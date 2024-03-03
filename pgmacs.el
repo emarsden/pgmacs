@@ -41,6 +41,12 @@
   '("#CCC" "#EEE")
   "The colors used for alternating rows in a database table.")
 
+(defvar pgmacs-row-limit 1000
+  "The maximum number of rows to retrieve per database query.
+If more rows are present in the PostgreSQL query result, the display of results will be
+paginated. You may wish to set this to a low value if accessing PostgreSQL over a slow
+network link.")
+
 (defvar pgmacs-mode-hook nil
   "Mode hook for `pgmacs-mode'.")
 
@@ -276,7 +282,7 @@
            (portal (format "pgbp%s" (pg-escape-identifier table)))
            (sql (format "SELECT * FROM %s OFFSET %s"
                         (pg-escape-identifier table) offset))
-           (res (pg-exec-prepared con sql (list) :max-rows 1000 :portal portal))
+           (res (pg-exec-prepared con sql (list) :max-rows pgmacs-row-limit :portal portal))
            (rows (pg-result res :tuples))
            (column-names (mapcar #'cl-first (pg-result res :attributes)))
            (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
@@ -336,17 +342,17 @@
         (insert (format "  %s: %s\n" col (pgmacs--column-info con table col))))
       (insert "\n")
       (when (pg-result res :incomplete)
-        (when (> pgmacs--offset 1000)
+        (when (> pgmacs--offset pgmacs-row-limit)
           (insert-text-button
-           "Prev. 1000 rows"
+           (format "Prev. %s rows" pgmacs-row-limit)
            'action (lambda (&rest _ignore)
-                     (cl-decf pgmacs--offset 1000)
+                     (cl-decf pgmacs--offset pgmacs-row-limit)
                      (pgmacs--display-table table)))
           (insert "   "))
         (insert-text-button
-         "Next 1000 rows"
+         (format "Next %s rows" pgmacs-row-limit)
          'action (lambda (&rest _ignore)
-                   (cl-incf pgmacs--offset 1000)
+                   (cl-incf pgmacs--offset pgmacs-row-limit)
                    (pgmacs--display-table table)))
         (insert "\n\n"))
       (unless (null rows)

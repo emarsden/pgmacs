@@ -7,3 +7,6 @@
   database tables.
   
 - Variable `pgmacs-row-colors` specifies the colors used for alternating rows in a database table.
+
+- Variable `pgmacs-row-limit` specifies the maximum number of rows to retrieve per database query,
+  before results are paginated.
