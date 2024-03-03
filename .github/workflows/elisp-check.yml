@@ -1,0 +1,28 @@
+name: elisp-check
+
+on: [push]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        emacs_version:
+          - 29.2
+          - snapshot
+        ignore_warnings:
+          - true
+        include:
+          - emacs_version: snapshot
+            ignore_warnings: false
+    steps:
+    - uses: actions/checkout@v4
+    - uses: purcell/setup-emacs@master
+      with:
+        version: ${{ matrix.emacs_version }}
+    - uses: leotaku/elisp-check@master
+      with:
+        file: pgmacs.el
+        ignore_warnings: ${{ matrix.ignore_warnings }}
