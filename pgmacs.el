@@ -23,6 +23,17 @@
   :group 'tools
   :link '(url-link :tag "Github" "https://github.com/emarsden/pgmacs/"))
 
+(defface pgmacs-table-data
+  '((t (:inherit fixed-pitch-serif)))
+  "Face used to display data in a PGMacs database table."
+  :group 'pgmacs)
+
+(defface pgmacs-table-header
+  '((t (:inherit fixed-pitch-serif :weight bold)))
+  "Face used to display a PGMacs database table header."
+  :group 'pgmacs)
+
+
 (defvar pgmacs-mode-hook nil
   "Mode hook for `pgmacs-mode'.")
 
@@ -274,7 +285,7 @@
                              for fmt in column-formatters
                              for w in column-widths
                              collect (make-vtable-column
-                                      :name (propertize name 'help-echo meta)
+                                      :name (propertize name 'face 'pgmacs-table-header 'help-echo meta)
                                       :min-width (1+ (max w (length name)))
                                       :formatter fmt
                                       :displayer (pgmacs--make-column-displayer meta))))
@@ -282,6 +293,7 @@
            (vtable (make-vtable
                     :insert nil
                     :use-header-line nil
+                    :face 'pgmacs-table-data
                     :columns columns
                     :row-colors '("#EEE" "#FFF")
                     :separator-width 5
