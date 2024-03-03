@@ -33,6 +33,9 @@
   "Face used to display a PGMacs database table header."
   :group 'pgmacs)
 
+(defvar pgmacs-row-colors
+  '("#CCC" "#EEE")
+  "The colors used for alternating rows in a database table.")
 
 (defvar pgmacs-mode-hook nil
   "Mode hook for `pgmacs-mode'.")
@@ -295,7 +298,7 @@
                     :use-header-line nil
                     :face 'pgmacs-table-data
                     :columns columns
-                    :row-colors '("#EEE" "#FFF")
+                    :row-colors pgmacs-row-colors
                     :separator-width 5
                     :divider-width "5px"
                     :objects rows
@@ -364,8 +367,8 @@
                              (:name "Size on disk" :width 11 :align right)
                              (:name "Owner" :width 13 :align left)
                              (:name "Comment" :width 30 :align left))
-                  :row-colors '("#CCC" "#EEE")
-                  :face 'fixed-pitch
+                  :row-colors pgmacs-row-colors
+                  :face 'pgmacs-table-data
                   ;; :column-colors '("#202020" "#404040")
                   :separator-width 5
                   :divider-width "2px"
@@ -442,8 +445,9 @@
          (vtable (make-vtable
                   :insert nil
                   :use-header-line nil
+                  :face 'pgmacs-table-data
                   :columns columns
-                  :row-colors '("#CCC" "#EEE")
+                  :row-colors pgmacs-row-colors
                   :separator-width 5
                   :divider-width "5px"
                   :objects rows
