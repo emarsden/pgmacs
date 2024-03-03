@@ -3,10 +3,14 @@
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 ;; Version: 0.1
-;; Package-Requires: ((emacs "29"))
+;; Package-Requires: ((emacs "29.1") (pg "0.29"))
 ;; URL: https://github.com/emarsden/pgmacs/
-;; Keywords: PostgreSQL, database, editor, browser, SQL, query
+;; Keywords: data, PostgreSQL, database
 ;; SPDX-License-Identifier: GPL-2.0-or-later
+
+;;; Commentary:
+;;
+;; See README.md at https://github.com/emarsden/pgmacs/
 
 
 ;;; Code:
