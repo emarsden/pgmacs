@@ -221,15 +221,19 @@ network link.")
          (res (pg-exec-prepared con sql
                                 `((,table . "text") (,column . "text"))))
          (constraints (pg-result res :tuples))
+         (defaults (pg-column-default con table column))
          (sql (format "SELECT %s FROM %s LIMIT 0"
                       (pg-escape-identifier column)
                       (pg-escape-identifier table)))
          (res (pg-exec con sql))
          (oid (cadar (pg-result res :attributes)))
-         (type-name (pg--lookup-type-name oid)))
-    (if (null constraints)
-        type-name
-       (string-join (cons type-name (mapcar #'cl-first constraints)) ", "))))
+         (type-name (pg--lookup-type-name oid))
+         (column-info (list type-name)))
+    (dolist (c constraints)
+      (push (cl-first c) column-info))
+    (unless (null defaults)
+      (push (format "DEFAULT %s" defaults) column-info))
+    (string-join (reverse column-info) ", ")))
 
 ;; TODO also include VIEWs
 ;;   SELECT * FROM information_schema.views
@@ -372,11 +376,24 @@ network link.")
          (vtable (make-vtable
                   :insert nil
                   :use-header-line nil
-                  :columns '((:name "Table" :width 20 :primary t :align left)
-                             (:name "Rows" :width 7 :align right)
-                             (:name "Size on disk" :width 11 :align right)
-                             (:name "Owner" :width 13 :align left)
-                             (:name "Comment" :width 30 :align left))
+                  :columns (list
+                            (make-vtable-column
+                             :name (propertize "Table" 'face 'pgmacs-table-header)
+                             :width 20
+                             :primary t
+                             :align 'left)
+                            (make-vtable-column
+                             :name (propertize "Rows" 'face 'pgmacs-table-header)
+                             :width 7 :align 'right)
+                            (make-vtable-column
+                             :name (propertize "Size on disk" 'face 'pgmacs-table-header)
+                             :width 11 :align 'right)
+                            (make-vtable-column
+                             :name (propertize "Owner" 'face 'pgmacs-table-header)
+                             :width 13 :align 'left)
+                            (make-vtable-column
+                             :name (propertize "Comment" 'face 'pgmacs-table-header)
+                             :width 30 :align 'left))
                   :row-colors pgmacs-row-colors
                   :face 'pgmacs-table-data
                   ;; :column-colors '("#202020" "#404040")
