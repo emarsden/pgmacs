@@ -69,13 +69,13 @@ network link.")
 (defvar-local pgmacs--column-type-names nil)
 (defvar-local pgmacs--offset nil)
 
-;; TODO: move to pg-el
 (defun pgmacs--value-formatter (type-name)
   (cond ((or (string= type-name "timestamp")
              (string= type-name "timestamptz")
 	     (string= type-name "date"))
          ;; these are represented as a `decode-time' structure
          (lambda (val) (format-time-string "%Y-%m-%dT%T" val)))
+        ((string= type-name "bpchar") #'byte-to-string)
         (t
          (lambda (val) (format "%s" val)))))
 
@@ -89,6 +89,7 @@ network link.")
         ((string= type-name "bool") 4)
         ((string= type-name "bit") 4)
         ((string= type-name "varbit") 10)
+        ((string= type-name "bpchar") 4)
         ((string= type-name "char2") 4)
         ((string= type-name "char4") 6)
         ((string= type-name "char8") 10)
@@ -125,7 +126,9 @@ network link.")
 (defun pgmacs--edit-row (row primary-keys)
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
-  (let* ((cols (vtable-columns (vtable-current-table)))
+  (let* ((table (vtable-current-table))
+         (current-row (vtable-current-object))
+         (cols (vtable-columns table))
          (col-id (vtable-current-column))
          (col (nth col-id cols))
          (col-name (vtable-column-name col))
@@ -141,34 +144,40 @@ network link.")
                         (pg-escape-identifier pgmacs--table)
                         (pg-escape-identifier col-name)
                         (pg-escape-identifier pk)))
-           (res (pg-exec-prepared
-                 pgmacs--con sql
-                 `((,new-value . ,col-type)
-                   (,pk-value . ,pk-col-type)))))
-      (message "PostgreSQL> %s" (pg-result res :status))))
-  (pgmacs--display-table pgmacs--table))
+           (res (pg-exec-prepared pgmacs--con sql
+                                  `((,new-value . ,col-type)
+                                    (,pk-value . ,pk-col-type)))))
+      (message "PostgreSQL> %s" (pg-result res :status))
+      (let ((new-row (copy-sequence current-row)))
+        (setf (nth col-id new-row) new-value)
+        ;; vtable-update-object doesn't work, so insert then delete old row
+        (vtable-insert-object table new-row current-row)
+        (vtable-remove-object table current-row)))))
 
 (defun pgmacs--delete-row (row primary-keys)
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
-  (let* ((cols (vtable-columns (vtable-current-table)))
-         (pk (cl-first primary-keys))
-         (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
-         (pk-col-type (aref pgmacs--column-type-names pk-col-id))
-         (pk-value (and pk-col-id (nth pk-col-id row))))
-    (unless pk-value
-      (error "Can't find value for primary key %s" pk))
-    (let* ((res (pg-exec-prepared
-                 pgmacs--con
-                 (format "DELETE FROM %s WHERE %s = $1"
-                         (pg-escape-identifier pgmacs--table)
-                         (pbbrowser-escape-identifier pk))
-                 `((,pk-value . ,pk-col-type)))))
-      (message "PostgreSQL> %s" (pg-result res :status))))
-  (pgmacs--display-table (list pgmacs--table)))
+  (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
+    (let* ((table (vtable-current-table))
+           (cols (vtable-columns table))
+           (pk (cl-first primary-keys))
+           (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
+           (pk-col-type (aref pgmacs--column-type-names pk-col-id))
+           (pk-value (and pk-col-id (nth pk-col-id row))))
+      (unless pk-value
+        (error "Can't find value for primary key %s" pk))
+      (let* ((res (pg-exec-prepared
+                   pgmacs--con
+                   (format "DELETE FROM %s WHERE %s = $1"
+                           (pg-escape-identifier pgmacs--table)
+                           (pg-escape-identifier pk))
+                   `((,pk-value . ,pk-col-type)))))
+        (message "PostgreSQL> %s" (pg-result res :status)))
+      (vtable-remove-object table row))))
 
-(defun pgmacs--insert-row ()
-  (let* ((cols (vtable-columns (vtable-current-table)))
+(defun pgmacs--insert-row (current-row)
+  (let* ((table (vtable-current-table))
+         (cols (vtable-columns table))
          (col-names (list))
          (values (list))
          (value-types (list)))
@@ -194,8 +203,11 @@ network link.")
                  (cl-loop for v in values
                           for vt in value-types
                           collect (cons v vt)))))
-      (message "PostgreSQL> %s" (pg-result res :status))))
-  (pgmacs--display-table pgmacs--table))
+      (message "PostgreSQL> %s" (pg-result res :status))
+      ;; It's tempting to use vtable-insert-object here to avoid a full refresh of the table.
+      ;; However, we don't know what values were chosen for any columns that have a default.
+      (pgmacs--display-table pgmacs--table))))
+
 
 ;; We can also SELECT c.column_name, c.data_type
 (defun pgmacs--table-primary-keys (con table)
@@ -318,7 +330,7 @@ network link.")
                     :objects rows
                     :actions `("RET" (lambda (row) (pgmacs--edit-row row ',primary-keys))
                                "d" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                               "i" (lambda (&rest ignore) (pgmacs--insert-row))
+                               "i" pgmacs--insert-row
                                "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (erase-buffer)
