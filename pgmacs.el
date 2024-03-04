@@ -319,6 +319,7 @@ network link.")
                     :actions `("RET" (lambda (row) (pgmacs--edit-row row ',primary-keys))
                                "d" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "i" (lambda (&rest ignore) (pgmacs--insert-row))
+                               "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (erase-buffer)
       ;; (setq-local revert-buffer-function #'pgmacs-regenerate-display-table)
@@ -359,8 +360,16 @@ network link.")
                    (cl-incf pgmacs--offset pgmacs-row-limit)
                    (pgmacs--display-table table)))
         (insert "\n\n"))
-      (unless (null rows)
+      (if (null rows)
+          (insert "(no rows in table)")
         (vtable-insert vtable)))))
+
+;; We can't make this interactive because it's called from the keymap on a table list, where we
+;; receive unnecessary arguments related to the current cursor position. TODO: allow input from a
+;; buffer which is set to sql-mode.
+(defun pgmacs-run-sql ()
+  (let ((sql (read-from-minibuffer "SQL query: ")))
+    (pgmacs-show-result pgmacs--con sql)))
 
 
 ;;;###autoload
@@ -401,6 +410,7 @@ network link.")
                   :divider-width "2px"
                   :objects (pgmacs--list-tables)
                   :actions '("RET" (lambda (table-rows) (pgmacs--display-table (car table-rows)))
+                             "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                              "q"  (lambda (&rest _ignored) (kill-buffer)))
                   :getter (lambda (object column vtable)
                             (pcase (vtable-column vtable column)
@@ -478,12 +488,16 @@ network link.")
                   :separator-width 5
                   :divider-width "5px"
                   :objects rows
-                  :actions `("q" (lambda (&rest _ignore) (kill-buffer))))))
+                  :actions `("e" (lambda (&rest _ignored) (pgmacs-run-sql))
+                             "q" (lambda (&rest _ignore) (kill-buffer))))))
     (erase-buffer)
     (remove-overlays)
+    (insert (propertize "PostgreSQL query output" 'face 'bold))
+    (insert "\n")
     (insert (propertize "SQL" 'face 'bold))
     (insert (format ": %s\n\n" sql))
-    (unless (null rows)
+    (if (null rows)
+        (insert "(no rows)")
       (vtable-insert vtable))))
 
 
