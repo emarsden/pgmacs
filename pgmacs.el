@@ -381,6 +381,7 @@ network link.")
   (setq-local pgmacs--con (pg-connect dbname user password host port tls)
               buffer-read-only t
               truncate-lines t)
+  (set-process-query-on-exit-flag (pgcon-process pgmacs--con) nil)
   (let* ((inhibit-read-only t)
          (vtable (make-vtable
                   :insert nil
