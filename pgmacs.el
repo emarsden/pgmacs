@@ -175,7 +175,7 @@ network link.")
         (message "PostgreSQL> %s" (pg-result res :status)))
       (vtable-remove-object table row))))
 
-(defun pgmacs--insert-row (current-row)
+(defun pgmacs--insert-row (_current-row)
   (let* ((table (vtable-current-table))
          (cols (vtable-columns table))
          (col-names (list))
@@ -272,6 +272,17 @@ network link.")
                        fvalue)))
       (propertize truncated 'help-echo help-echo))))
 
+
+(defun pgmacs--table-to-csv (&rest _ignore)
+  (let* ((con pgmacs--con)
+         (table pgmacs--table)
+         (buf (get-buffer-create (format "*PostgreSQL CSV for %s*" table)))
+         (sql (format "COPY %s TO STDOUT WITH (FORMAT CSV)" (pg-escape-identifier table))))
+    (pg-copy-to-buffer con sql buf)
+    (pop-to-buffer buf)))
+
+
+
 ;; TODO: add additional information as per psql
 ;; Table « public.books »
 ;; Colonne |           Type           | Collationnement | NULL-able |            Par défaut             
@@ -358,6 +369,10 @@ network link.")
       (dolist (col column-names)
         (insert (format "  %s: %s\n" col (pgmacs--column-info con table col))))
       (insert "\n")
+      (insert-text-button "Export table to CSV buffer"
+                          'action #'pgmacs--table-to-csv
+                          'help-echo "Export this table to a CSV buffer")
+      (insert "\n\n")
       (when (pg-result res :incomplete)
         (when (> pgmacs--offset pgmacs-row-limit)
           (insert-text-button
