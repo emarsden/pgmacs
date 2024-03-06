@@ -62,6 +62,9 @@ network link.")
   (put 'pgmacs-mode 'mode-class 'special)
   (run-mode-hooks 'pgmacs-mode-hook))
 
+;; Used for copying and pasting rows
+(defvar pgmacs--kill-ring nil)
+
 
 ;; TODO fold some of these into common structs
 (defvar-local pgmacs--con nil)
@@ -89,6 +92,7 @@ network link.")
         ((string= type-name "bool") 4)
         ((string= type-name "bit") 4)
         ((string= type-name "varbit") 10)
+        ((string= type-name "char") 4)
         ((string= type-name "bpchar") 4)
         ((string= type-name "char2") 4)
         ((string= type-name "char4") 6)
@@ -208,6 +212,55 @@ network link.")
       ;; However, we don't know what values were chosen for any columns that have a default.
       (pgmacs--display-table pgmacs--table))))
 
+;; Copy current row to our "kill ring".
+(defun pgmacs--copy-row (current-row)
+  (setq pgmacs--kill-ring (cons pgmacs--table current-row))
+  (message "Row copied to PGMacs kill ring"))
+
+;; Insert new row at current position based on content of our "kill ring".
+(defun pgmacs--yank-row (_current-row)
+  (unless pgmacs--kill-ring
+    (error "PGMacs kill ring is empty"))
+  (unless (eq (car pgmacs--kill-ring) pgmacs--table)
+    (error "Can't paste into a different PostgreSQL table"))
+  (message "Pasting row from PGMacs kill ring")
+  ;; Insert a new row based on the copied row, but without specifying values for the columns that
+  ;; have a default value
+  (let* ((yanked-row (cdr pgmacs--kill-ring))
+         (table (vtable-current-table))
+         (cols (vtable-columns table))
+         (col-names (list))
+         (values (list))
+         (value-types (list)))
+    (cl-loop
+     for col in cols
+     for pasted-val in yanked-row
+     do (let* ((col-name (vtable-column-name col))
+               (col-id (cl-position col-name cols :key #'vtable-column-name :test #'string=))
+               (col-type (aref pgmacs--column-type-names col-id))
+               (col-has-default (not (null (pg-column-default pgmacs--con pgmacs--table col-name)))))
+          (unless col-has-default
+            (push col-name col-names)
+            (push pasted-val values)
+            (push col-type value-types))))
+    (let* ((placeholders (cl-loop for i from 1 to (length values)
+                                  collect (format "$%d" i)))
+           (target-cols (mapcar #'pg-escape-identifier col-names))
+           (res (pg-exec-prepared
+                 pgmacs--con
+                 (format "INSERT INTO %s(%s) VALUES(%s)"
+                         (pg-escape-identifier pgmacs--table)
+                         (string-join target-cols ",")
+                         (string-join placeholders ","))
+                 (cl-loop for v in values
+                          for vt in value-types
+                          collect (cons v vt)))))
+      (message "PostgreSQL> %s" (pg-result res :status))
+      ;; It's tempting to use vtable-insert-object here to avoid a full refresh of the table.
+      ;; However, we don't know what values were chosen for any columns that have a default.
+      ;; This means that we can't insert at the current-row position.
+      (pgmacs--display-table pgmacs--table))))
+  
 
 ;; We can also SELECT c.column_name, c.data_type
 (defun pgmacs--table-primary-keys (con table)
@@ -223,16 +276,20 @@ network link.")
 
 ;; Return a string with information about this column, like the type name, PRIMARY KEY, UNIQUE, etc.
 (defun pgmacs--column-info (con table column)
-  (let* ((sql (format
-               "SELECT constraint_type FROM information_schema.table_constraints tc
+  (let* ((sql "SELECT tc.constraint_type FROM information_schema.table_constraints tc
                JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name) 
                JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
                AND tc.table_name = c.table_name
                AND ccu.column_name = c.column_name
-               WHERE tc.table_name = $1 AND c.column_name = $2"))
+               WHERE tc.table_name = $1 AND c.column_name = $2")
          (res (pg-exec-prepared con sql
                                 `((,table . "text") (,column . "text"))))
          (constraints (pg-result res :tuples))
+         (res (pg-exec-prepared
+               con
+               "SELECT character_maximum_length FROM information_schema.columns WHERE table_name=$1 AND column_name=$2"
+               `((,table . "text") (,column . "text"))))
+         (maxlen (pg-result res :tuple 0))
          (defaults (pg-column-default con table column))
          (sql (format "SELECT %s FROM %s LIMIT 0"
                       (pg-escape-identifier column)
@@ -243,6 +300,8 @@ network link.")
          (column-info (list type-name)))
     (dolist (c constraints)
       (push (cl-first c) column-info))
+    (when (cl-first maxlen)
+      (push (format "max-len %s" (cl-first maxlen)) column-info))
     (unless (null defaults)
       (push (format "DEFAULT %s" defaults) column-info))
     (string-join (reverse column-info) ", ")))
@@ -274,13 +333,13 @@ network link.")
 
 
 (defun pgmacs--table-to-csv (&rest _ignore)
+  "Retrieve the current PostgreSQL table in CSV format in a new Emacs buffer."
   (let* ((con pgmacs--con)
          (table pgmacs--table)
          (buf (get-buffer-create (format "*PostgreSQL CSV for %s*" table)))
          (sql (format "COPY %s TO STDOUT WITH (FORMAT CSV)" (pg-escape-identifier table))))
     (pg-copy-to-buffer con sql buf)
     (pop-to-buffer buf)))
-
 
 
 ;; TODO: add additional information as per psql
@@ -342,6 +401,8 @@ network link.")
                     :actions `("RET" (lambda (row) (pgmacs--edit-row row ',primary-keys))
                                "d" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "i" pgmacs--insert-row
+                               "k" pgmacs--copy-row
+                               "y" pgmacs--yank-row
                                "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (erase-buffer)
