@@ -338,8 +338,9 @@ network link.")
          (table pgmacs--table)
          (buf (get-buffer-create (format "*PostgreSQL CSV for %s*" table)))
          (sql (format "COPY %s TO STDOUT WITH (FORMAT CSV)" (pg-escape-identifier table))))
-    (pg-copy-to-buffer con sql buf)
-    (pop-to-buffer buf)))
+    (pop-to-buffer buf)
+    ;; (set-buffer-multibyte nil)
+    (pg-copy-to-buffer con sql buf)))
 
 
 ;; TODO: add additional information as per psql
@@ -361,6 +362,7 @@ network link.")
   (let* ((con pgmacs--con)
          (buffer-name (format "*PostgreSQL %s %s*" (pgcon-dbname con) table)))
     (pop-to-buffer (get-buffer-create buffer-name))
+    (pgmacs-mode)
     (let* ((primary-keys (pgmacs--table-primary-keys con table))
            (owner (pg-table-owner con table))
            (comment (pg-table-comment con table))
@@ -452,90 +454,6 @@ network link.")
           (insert "(no rows in table)")
         (vtable-insert vtable)))))
 
-;; We can't make this interactive because it's called from the keymap on a table list, where we
-;; receive unnecessary arguments related to the current cursor position. TODO: allow input from a
-;; buffer which is set to sql-mode.
-(defun pgmacs-run-sql ()
-  (let ((sql (read-from-minibuffer "SQL query: ")))
-    (pgmacs-show-result pgmacs--con sql)))
-
-
-;;;###autoload
-(cl-defun pgmacs-open-db (dbname user &optional (password "") (host "localhost") (port 5432) (tls nil))
-  "Browse the contents of a PostgreSQL database."
-  (interactive "sPostgreSQL database: \nsUser: \nsPassword: ")
-  (pop-to-buffer (get-buffer-create (format "*PostgreSQL %s*" dbname)))
-  (pgmacs-mode)
-  (setq-local pgmacs--con (pg-connect dbname user password host port tls)
-              buffer-read-only t
-              truncate-lines t)
-  (set-process-query-on-exit-flag (pgcon-process pgmacs--con) nil)
-  (let* ((inhibit-read-only t)
-         (vtable (make-vtable
-                  :insert nil
-                  :use-header-line nil
-                  :columns (list
-                            (make-vtable-column
-                             :name (propertize "Table" 'face 'pgmacs-table-header)
-                             :width 20
-                             :primary t
-                             :align 'left)
-                            (make-vtable-column
-                             :name (propertize "Rows" 'face 'pgmacs-table-header)
-                             :width 7 :align 'right)
-                            (make-vtable-column
-                             :name (propertize "Size on disk" 'face 'pgmacs-table-header)
-                             :width 11 :align 'right)
-                            (make-vtable-column
-                             :name (propertize "Owner" 'face 'pgmacs-table-header)
-                             :width 13 :align 'left)
-                            (make-vtable-column
-                             :name (propertize "Comment" 'face 'pgmacs-table-header)
-                             :width 30 :align 'left))
-                  :row-colors pgmacs-row-colors
-                  :face 'pgmacs-table-data
-                  ;; :column-colors '("#202020" "#404040")
-                  :separator-width 5
-                  :divider-width "2px"
-                  :objects (pgmacs--list-tables)
-                  :actions '("RET" (lambda (table-rows) (pgmacs--display-table (car table-rows)))
-                             "e" (lambda (&rest _ignored) (pgmacs-run-sql))
-                             "q"  (lambda (&rest _ignored) (kill-buffer)))
-                  :getter (lambda (object column vtable)
-                            (pcase (vtable-column vtable column)
-                              ("Table" (cl-first object))
-                              ("Rows" (cl-second object))
-                              ("Size on disk" (cl-third object))
-                              ("Owner" (cl-fourth object))
-                              ("Comment" (cl-fifth object)))))))
-    (erase-buffer)
-    (insert (pg-backend-version pgmacs--con))
-    (let* ((res (pg-exec pgmacs--con "SELECT pg_backend_pid(), pg_is_in_recovery()"))
-           (row (pg-result res :tuple 0)))
-      (insert (format "\nConnected to database %s as user %s (pid %d %s)\n"
-                      dbname user (cl-first row) (if (cl-second row) "RECOVERING" "PRIMARY"))))
-    (let* ((sql (format "SELECT pg_size_pretty(pg_database_size(%s))"
-                        (pg-escape-literal dbname)))
-           (res (pg-exec pgmacs--con sql))
-           (size (cl-first (pg-result res :tuple 0))))
-      (insert (format "Total database size: %s\n" size)))
-    ;; Perhaps also display output from
-    ;; select state, count(*) from pg_stat_activity where pid <> pg_backend_pid() group by 1 order by 1;'
-    ;; see https://gitlab.com/postgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
-    (insert "\n")
-    (insert-text-button "Stat activity"
-                        'action #'pgmacs--display-stat-activity
-                        'help-echo "Show information from the pg_stat_activity table")
-    (insert "   ")
-    (insert-text-button
-     "Replication stats"
-     'action (lambda (&rest _ignore)
-               ;; FIXME probably only want a subset of these columns
-               (pgmacs-show-result pgmacs--con "SELECT * FROM pg_stat_replication"))
-     'help-echo "Show information on PostgreSQL replication status")
-    (insert "\n\n")
-    (vtable-insert vtable)))
-
 (defvar pgmacs--stat-activity-columns
   (list "datname" "usename" "client_addr" "backend_start" "xact_start" "query_start" "wait_event"))
 
@@ -588,6 +506,93 @@ network link.")
     (if (null rows)
         (insert "(no rows)")
       (vtable-insert vtable))))
+
+;; We can't make this interactive because it's called from the keymap on a table list, where we
+;; receive unnecessary arguments related to the current cursor position. TODO: allow input from a
+;; buffer which is set to sql-mode.
+(defun pgmacs-run-sql ()
+  (let ((sql (read-from-minibuffer "SQL query: ")))
+    (pgmacs-show-result pgmacs--con sql)))
+
+
+;;;###autoload
+(defun pgmacs-open (con)
+  "Browse the contents of PostgreSQL database to which we are connected over CON."
+  (pop-to-buffer (get-buffer-create (format "*PostgreSQL %s*" (pgcon-dbname con))))
+  (pgmacs-mode)
+  (setq-local pgmacs--con con
+              buffer-read-only t
+              truncate-lines t)
+  (set-process-query-on-exit-flag (pgcon-process con) nil)
+  (let* ((dbname (pgcon-dbname con))
+         (inhibit-read-only t)
+         (vtable (make-vtable
+                  :insert nil
+                  :use-header-line nil
+                  :columns (list
+                            (make-vtable-column
+                             :name (propertize "Table" 'face 'pgmacs-table-header)
+                             :width 20
+                             :primary t
+                             :align 'left)
+                            (make-vtable-column
+                             :name (propertize "Rows" 'face 'pgmacs-table-header)
+                             :width 7 :align 'right)
+                            (make-vtable-column
+                             :name (propertize "Size on disk" 'face 'pgmacs-table-header)
+                             :width 11 :align 'right)
+                            (make-vtable-column
+                             :name (propertize "Owner" 'face 'pgmacs-table-header)
+                             :width 13 :align 'left)
+                            (make-vtable-column
+                             :name (propertize "Comment" 'face 'pgmacs-table-header)
+                             :width 30 :align 'left))
+                  :row-colors pgmacs-row-colors
+                  :face 'pgmacs-table-data
+                  ;; :column-colors '("#202020" "#404040")
+                  :separator-width 5
+                  :divider-width "2px"
+                  :objects (pgmacs--list-tables)
+                  :actions '("RET" (lambda (table-rows) (pgmacs--display-table (car table-rows)))
+                             "e" (lambda (&rest _ignored) (pgmacs-run-sql))
+                             "q"  (lambda (&rest _ignored) (kill-buffer)))
+                  :getter (lambda (object column vtable)
+                            (pcase (vtable-column vtable column)
+                              ("Table" (cl-first object))
+                              ("Rows" (cl-second object))
+                              ("Size on disk" (cl-third object))
+                              ("Owner" (cl-fourth object))
+                              ("Comment" (cl-fifth object)))))))
+    (erase-buffer)
+    (insert (pg-backend-version con))
+    (let* ((res (pg-exec con "SELECT current_user, pg_backend_pid(), pg_is_in_recovery()"))
+           (row (pg-result res :tuple 0)))
+      (insert (format "\nConnected to database %s as user %s (pid %d %s)\n"
+                      dbname
+                      (cl-first row)
+                      (cl-second row)
+                      (if (cl-second row) "RECOVERING" "PRIMARY"))))
+    (let* ((sql (format "SELECT pg_size_pretty(pg_database_size(%s))"
+                        (pg-escape-literal dbname)))
+           (res (pg-exec con sql))
+           (size (cl-first (pg-result res :tuple 0))))
+      (insert (format "Total database size: %s\n" size)))
+    ;; Perhaps also display output from
+    ;; select state, count(*) from pg_stat_activity where pid <> pg_backend_pid() group by 1 order by 1;'
+    ;; see https://gitlab.com/postgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
+    (insert "\n")
+    (insert-text-button "Stat activity"
+                        'action #'pgmacs--display-stat-activity
+                        'help-echo "Show information from the pg_stat_activity table")
+    (insert "   ")
+    (insert-text-button
+     "Replication stats"
+     'action (lambda (&rest _ignore)
+               ;; FIXME probably only want a subset of these columns
+               (pgmacs-show-result con "SELECT * FROM pg_stat_replication"))
+     'help-echo "Show information on PostgreSQL replication status")
+    (insert "\n\n")
+    (vtable-insert vtable)))
 
 
 (provide 'pgmacs)

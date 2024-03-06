@@ -13,6 +13,7 @@ It allows you to:
 
 - edit the value of a column (type `RET` on the value you want to modify)
 
+- copy/paste rows of a database table (type `k` to copy, `y` to paste in a table display buffer)
 
 
 ## Get started
@@ -29,7 +30,7 @@ Load this library, then say
 which will prompt you for a database name and a user. To specify additional arguments such as a
 password, a host other than `localhost` and a port other than 5432, call the function
 
-    (pgmacs-open-db "database-name" "username" "password "localhost" 5433)
+    (pgmacs-open (pg-connect "database-name" "username" "password "localhost" 5433))
 
 This should show you a list of the tables available in the database.
 
