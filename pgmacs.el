@@ -33,34 +33,55 @@
   :group 'pgmacs)
 
 (defface pgmacs-table-header
-  '((t (:inherit fixed-pitch-serif :weight bold)))
+  '((t (:inherit bold :weight bold)))
   "Face used to display a PGMacs database table header."
   :group 'pgmacs)
 
-(defvar pgmacs-row-colors
-  '("#CCC" "#EEE")
-  "The colors used for alternating rows in a database table.")
+(defcustom pgmacs-row-colors
+  '("#D9CEB4" "#D9B96C")
+  "The colors used for alternating rows in a database table."
+  :type '(list color color)
+  :group 'pgmacs)
 
-(defvar pgmacs-row-limit 1000
+(defcustom pgmacs-row-limit 1000
   "The maximum number of rows to retrieve per database query.
 If more rows are present in the PostgreSQL query result, the display of results will be
 paginated. You may wish to set this to a low value if accessing PostgreSQL over a slow
-network link.")
+network link."
+  :type 'number
+  :group 'pgmacs)
 
-(defvar pgmacs-mode-hook nil
-  "Mode hook for `pgmacs-mode'.")
+(defcustom pgmacs-mode-hook nil
+  "Mode hook for `pgmacs-mode'."
+  :type 'hook
+  :group 'pgmacs)
 
-(defvar pgmacs-mode-map nil)
+(defvar pgmacs-mode-map (make-sparse-keymap))
+
+;; TODO: perhaps distinguish here between the insertion of a row when the cursor is in the table
+;; (keybinding set by make-vtable) and insertion of a row otherwise.
+(keymap-set pgmacs-mode-map (kbd "q") 'bury-buffer)
+(keymap-set pgmacs-mode-map (kbd "e") (lambda (&rest _ignored) (pgmacs-run-sql)))
+
 
 (defun pgmacs-mode ()
   "Major mode for editing PostgreSQL database."
-  ;; We can't kill all the local variables; some like pgmacs--offset need to be kept around!
-  ;; (kill-all-local-variables)
   (setq major-mode 'pgmacs-mode
         mode-name "PGMacs")
   ;; Not appropriate for user to type stuff into our buffers.
   (put 'pgmacs-mode 'mode-class 'special)
+  (use-local-map pgmacs-mode-map)
   (run-mode-hooks 'pgmacs-mode-hook))
+
+(defvar pgmacs-transient-map (make-sparse-keymap))
+
+(keymap-set pgmacs-transient-map (kbd "q") 'kill-buffer)
+
+(define-minor-mode pgmacs-transient-mode
+  "Minor mode for transient PGMacs buffers"
+  :global nil
+  :init-value nil
+  :keymap pgmacs-transient-map)
 
 ;; Used for copying and pasting rows
 (defvar pgmacs--kill-ring nil)
@@ -166,7 +187,7 @@ network link.")
            (cols (vtable-columns table))
            (pk (cl-first primary-keys))
            (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
-           (pk-col-type (aref pgmacs--column-type-names pk-col-id))
+           (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
            (pk-value (and pk-col-id (nth pk-col-id row))))
       (unless pk-value
         (error "Can't find value for primary key %s" pk))
@@ -180,6 +201,7 @@ network link.")
       (vtable-remove-object table row))))
 
 (defun pgmacs--insert-row (_current-row)
+  ;; TODO we need to handle the case where there is no existing vtable because the underlying SQL table is empty.
   (let* ((table (vtable-current-table))
          (cols (vtable-columns table))
          (col-names (list))
@@ -260,7 +282,7 @@ network link.")
       ;; However, we don't know what values were chosen for any columns that have a default.
       ;; This means that we can't insert at the current-row position.
       (pgmacs--display-table pgmacs--table))))
-  
+
 
 ;; We can also SELECT c.column_name, c.data_type
 (defun pgmacs--table-primary-keys (con table)
@@ -287,7 +309,8 @@ network link.")
          (constraints (pg-result res :tuples))
          (res (pg-exec-prepared
                con
-               "SELECT character_maximum_length FROM information_schema.columns WHERE table_name=$1 AND column_name=$2"
+               "SELECT character_maximum_length FROM information_schema.columns
+                WHERE table_name=$1 AND column_name=$2"
                `((,table . "text") (,column . "text"))))
          (maxlen (pg-result res :tuple 0))
          (defaults (pg-column-default con table column))
@@ -333,14 +356,29 @@ network link.")
 
 
 (defun pgmacs--table-to-csv (&rest _ignore)
-  "Retrieve the current PostgreSQL table in CSV format in a new Emacs buffer."
+  "Dump the current PostgreSQL table in CSV format into an Emacs buffer."
   (let* ((con pgmacs--con)
          (table pgmacs--table)
          (buf (get-buffer-create (format "*PostgreSQL CSV for %s*" table)))
          (sql (format "COPY %s TO STDOUT WITH (FORMAT CSV)" (pg-escape-identifier table))))
     (pop-to-buffer buf)
-    ;; (set-buffer-multibyte nil)
+    (pgmacs-transient-mode)
     (pg-copy-to-buffer con sql buf)))
+
+(defun pgmacs--add-primary-key (&rest _ignore)
+  "Add a PRIMARY KEY to the current PostgreSQL table."
+  (let ((pk (pgmacs--table-primary-keys pgmacs--con pgmacs--table)))
+    (when pk
+      (error "Table %s already has a primary key %s" pgmacs--table pk)))
+  (cl-flet ((exists (name) (cl-find name (pg-columns pgmacs--con pgmacs--table))))
+    (let* ((colname (or (cl-find-if-not #'exists (list "id" "idpk" "idcol" "pk" "_id"))
+                        (error "Can't autogenerate a name for primary key")))
+           (sql (format "ALTER TABLE %s ADD COLUMN %s BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
+                        (pg-escape-identifier pgmacs--table)
+                        (pg-escape-identifier colname))))
+      (when (y-or-n-p (format "Really run this SQL? %s" sql))
+        (let ((res (pg-exec pgmacs--con sql)))
+          (message "PostgreSQL> %s" (pg-result res :status)))))))
 
 
 ;; TODO: add additional information as per psql
@@ -359,9 +397,8 @@ network link.")
 ;; TABLE "book_author" CONSTRAINT "book_author_book_id_fkey" FOREIGN KEY (book_id) REFERENCES books(id)
 
 (defun pgmacs--display-table (table)
-  (let* ((con pgmacs--con)
-         (buffer-name (format "*PostgreSQL %s %s*" (pgcon-dbname con) table)))
-    (pop-to-buffer (get-buffer-create buffer-name))
+  (let* ((con pgmacs--con))
+    (pop-to-buffer-same-window (format "*PostgreSQL %s %s*" (pgcon-dbname con) table))
     (pgmacs-mode)
     (let* ((primary-keys (pgmacs--table-primary-keys con table))
            (owner (pg-table-owner con table))
@@ -406,6 +443,7 @@ network link.")
                                "k" pgmacs--copy-row
                                "y" pgmacs--yank-row
                                "e" (lambda (&rest _ignored) (pgmacs-run-sql))
+                               "r" pgmacs--revert-vtable
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (erase-buffer)
       ;; (setq-local revert-buffer-function #'pgmacs-regenerate-display-table)
@@ -429,12 +467,26 @@ network link.")
         (insert (format " (indexes %s)\n" (cl-second row))))
       (insert (propertize "Columns" 'face 'bold))
       (insert ":\n")
-      (dolist (col column-names)
-        (insert (format "  %s: %s\n" col (pgmacs--column-info con table col))))
+      (let ((colinfo (list)))
+        (dolist (col column-names)
+          (push (format "%s: %s" col (pgmacs--column-info con table col)) colinfo))
+        (let ((last (pop colinfo)))
+          (dolist (c colinfo)
+            (insert "├ ")
+            (insert c)
+            (insert "\n"))
+          (insert "└ ")
+          (insert last)
+          (insert "\n")))
       (insert "\n")
       (insert-text-button "Export table to CSV buffer"
                           'action #'pgmacs--table-to-csv
                           'help-echo "Export this table to a CSV buffer")
+      (unless primary-keys
+        (insert "   ")
+        (insert-text-button "Add primary key to table"
+                            'action #'pgmacs--add-primary-key
+                            'help-echo "Add a PRIMARY KEY to enable editing"))
       (insert "\n\n")
       (when (pg-result res :incomplete)
         (when (> pgmacs--offset pgmacs-row-limit)
@@ -454,12 +506,42 @@ network link.")
           (insert "(no rows in table)")
         (vtable-insert vtable)))))
 
+(defun pgmacs--revert-vtable (&rest _ignore)
+  "Redraw the table in the current buffer."
+  ;; We are assuming there that there is a single vtable in the buffer.
+  (goto-char (point-max))
+  (vtable-beginning-of-table)
+  (vtable-revert))
+
+(defun pgmacs--display-backend-information (&rest _ignore)
+  (let ((con pgmacs--con))
+    (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
+    (pgmacs-transient-mode)
+    (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
+           (row (pg-result res :tuple 0)))
+      (insert (apply #'format "Database running on %s:%s with pid %s\n" row)))
+    (let* ((res (pg-exec con "SELECT current_user"))
+           (row (pg-result res :tuple 0)))
+      (insert (apply #'format "Connected as user %s\n" row)))
+    (let* ((res (pg-exec con "SELECT pg_postmaster_start_time()"))
+           (dtime (car (pg-result res :tuple 0)))
+           (fmt (funcall (pgmacs--value-formatter "timestamp") dtime)))
+      (insert (format "Backend started at %s\n" fmt)))))
+
 (defvar pgmacs--stat-activity-columns
   (list "datname" "usename" "client_addr" "backend_start" "xact_start" "query_start" "wait_event"))
 
 (defun pgmacs--display-stat-activity (&rest _ignore)
   (let* ((cols (string-join pgmacs--stat-activity-columns ","))
          (sql (format "SELECT %s FROM pg_stat_activity" cols)))
+    (pgmacs-show-result pgmacs--con sql)))
+
+;; We can't make this interactive because it's called from the keymap on a table list, where we
+;; receive unnecessary arguments related to the current cursor position.
+;;
+;; TODO: allow input from a buffer which is set to sql-mode.
+(defun pgmacs-run-sql ()
+  (let ((sql (read-from-minibuffer "SQL query: ")))
     (pgmacs-show-result pgmacs--con sql)))
 
 
@@ -507,18 +589,10 @@ network link.")
         (insert "(no rows)")
       (vtable-insert vtable))))
 
-;; We can't make this interactive because it's called from the keymap on a table list, where we
-;; receive unnecessary arguments related to the current cursor position. TODO: allow input from a
-;; buffer which is set to sql-mode.
-(defun pgmacs-run-sql ()
-  (let ((sql (read-from-minibuffer "SQL query: ")))
-    (pgmacs-show-result pgmacs--con sql)))
-
-
 ;;;###autoload
 (defun pgmacs-open (con)
   "Browse the contents of PostgreSQL database to which we are connected over CON."
-  (pop-to-buffer (get-buffer-create (format "*PostgreSQL %s*" (pgcon-dbname con))))
+  (pop-to-buffer-same-window (format "*PostgreSQL %s*" (pgcon-dbname con)))
   (pgmacs-mode)
   (setq-local pgmacs--con con
               buffer-read-only t
@@ -540,7 +614,7 @@ network link.")
                              :width 7 :align 'right)
                             (make-vtable-column
                              :name (propertize "Size on disk" 'face 'pgmacs-table-header)
-                             :width 11 :align 'right)
+                             :width 13 :align 'right)
                             (make-vtable-column
                              :name (propertize "Owner" 'face 'pgmacs-table-header)
                              :width 13 :align 'left)
@@ -550,7 +624,7 @@ network link.")
                   :row-colors pgmacs-row-colors
                   :face 'pgmacs-table-data
                   ;; :column-colors '("#202020" "#404040")
-                  :separator-width 5
+                  ;; :separator-width 5
                   :divider-width "2px"
                   :objects (pgmacs--list-tables)
                   :actions '("RET" (lambda (table-rows) (pgmacs--display-table (car table-rows)))
@@ -581,6 +655,9 @@ network link.")
     ;; select state, count(*) from pg_stat_activity where pid <> pg_backend_pid() group by 1 order by 1;'
     ;; see https://gitlab.com/postgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
     (insert "\n")
+    (insert-text-button "More backend information"
+                        'action #'pgmacs--display-backend-information)
+    (insert "   ")
     (insert-text-button "Stat activity"
                         'action #'pgmacs--display-stat-activity
                         'help-echo "Show information from the pg_stat_activity table")
@@ -594,6 +671,78 @@ network link.")
     (insert "\n\n")
     (vtable-insert vtable)))
 
+
+;;;###autoload
+(defun pgmacs-open/string (connection-string)
+  (interactive "sPostgreSQL connection string: ")
+  (pgmacs-open (pg-connect/string connection-string)))
+
+;;;###autoload
+(defun pgmacs-open/uri (connection-uri)
+  (interactive "sPostgreSQL connection URI: ")
+  (pgmacs-open (pg-connect/uri connection-uri)))
+
+
+;;;###autoload
+(defun pgmacs ()
+  (interactive)
+  (require 'widget)
+  (switch-to-buffer "*PGMacs connection widget*")
+  (kill-all-local-variables)
+  (remove-overlays)
+  (widget-insert (propertize "Connect to PostgreSQL database" 'face 'bold))
+  (widget-insert "\n\n")
+  (let* ((w-dbname
+         (progn
+           (insert (format "%18s: " "Database name"))
+           (widget-create 'editable-field
+                          :size 20)))
+        (w-hostname
+         (progn
+           (insert (format "\n%18s: " "Hostname"))
+           (widget-create 'editable-field
+                          :help-echo "The host where PostgreSQL is running"
+                          :default ""
+                          :size 20)))
+        (w-port
+         (progn
+           (insert (format "\n%18s: " "Port"))
+           (widget-create 'natnum
+                          :format "%v"
+                          :size 20
+                          "5432")))
+        (w-username
+         (progn
+           (insert (format "\n%18s: " "Username"))
+           (widget-create 'editable-field
+                          :help-echo "Authenticate as this user"
+                          :size 20)))
+        (w-password
+         (progn
+           (insert (format "\n%18s: " "Password"))
+           (widget-create 'editable-field
+                          :size 20)))
+        (w-tls
+         (progn
+           (insert (format "\n%18s: " "TLS encryption"))
+           (widget-create 'checkbox
+                          :help-echo "Whether to use an encrypted connection"))))
+    (widget-insert "\n\n")
+    (widget-create 'push-button
+                   :notify (lambda (&rest _ignore)
+                             (let ((con (pg-connect (widget-value w-dbname)
+                                                    (widget-value w-username)
+                                                    (widget-value w-password)
+                                                    (widget-value w-hostname)
+                                                    (widget-value w-port)
+                                                    (widget-value w-tls))))
+                               (pgmacs-open con)))
+                   "Connect")
+    (widget-insert "\n")
+    (use-local-map widget-keymap)
+    (widget-setup)
+    (goto-char (point-min))
+    (widget-forward 1)))
 
 (provide 'pgmacs)
 

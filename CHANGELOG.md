@@ -3,6 +3,11 @@
 
 ## [0.2] - Unreleased
 
+- New functions `pgmacs-open/string` to open PGMacs with a PostgreSQL connection string, and
+  `pgmacs-open/uri` to open PGMacs with a PostgreSQL connection URI.
+  
+- New function `pgmacs` which opens a widget-based buffer to enter PostgreSQL connection information.
+
 - `e` in keymap reads an SQL query from the minibuffer and displays the output in a temporary buffer.
 
 - Pressing `k` in a table view copies the current row to a special kill ring. Pressing `y` then
