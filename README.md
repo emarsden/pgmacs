@@ -9,14 +9,14 @@ It allows you to:
 
 - browse the **list of tables** in the database
 
-- browse the contents of a table, row by row
+- browse the contents of a table, row by row, in paginated mode for large tables
 
 - edit the value of a column (type `RET` on the value you want to modify)
 
 - copy/paste rows of a database table (type `k` to copy, `y` to paste in a table display buffer)
 
 
-## Get started
+## Getting started
 
 You will need the [pg-el library](https://github.com/emarsden/pg-el/) installed, available in
 [MELPA](https://melpa.org/):
@@ -25,14 +25,16 @@ You will need the [pg-el library](https://github.com/emarsden/pg-el/) installed,
 
 Load this library, then say 
 
-    M-x pgmacs-open-db
+    M-x pgmacs
     
-which will prompt you for a database name and a user. To specify additional arguments such as a
-password, a host other than `localhost` and a port other than 5432, call the function
+which will open a widget-based buffer to collect connection information (database name, hostname,
+port, etc.). It will then open the PGMacs main buffer, which will show you a list of the tables
+available in the database.
 
-    (pgmacs-open (pg-connect "database-name" "username" "password "localhost" 5433))
-
-This should show you a list of the tables available in the database.
+You can also open pgmacs with a connection object from the pg.el library (function `pgmacs-open`),
+or with a PostgreSQL connection string such as `user=myself port=5432 dbname=mydb` (function
+`pgmacs-open/string`) or with a PostgreSQL connection URI such as
+`postgresql://%2Fvar%2Flib%2Fpostgresql/dbname` (function `pgmacs-open/uri`). 
 
 
 ## Status
