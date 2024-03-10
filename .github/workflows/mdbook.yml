@@ -1,0 +1,49 @@
+# Build our user documentation using mdbook and publish to GitHub Pages
+#
+# The default build of highlight.js bundled with mdbook does not support Emacs Lisp syntax
+# highlighting, so we use a custom build downloaded from https://highlightjs.org/download with the
+# "lisp" language enabled. This is placed at theme/highlight.js to override the bundled version.
+
+name: Build documentation
+
+on: workflow_dispatch
+
+jobs:
+  build-mdbook:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pages: write
+      id-token: write # To update the deployment status
+
+    name: Build documentation with mdbook and deploy to GitHub pages
+    steps:
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install latest mdbook
+        run: |
+          cargo install mdbook
+          cargo install mdbook-admonish
+
+      - name: Build book
+        run: |
+          (cd doc && mdbook-admonish install .)
+          (cd doc && mdbook build )
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'doc/book'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
