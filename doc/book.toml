@@ -1,0 +1,13 @@
+[book]
+title = "Using PGMacs"
+authors = ["Eric Marsden <eric.marsden@risk-engineering.org>"]
+description = "User manual for the the PGMacs PostgreSQL editor."
+language = "en"
+multilingual = false
+src = "src"
+
+
+[output.html]
+git-repository-url = "https://github.com/emarsden/pgmacs"
+git-repository-icon = "fa-github"
+curly-quotes = true
