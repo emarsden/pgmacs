@@ -28,10 +28,15 @@ port, etc.).
 It will then open the PGMacs main buffer, which will show you a list of the tables available in the
 database.
 
-You can also open pgmacs with a connection object from the pg.el library (function `pgmacs-open`),
-or with a PostgreSQL connection string such as `user=myself port=5432 dbname=mydb` (function
-`pgmacs-open/string`) or with a PostgreSQL connection URI such as
-`postgresql://%2Fvar%2Flib%2Fpostgresql/dbname` (function `pgmacs-open/uri`). 
+You can also open PGMacs with:
+
+- a PostgreSQL connection object from the pg.el library, using function `pgmacs-open`
+
+- a PostgreSQL connection string such as `user=myself port=5432 dbname=mydb`, using function
+  `pgmacs-open/string`
+
+- a PostgreSQL connection URI such as `postgresql://%2Fvar%2Flib%2Fpostgresql/dbname`, using
+  function `pgmacs-open/uri`.
 
 
 
@@ -43,7 +48,7 @@ columns, then the rows in the table.
 
 ![Screenshot table](img/screenshot-table.png)
 
-It the table contains a large number of rows, the contents will be paginated, with `Next` and
+If the table contains a large number of rows, the contents will be **paginated**, with `Next` and
 `Previous` buttons to move page by page. The number of rows in each page is determined by the
 variable `pgmacs-row-limit`.
 
@@ -67,3 +72,19 @@ buffer, which will prompt you for an SQL query, then display the output in a ded
 buffer. Type `q` to kill the temporary buffer.
 
 ![Screenshot table](img/screenshot-sql-query.png)
+
+
+
+## Inserting, copying and deleting rows
+
+To insert a new row into a table, press `i` in the table buffer. You will be prompted for the values
+of each column for which a default values is not specified, then the new row will be inserted. 
+
+To delete the row at point, press `d` in a table buffer and confirm. Please note that this deletes
+in the PostgreSQL database, not only in the Emacs buffer.
+
+To copy/paste rows, press `k` to copy the row to the PGMacs kill buffer (this only copies, without
+deleting the row), then `y` to insert a new row with the same values. Any columns that have a
+default value specified (for example, primary key rows that pull a value from an integer sequence,
+or are specified as `SERIAL`, or timestap values that default to `now`) will be inserted with a new
+generated value, rather than the value in the copied row.
