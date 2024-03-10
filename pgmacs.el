@@ -645,7 +645,7 @@ network link."
                       dbname
                       (cl-first row)
                       (cl-second row)
-                      (if (cl-second row) "RECOVERING" "PRIMARY"))))
+                      (if (cl-third row) "RECOVERING" "PRIMARY"))))
     (let* ((sql (format "SELECT pg_size_pretty(pg_database_size(%s))"
                         (pg-escape-literal dbname)))
            (res (pg-exec con sql))
