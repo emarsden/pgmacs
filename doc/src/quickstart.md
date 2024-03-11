@@ -57,6 +57,8 @@ variable `pgmacs-row-limit`.
 
 The following keys are bound when the point is located in the table: 
 
+
+| Key       | Binding                                                             |
 |-----------|---------------------------------------------------------------------|
 | S         | Sort the table by the current column.                               |
 | {         | Make the current column narrower.                                   |
