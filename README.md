@@ -15,7 +15,7 @@ It allows you to:
 
 - copy/paste rows of a database table (type `k` to copy, `y` to paste in a table display buffer)
 
-![Screenshot table list](img/screenshot-overview.png)
+![Screenshot table list](doc/src/img/screenshot-overview.png)
 
 
 
