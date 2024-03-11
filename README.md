@@ -15,6 +15,9 @@ It allows you to:
 
 - copy/paste rows of a database table (type `k` to copy, `y` to paste in a table display buffer)
 
+![Screenshot table list](img/screenshot-overview.png)
+
+
 
 ## Getting started
 
@@ -53,8 +56,3 @@ PGMacs is distributed under the terms of the GNU General Public License, version
 
 Copyright 2023-2024 Eric Marsden.
 
-
-
-The **latest version** of this package should be available from
-
-    https://github.com/emarsden/pgmacs/

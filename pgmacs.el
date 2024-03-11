@@ -58,8 +58,6 @@ network link."
 
 (defvar pgmacs-mode-map (make-sparse-keymap))
 
-;; TODO: perhaps distinguish here between the insertion of a row when the cursor is in the table
-;; (keybinding set by make-vtable) and insertion of a row otherwise.
 (keymap-set pgmacs-mode-map (kbd "q") 'bury-buffer)
 (keymap-set pgmacs-mode-map (kbd "e") (lambda (&rest _ignored) (pgmacs-run-sql)))
 
@@ -87,11 +85,14 @@ network link."
 (defvar pgmacs--kill-ring nil)
 
 
-;; TODO fold some of these into common structs
 (defvar-local pgmacs--con nil)
 (defvar-local pgmacs--table nil)
 (defvar-local pgmacs--column-type-names nil)
 (defvar-local pgmacs--offset nil)
+
+
+(defun pgmacs--notify (fmt &rest args)
+  (message (concat "PostgreSQL> " (apply fmt args))))
 
 (defun pgmacs--value-formatter (type-name)
   (cond ((or (string= type-name "timestamp")
@@ -172,7 +173,7 @@ network link."
            (res (pg-exec-prepared pgmacs--con sql
                                   `((,new-value . ,col-type)
                                     (,pk-value . ,pk-col-type)))))
-      (message "PostgreSQL> %s" (pg-result res :status))
+      (pgmacs--notify "%s" (pg-result res :status))
       (let ((new-row (copy-sequence current-row)))
         (setf (nth col-id new-row) new-value)
         ;; vtable-update-object doesn't work, so insert then delete old row
@@ -197,7 +198,7 @@ network link."
                            (pg-escape-identifier pgmacs--table)
                            (pg-escape-identifier pk))
                    `((,pk-value . ,pk-col-type)))))
-        (message "PostgreSQL> %s" (pg-result res :status)))
+        (pgmacs--notify "%s" (pg-result res :status)))
       (vtable-remove-object table row))))
 
 (defun pgmacs--insert-row (_current-row)
@@ -229,7 +230,7 @@ network link."
                  (cl-loop for v in values
                           for vt in value-types
                           collect (cons v vt)))))
-      (message "PostgreSQL> %s" (pg-result res :status))
+      (pgmacs--notify "%s" (pg-result res :status))
       ;; It's tempting to use vtable-insert-object here to avoid a full refresh of the table.
       ;; However, we don't know what values were chosen for any columns that have a default.
       (pgmacs--display-table pgmacs--table))))
@@ -277,7 +278,7 @@ network link."
                  (cl-loop for v in values
                           for vt in value-types
                           collect (cons v vt)))))
-      (message "PostgreSQL> %s" (pg-result res :status))
+      (pgmacs--notify "%s" (pg-result res :status))
       ;; It's tempting to use vtable-insert-object here to avoid a full refresh of the table.
       ;; However, we don't know what values were chosen for any columns that have a default.
       ;; This means that we can't insert at the current-row position.
@@ -378,7 +379,7 @@ network link."
                         (pg-escape-identifier colname))))
       (when (y-or-n-p (format "Really run this SQL? %s" sql))
         (let ((res (pg-exec pgmacs--con sql)))
-          (message "PostgreSQL> %s" (pg-result res :status)))))))
+          (pgmacs--notify "%s" (pg-result res :status)))))))
 
 
 ;; TODO: add additional information as per psql
@@ -444,9 +445,10 @@ network link."
                                "y" pgmacs--yank-row
                                "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                                "r" pgmacs--revert-vtable
+                               ;; TODO: "h" to show local help
+                               ;; TODO: if paginated, "n" and "p" for next/prev
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (erase-buffer)
-      ;; (setq-local revert-buffer-function #'pgmacs-regenerate-display-table)
       (setq-local pgmacs--con con
                   pgmacs--table table
                   pgmacs--offset offset
@@ -508,7 +510,7 @@ network link."
 
 (defun pgmacs--revert-vtable (&rest _ignore)
   "Redraw the table in the current buffer."
-  ;; We are assuming there that there is a single vtable in the buffer.
+  ;; We are assuming that there is a single vtable in the buffer.
   (goto-char (point-max))
   (vtable-beginning-of-table)
   (vtable-revert))

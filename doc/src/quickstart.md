@@ -39,10 +39,13 @@ You can also open PGMacs with:
   function `pgmacs-open/uri`.
 
 
+![Screenshot table list](img/screenshot-overview.png)
+
+
 
 ## Browsing a table
 
-From the buffer that displays a list of the tables in the database you are connected to, type RET on
+From the buffer that displays a list of the tables in the database you are connected to, type `RET` on
 the name of a table to enter a table buffer. This presents some metainformation on the table and its
 columns, then the rows in the table.
 
@@ -51,6 +54,21 @@ columns, then the rows in the table.
 If the table contains a large number of rows, the contents will be **paginated**, with `Next` and
 `Previous` buttons to move page by page. The number of rows in each page is determined by the
 variable `pgmacs-row-limit`.
+
+The following keys are bound when the point is located in the table: 
+
+|-----------|---------------------------------------------------------------------|
+| S         | Sort the table by the current column.                               |
+| {         | Make the current column narrower.                                   |
+| }         | Make the current column wider.                                      |
+| M-<left>  | Move to the previous column.                                        |
+| M-<right> | Move to the next column.                                            |
+| q         | Kill the current buffer.                                            |
+| i         | Insert a new row into the current table.                            |
+| d         | Delete the current row.                                             |
+| k         | Copy the current row.                                               |
+| y         | Paste (yank) the copied row.                                        |
+| e         | Open a new buffer to display the result of an SQL query.            |
 
 
 ## Editing a column value
@@ -78,7 +96,7 @@ buffer. Type `q` to kill the temporary buffer.
 ## Inserting, copying and deleting rows
 
 To insert a new row into a table, press `i` in the table buffer. You will be prompted for the values
-of each column for which a default values is not specified, then the new row will be inserted. 
+of each column for which a default value is not specified, then the new row will be inserted. 
 
 To delete the row at point, press `d` in a table buffer and confirm. Please note that this deletes
 in the PostgreSQL database, not only in the Emacs buffer.
@@ -88,3 +106,6 @@ deleting the row), then `y` to insert a new row with the same values. Any column
 default value specified (for example, primary key rows that pull a value from an integer sequence,
 or are specified as `SERIAL`, or timestap values that default to `now`) will be inserted with a new
 generated value, rather than the value in the copied row.
+
+All updates, insertions and deletions are immediately made on the PostgreSQL server by sending it
+the appropriate SQL `UPDATE TABLE`, `DELETE FROM` or `INSERT INTO` commands. 
