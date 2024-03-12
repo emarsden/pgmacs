@@ -92,7 +92,7 @@ network link."
 
 
 (defun pgmacs--notify (fmt &rest args)
-  (message (concat "PostgreSQL> " (apply fmt args))))
+  (message (concat "PostgreSQL> " (apply #'format (cons fmt args)))))
 
 (defun pgmacs--value-formatter (type-name)
   (cond ((or (string= type-name "timestamp")
@@ -522,13 +522,28 @@ network link."
     (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
            (row (pg-result res :tuple 0)))
       (insert (apply #'format "Database running on %s:%s with pid %s\n" row)))
-    (let* ((res (pg-exec con "SELECT current_user"))
+    (let* ((res (pg-exec con "SELECT current_user, current_setting('is_superuser')"))
            (row (pg-result res :tuple 0)))
-      (insert (apply #'format "Connected as user %s\n" row)))
+      (insert (format "Connected as user %s (%ssuperuser)\n"
+                      (cl-first row)
+                      (if (cl-second row) "" "not "))))
+    (let* ((res (pg-exec con "SELECT current_setting('in_hot_standby')"))
+           (row (pg-result res :tuple 0)))
+      (insert (apply #'format "In hot standby: %s\n" row)))
     (let* ((res (pg-exec con "SELECT pg_postmaster_start_time()"))
            (dtime (car (pg-result res :tuple 0)))
            (fmt (funcall (pgmacs--value-formatter "timestamp") dtime)))
-      (insert (format "Backend started at %s\n" fmt)))))
+      (insert (format "Backend started at %s\n" fmt)))
+    (let* ((res (pg-exec con "SELECT current_setting('client_encoding')"))
+           (row (pg-result res :tuple 0)))
+      (insert (apply #'format "Client encoding: %s\n" row)))
+    (let* ((res (pg-exec con "SELECT current_setting('server_encoding')"))
+           (row (pg-result res :tuple 0)))
+      (insert (apply #'format "Server encoding: %s\n" row)))
+    (let* ((res (pg-exec con "SELECT current_setting('TimeZone')"))
+           (row (pg-result res :tuple 0)))
+      (insert (apply #'format "Server timezone: %s\n" row)))))
+
 
 (defvar pgmacs--stat-activity-columns
   (list "datname" "usename" "client_addr" "backend_start" "xact_start" "query_start" "wait_event"))
