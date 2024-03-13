@@ -691,14 +691,18 @@ network link."
 
 ;;;###autoload
 (defun pgmacs-open/string (connection-string)
+  "Open PGMacs on database `dbname=mydb user=me host=localhost password=foo'.
+The supported keywords in the connection string are host,
+hostaddr, port, dbname, user, password, sslmode (partial support)
+and application_name."
   (interactive "sPostgreSQL connection string: ")
   (pgmacs-open (pg-connect/string connection-string)))
 
 ;;;###autoload
 (defun pgmacs-open/uri (connection-uri)
+  "Open PGMacs on database `postgresql://user:pass@host/dbname'."
   (interactive "sPostgreSQL connection URI: ")
   (pgmacs-open (pg-connect/uri connection-uri)))
-
 
 ;;;###autoload
 (defun pgmacs ()
@@ -738,12 +742,16 @@ network link."
          (progn
            (insert (format "\n%18s: " "Password"))
            (widget-create 'editable-field
+                          :secret ?*
                           :size 20)))
         (w-tls
          (progn
            (insert (format "\n%18s: " "TLS encryption"))
            (widget-create 'checkbox
                           :help-echo "Whether to use an encrypted connection"))))
+    (widget-insert "\n\n")
+    (widget-insert (propertize "Tab next ∣  Shift-Tab prev"
+                               'face 'shadow))
     (widget-insert "\n\n")
     (widget-create 'push-button
                    :notify (lambda (&rest _ignore)
