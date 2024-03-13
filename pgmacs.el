@@ -61,7 +61,6 @@ network link."
 (keymap-set pgmacs-mode-map (kbd "q") 'bury-buffer)
 (keymap-set pgmacs-mode-map (kbd "e") (lambda (&rest _ignored) (pgmacs-run-sql)))
 
-
 (defun pgmacs-mode ()
   "Major mode for editing PostgreSQL database."
   (setq major-mode 'pgmacs-mode
@@ -72,14 +71,24 @@ network link."
   (run-mode-hooks 'pgmacs-mode-hook))
 
 (defvar pgmacs-transient-map (make-sparse-keymap))
-
 (keymap-set pgmacs-transient-map (kbd "q") 'kill-buffer)
 
 (define-minor-mode pgmacs-transient-mode
-  "Minor mode for transient PGMacs buffers"
+  "Minor mode for transient PGMacs buffers."
   :global nil
   :init-value nil
   :keymap pgmacs-transient-map)
+
+(defvar pgmacs-paginated-map (make-sparse-keymap))
+(keymap-set pgmacs-paginated-map (kbd "n") 'pgmacs--paginated-next)
+(keymap-set pgmacs-paginated-map (kbd "p") 'pgmacs--paginated-prev)
+
+(define-minor-mode pgmacs-paginated-mode
+  "Minor mode for paginated PGMacs table buffers."
+  :global nil
+  :init-value nil
+  :keymap pgmacs-paginated-map)
+
 
 ;; Used for copying and pasting rows
 (defvar pgmacs--kill-ring nil)
@@ -395,6 +404,17 @@ network link."
           (pgmacs--notify "%s" (pg-result res :status)))))))
 
 
+(defun pgmacs--paginated-next (&rest _ignore)
+  (interactive)
+  (cl-incf pgmacs--offset pgmacs-row-limit)
+  (pgmacs--display-table pgmacs--table))
+
+(defun pgmacs--paginated-prev (&rest _ignore)
+  (interactive)
+  (cl-decf pgmacs--offset pgmacs-row-limit)
+  (pgmacs--display-table pgmacs--table))
+
+
 ;; TODO: add additional information as per psql
 ;; Table « public.books »
 ;; Colonne |           Type           | Collationnement | NULL-able |            Par défaut             
@@ -505,22 +525,20 @@ network link."
                             'help-echo "Add a PRIMARY KEY to enable editing"))
       (insert "\n\n")
       (when (pg-result res :incomplete)
+        (pgmacs-paginated-mode)
         (when (> pgmacs--offset pgmacs-row-limit)
           (insert-text-button
            (format "Prev. %s rows" pgmacs-row-limit)
-           'action (lambda (&rest _ignore)
-                     (cl-decf pgmacs--offset pgmacs-row-limit)
-                     (pgmacs--display-table table)))
+           'action #'pgmacs--paginated-prev)
           (insert "   "))
         (insert-text-button
          (format "Next %s rows" pgmacs-row-limit)
-         'action (lambda (&rest _ignore)
-                   (cl-incf pgmacs--offset pgmacs-row-limit)
-                   (pgmacs--display-table table)))
+         'action #'pgmacs--paginated-next)
         (insert "\n\n"))
       (if (null rows)
           (insert "(no rows in table)")
         (vtable-insert vtable)))))
+
 
 (defun pgmacs--revert-vtable (&rest _ignore)
   "Redraw the table in the current buffer."
