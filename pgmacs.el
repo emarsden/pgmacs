@@ -149,6 +149,19 @@ network link."
         (funcall parser stringval (pgcon-client-encoding pgmacs--con))
       stringval)))
 
+(defun pgmacs--row-as-json (current-row)
+  (unless (json-available-p)
+    (error "Emacs is not compiled with JSON support"))
+  (let* ((table (vtable-current-table))
+         (cols (vtable-columns table))
+         (ht (make-hash-table :test #'equal)))
+    (cl-loop
+     for col in cols
+     for v in current-row
+     do (puthash (vtable-column-name col) v ht))
+    (kill-new (json-encode ht))
+    (message "JSON copied to kill ring")))
+
 (defun pgmacs--edit-row (row primary-keys)
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
@@ -440,12 +453,13 @@ network link."
                     :objects rows
                     :actions `("RET" (lambda (row) (pgmacs--edit-row row ',primary-keys))
                                "d" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                               ;; TODO: "h" to show local help
                                "i" pgmacs--insert-row
                                "k" pgmacs--copy-row
                                "y" pgmacs--yank-row
                                "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                                "r" pgmacs--revert-vtable
-                               ;; TODO: "h" to show local help
+                               "j" pgmacs--row-as-json
                                ;; TODO: if paginated, "n" and "p" for next/prev
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (erase-buffer)
