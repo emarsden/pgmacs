@@ -109,7 +109,15 @@ network link."
 	     (string= type-name "date"))
          ;; these are represented as a `decode-time' structure
          (lambda (val) (format-time-string "%Y-%m-%dT%T" val)))
-        ((string= type-name "bpchar") #'byte-to-string)
+        ((string= type-name "bpchar")
+         #'byte-to-string)
+        ((string= type-name "hstore")
+         (lambda (ht)
+           (let ((items (list)))
+             (maphash (lambda (k v) (push (format "%s=>%s" k v) items)) ht)
+             (string-join items ","))))
+        ((string= type-name "json")
+         #'json-serialize)
         (t
          (lambda (val) (format "%s" val)))))
 
