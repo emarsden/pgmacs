@@ -158,9 +158,9 @@ network link."
         ((string= type-name "timespan") 12)
         (t 10)))
 
-(defun pgmacs--read-value (name type prompt)
+(defun pgmacs--read-value (name type prompt current-value)
   (let* ((prompt (format prompt name type))
-         (stringval (read-string prompt))
+         (stringval (read-string prompt current-value))
          (parser (pg-lookup-parser type)))
     (if parser
         (funcall parser stringval (pgcon-client-encoding pgmacs--con))
@@ -195,7 +195,8 @@ network link."
          (pk-value (and pk-col-id (nth pk-col-id row))))
     (unless pk-value
       (error "Can't find value for primary key %s" pk))
-    (let* ((new-value (pgmacs--read-value col-name col-type "Change %s (%s) to: "))
+    (let* ((current (nth col-id current-row))
+           (new-value (pgmacs--read-value col-name col-type "Change %s (%s) to: " current))
            (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
                         (pg-escape-identifier pgmacs--table)
                         (pg-escape-identifier col-name)
@@ -231,7 +232,7 @@ network link."
         (pgmacs--notify "%s" (pg-result res :status)))
       (vtable-remove-object table row))))
 
-(defun pgmacs--insert-row (_current-row)
+(defun pgmacs--insert-row (current-row)
   ;; TODO we need to handle the case where there is no existing vtable because the underlying SQL table is empty.
   (let* ((table (vtable-current-table))
          (cols (vtable-columns table))
@@ -244,7 +245,8 @@ network link."
              (col-type (aref pgmacs--column-type-names col-id))
              (col-has-default (not (null (pg-column-default pgmacs--con pgmacs--table col-name)))))
         (unless col-has-default
-          (let* ((val (pgmacs--read-value col-name col-type "Value for column %s (%s): ")))
+          (let* ((current (nth col-id current-row))
+                 (val (pgmacs--read-value col-name col-type "Value for column %s (%s): " current)))
             (push col-name col-names)
             (push val values)
             (push col-type value-types)))))
