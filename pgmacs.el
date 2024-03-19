@@ -28,12 +28,15 @@
   :link '(url-link :tag "Github" "https://github.com/emarsden/pgmacs/"))
 
 (defface pgmacs-table-data
-  '((t (:inherit fixed-pitch-serif)))
+  '((t (:inherit fixed-pitch-serif
+        :foreground "black")))
   "Face used to display data in a PGMacs database table."
   :group 'pgmacs)
 
 (defface pgmacs-table-header
-  '((t (:inherit bold :weight bold)))
+  '((t (:inherit bold
+        :weight bold
+        :foreground "black")))
   "Face used to display a PGMacs database table header."
   :group 'pgmacs)
 
@@ -109,6 +112,10 @@ network link."
 	     (string= type-name "date"))
          ;; these are represented as a `decode-time' structure
          (lambda (val) (format-time-string "%Y-%m-%dT%T" val)))
+        ((or (string= type-name "text")
+             (string= type-name "varchar")
+             (string= type-name "name"))
+         (lambda (s) (or s "")))
         ((string= type-name "bpchar")
          #'byte-to-string)
         ((string= type-name "hstore")
@@ -158,14 +165,6 @@ network link."
         ((string= type-name "timespan") 12)
         (t 10)))
 
-(defun pgmacs--read-value (name type prompt current-value)
-  (let* ((prompt (format prompt name type))
-         (stringval (read-string prompt current-value))
-         (parser (pg-lookup-parser type)))
-    (if parser
-        (funcall parser stringval (pgcon-client-encoding pgmacs--con))
-      stringval)))
-
 (defun pgmacs--row-as-json (current-row)
   (unless (json-available-p)
     (error "Emacs is not compiled with JSON support"))
@@ -179,7 +178,21 @@ network link."
     (kill-new (json-encode ht))
     (message "JSON copied to kill ring")))
 
-(defun pgmacs--edit-row (row primary-keys)
+(defun pgmacs--read-value/minibuffer (name type prompt current-value)
+  (let* ((prompt (format prompt name type)))
+    (read-string prompt (format "%s" current-value))))
+
+;; TODO: perhaps if the field value is very long or of BYTEA type, prompt "really want to edit in
+;; minibuffer" and suggest using the widget editing mode instead.
+(defun pgmacs--read-value (name type prompt current-value)
+  (let* ((user-provided (pgmacs--read-value/minibuffer name type prompt current-value))
+         (parser (pg-lookup-parser type)))
+    (if parser
+        (funcall parser user-provided (pgcon-client-encoding pgmacs--con))
+      user-provided)))
+
+;; Edit the column value at point by prompting for the new value in the minibuffer.
+(defun pgmacs--edit-value (row primary-keys)
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((table (vtable-current-table))
@@ -211,6 +224,73 @@ network link."
         (vtable-insert-object table new-row current-row)
         (vtable-remove-object table current-row)))))
 
+;; Edit the current value in a dedicated widget buffer
+(defun pgmacs--edit-value/widget (row primary-keys)
+  (require 'widget)
+  (when (null primary-keys)
+    (error "Can't edit content of a table that has no PRIMARY KEY"))
+  (let* ((con pgmacs--con)
+         (table (vtable-current-table))
+         (current-row (vtable-current-object))
+         (cols (vtable-columns table))
+         (col-id (vtable-current-column))
+         (col (nth col-id cols))
+         (col-name (vtable-column-name col))
+         (col-type (aref pgmacs--column-type-names col-id))
+         (pk (cl-first primary-keys))
+         (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
+         (pk-col-type (aref pgmacs--column-type-names pk-col-id))
+         (pk-value (and pk-col-id (nth pk-col-id row))))
+    (unless pk-value
+      (error "Can't find value for primary key %s" pk))
+    (let* ((current (nth col-id current-row))
+           (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
+                        (pg-escape-identifier pgmacs--table)
+                        (pg-escape-identifier col-name)
+                        (pg-escape-identifier pk)))
+           (updater (lambda (user-provided)
+                      (let* ((parser (pg-lookup-parser col-type))
+                             (ce (pgcon-client-encoding pgmacs--con))
+                             (new-value (if parser (funcall parser user-provided ce)
+                                          user-provided))
+                             (res (pg-exec-prepared pgmacs--con sql
+                                                    `((,new-value . ,col-type)
+                                                      (,pk-value . ,pk-col-type)))))
+                        (pgmacs--notify "%s" (pg-result res :status))
+                        (let ((new-row (copy-sequence current-row)))
+                          (setf (nth col-id new-row) new-value)
+                          ;; vtable-update-object doesn't work, so insert then delete old row
+                          (vtable-insert-object table new-row current-row)
+                          (vtable-remove-object table current-row))))))
+      (switch-to-buffer "*PGMacs update widget*")
+      (erase-buffer)
+      (remove-overlays)
+      (kill-all-local-variables)
+      (setq-local pgmacs--con con
+                  pgmacs--table table)
+      (widget-insert (propertize (format "Update column %s" col-name) 'face 'bold))
+      (widget-insert "\n\n")
+      (widget-insert (format "Change %s (type %s) to:" col-name col-type))
+      (widget-insert "\n\n")
+      (let* ((w-updated
+              (progn
+                (insert (format "%12s: " "New value"))
+                ;; TODO: insert a widget that is appropriate for the col-type
+                (widget-create 'editable-field
+                               :size 40
+                               (format "%s" current)))))
+        (widget-insert "\n\n")
+        (widget-create 'push-button
+                       :notify (lambda (&rest _ignore)
+                                 (funcall updater (widget-value w-updated))
+                                 (kill-buffer (current-buffer)))
+                       "Update")
+        (widget-insert "\n")
+        (use-local-map widget-keymap)
+        (widget-setup)
+        (goto-char (point-min))
+        (widget-forward 1)))))
+
 (defun pgmacs--delete-row (row primary-keys)
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
@@ -232,6 +312,7 @@ network link."
         (pgmacs--notify "%s" (pg-result res :status)))
       (vtable-remove-object table row))))
 
+;; TODO: could have a version of this that uses a dedicated widget buffer to input each column value
 (defun pgmacs--insert-row (current-row)
   ;; TODO we need to handle the case where there is no existing vtable because the underlying SQL table is empty.
   (let* ((table (vtable-current-table))
@@ -481,7 +562,8 @@ network link."
                     :separator-width 5
                     :divider-width "5px"
                     :objects rows
-                    :actions `("RET" (lambda (row) (pgmacs--edit-row row ',primary-keys))
+                    :actions `("RET" (lambda (row) (pgmacs--edit-value row ',primary-keys))
+                               "w" (lambda (row) (pgmacs--edit-value/widget row ',primary-keys))
                                "d" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                ;; TODO: "h" to show local help
                                "i" pgmacs--insert-row
@@ -614,16 +696,18 @@ network link."
          (column-names (mapcar #'cl-first (pg-result res :attributes)))
          (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
          (column-type-names (mapcar #'pg--lookup-type-name column-type-oids))
+         (column-meta (mapcar (lambda (col) (pgmacs--column-info con table col)) column-names))
          (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
          (value-widths (mapcar #'pgmacs--value-width column-type-names))
          (column-widths (cl-loop for w in value-widths
                                  for name in column-names
                                  collect (1+ (max w (length name)))))
          (columns (cl-loop for name in column-names
+                           for meta in column-meta
                            for fmt in column-formatters
                            for w in column-widths
                            collect (make-vtable-column
-                                    :name name
+                                    :name (propertize name 'face 'pgmacs-table-header 'help-echo meta)
                                     :min-width (1+ (max w (length name)))
                                     :formatter fmt)))
          (inhibit-read-only t)
