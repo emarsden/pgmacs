@@ -20,6 +20,14 @@
   displayed in the buffer), pressing `n` and `p` updates the table data to display the next and
   previous pages respectively.
 
+- Pressing `+` in a table view allows you to insert a new row, with values for each column entered
+  in the minibuffer. Columns for which an SQL default value is specified will use that default
+  value.
+  
+- Pressing `i` in a table view allows you to insert a new row, with values for each column entered
+  in a widget-based buffer. Columns for which an SQL default value is specified will use that default
+  value.
+
 - In table buffers, include a button that dumps the table as CSV to an Emacs buffer.
 
 - Faces `pgmacs-table-header` and `pgmacs-table-data` are used to display the header and the rows of

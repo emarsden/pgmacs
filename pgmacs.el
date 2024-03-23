@@ -168,8 +168,8 @@ network link."
 (defun pgmacs--row-as-json (current-row)
   (unless (json-available-p)
     (error "Emacs is not compiled with JSON support"))
-  (let* ((table (vtable-current-table))
-         (cols (vtable-columns table))
+  (let* ((vtable (vtable-current-table))
+         (cols (vtable-columns vtable))
          (ht (make-hash-table :test #'equal)))
     (cl-loop
      for col in cols
@@ -186,18 +186,17 @@ network link."
 ;; minibuffer" and suggest using the widget editing mode instead.
 (defun pgmacs--read-value (name type prompt current-value)
   (let* ((user-provided (pgmacs--read-value/minibuffer name type prompt current-value))
-         (parser (pg-lookup-parser type)))
-    (if parser
-        (funcall parser user-provided (pgcon-client-encoding pgmacs--con))
-      user-provided)))
+         (parser (pg-lookup-parser type))
+         (ce (pgcon-client-encoding pgmacs--con)))
+    (if parser (funcall parser user-provided ce) user-provided)))
 
 ;; Edit the column value at point by prompting for the new value in the minibuffer.
-(defun pgmacs--edit-value (row primary-keys)
+(defun pgmacs--edit-value/minibuffer (row primary-keys)
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
-  (let* ((table (vtable-current-table))
+  (let* ((vtable (vtable-current-table))
          (current-row (vtable-current-object))
-         (cols (vtable-columns table))
+         (cols (vtable-columns vtable))
          (col-id (vtable-current-column))
          (col (nth col-id cols))
          (col-name (vtable-column-name col))
@@ -221,18 +220,25 @@ network link."
       (let ((new-row (copy-sequence current-row)))
         (setf (nth col-id new-row) new-value)
         ;; vtable-update-object doesn't work, so insert then delete old row
-        (vtable-insert-object table new-row current-row)
-        (vtable-remove-object table current-row)))))
+        (vtable-insert-object vtable new-row current-row)
+        (vtable-remove-object vtable current-row)))))
 
-;; Edit the current value in a dedicated widget buffer
+(defun pgmacs--widget-for (type current-value)
+  ;; TODO improve this choice based on type
+  (widget-create 'editable-field
+                 :size 40
+                 (format "%s" current-value)))
+
+;; Edit the current column value in a dedicated widget buffer
 (defun pgmacs--edit-value/widget (row primary-keys)
   (require 'widget)
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((con pgmacs--con)
-         (table (vtable-current-table))
+         (table pgmacs--table)
+         (vtable (vtable-current-table))
          (current-row (vtable-current-object))
-         (cols (vtable-columns table))
+         (cols (vtable-columns vtable))
          (col-id (vtable-current-column))
          (col (nth col-id cols))
          (col-name (vtable-column-name col))
@@ -260,8 +266,8 @@ network link."
                         (let ((new-row (copy-sequence current-row)))
                           (setf (nth col-id new-row) new-value)
                           ;; vtable-update-object doesn't work, so insert then delete old row
-                          (vtable-insert-object table new-row current-row)
-                          (vtable-remove-object table current-row))))))
+                          (vtable-insert-object vtable new-row current-row)
+                          (vtable-remove-object vtable current-row))))))
       (switch-to-buffer "*PGMacs update widget*")
       (erase-buffer)
       (remove-overlays)
@@ -274,11 +280,8 @@ network link."
       (widget-insert "\n\n")
       (let* ((w-updated
               (progn
-                (insert (format "%12s: " "New value"))
-                ;; TODO: insert a widget that is appropriate for the col-type
-                (widget-create 'editable-field
-                               :size 40
-                               (format "%s" current)))))
+                (widget-insert (format "%12s: " "New value"))
+                (pgmacs--widget-for col-type current))))
         (widget-insert "\n\n")
         (widget-create 'push-button
                        :notify (lambda (&rest _ignore)
@@ -295,8 +298,8 @@ network link."
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
   (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
-    (let* ((table (vtable-current-table))
-           (cols (vtable-columns table))
+    (let* ((vtable (vtable-current-table))
+           (cols (vtable-columns vtable))
            (pk (cl-first primary-keys))
            (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
            (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
@@ -310,13 +313,12 @@ network link."
                            (pg-escape-identifier pk))
                    `((,pk-value . ,pk-col-type)))))
         (pgmacs--notify "%s" (pg-result res :status)))
-      (vtable-remove-object table row))))
+      (vtable-remove-object vtable row))))
 
-;; TODO: could have a version of this that uses a dedicated widget buffer to input each column value
 (defun pgmacs--insert-row (current-row)
   ;; TODO we need to handle the case where there is no existing vtable because the underlying SQL table is empty.
-  (let* ((table (vtable-current-table))
-         (cols (vtable-columns table))
+  (let* ((vtable (vtable-current-table))
+         (cols (vtable-columns vtable))
          (col-names (list))
          (values (list))
          (value-types (list)))
@@ -344,9 +346,84 @@ network link."
                           for vt in value-types
                           collect (cons v vt)))))
       (pgmacs--notify "%s" (pg-result res :status))
-      ;; It's tempting to use vtable-insert-object here to avoid a full refresh of the table.
+      ;; It's tempting to use vtable-insert-object here to avoid a full refresh of the vtable.
       ;; However, we don't know what values were chosen for any columns that have a default.
       (pgmacs--display-table pgmacs--table))))
+
+(defun pgmacs--insert-row/widget (current-row)
+  (require 'widget)
+  (let* ((con pgmacs--con)
+         (table pgmacs--table)
+         (ce (pgcon-client-encoding pgmacs--con))
+         (vtable (vtable-current-table))
+         (cols (vtable-columns vtable))
+         (editable-cols (list))
+         (col-names (list))
+         (col-types (list)))
+    ;; Determine which of the columns are editable (those that do not have a defined default)
+    (dolist (col cols)
+      (let* ((col-name (vtable-column-name col))
+             (col-id (cl-position col-name cols :key #'vtable-column-name :test #'string=))
+             (current (nth col-id current-row))
+             (col-type (aref pgmacs--column-type-names col-id))
+             (col-has-default (not (null (pg-column-default pgmacs--con pgmacs--table col-name)))))
+        (unless col-has-default
+          (push (vector col-name col-type current) editable-cols)
+          (push col-name col-names)
+          (push col-type col-types))))
+    (setq editable-cols (nreverse editable-cols)
+          col-names (nreverse col-names)
+          col-types (nreverse col-types))
+    (let* ((widgets (list))
+           (placeholders (cl-loop for i from 1 to (length editable-cols)
+                                  collect (format "$%d" i)))
+           (target-cols (mapcar #'pg-escape-identifier col-names))
+           (updater (lambda (user-provided-values)
+                      (let* ((values (cl-loop
+                                      for v in user-provided-values
+                                      for vt in col-types
+                                      with parser = (pg-lookup-parser vt)
+                                      collect (if parser (funcall parser v ce) v)))
+                             (sql (format "INSERT INTO %s(%s) VALUES(%s)"
+                                          (pg-escape-identifier pgmacs--table)
+                                          (string-join target-cols ",")
+                                          (string-join placeholders ",")))
+                             (param-values (cl-loop for v in user-provided-values
+                                                    for vt in col-types
+                                                    collect (cons v vt)))
+                             (_ignore (message "insert/widget params> %s" param-values))
+                             (res (pg-exec-prepared pgmacs--con sql param-values)))
+                        (pgmacs--notify "%s" (pg-result res :status))
+                        ;; It's tempting to use vtable-insert-object here to avoid a full refresh of
+                        ;; the vtable. However, we don't know what values were chosen for any columns
+                        ;; that have a default.
+                        (pgmacs--display-table table)))))
+      (switch-to-buffer "*PGMacs insert row widget*")
+      (erase-buffer)
+      (remove-overlays)
+      (kill-all-local-variables)
+      (setq-local pgmacs--con con
+                  pgmacs--table table)
+      (widget-insert (propertize (format "Insert row into table %s" table) 'face 'bold))
+      (widget-insert "\n\n")
+      (dolist (ecv editable-cols)
+        (let ((name (aref ecv 0))
+              (type (aref ecv 1))
+              (current (aref ecv 2)))
+          (widget-insert (format "\n%12s: " name))
+          (push (pgmacs--widget-for type "") widgets)))
+      (setq widgets (nreverse widgets))
+      (widget-insert "\n\n")
+      (widget-create 'push-button
+                     :notify (lambda (&rest _ignore)
+                               (funcall updater (mapcar #'widget-value widgets))
+                               (kill-buffer (current-buffer)))
+                     "Insert row")
+      (widget-insert "\n")
+      (use-local-map widget-keymap)
+      (widget-setup)
+      (goto-char (point-min))
+      (widget-forward 1))))
 
 ;; Copy current row to our "kill ring".
 (defun pgmacs--copy-row (current-row)
@@ -363,8 +440,8 @@ network link."
   ;; Insert a new row based on the copied row, but without specifying values for the columns that
   ;; have a default value
   (let* ((yanked-row (cdr pgmacs--kill-ring))
-         (table (vtable-current-table))
-         (cols (vtable-columns table))
+         (vtable (vtable-current-table))
+         (cols (vtable-columns vtable))
          (col-names (list))
          (values (list))
          (value-types (list)))
@@ -392,7 +469,7 @@ network link."
                           for vt in value-types
                           collect (cons v vt)))))
       (pgmacs--notify "%s" (pg-result res :status))
-      ;; It's tempting to use vtable-insert-object here to avoid a full refresh of the table.
+      ;; It's tempting to use vtable-insert-object here to avoid a full refresh of the vtable.
       ;; However, we don't know what values were chosen for any columns that have a default.
       ;; This means that we can't insert at the current-row position.
       (pgmacs--display-table pgmacs--table))))
@@ -562,17 +639,18 @@ network link."
                     :separator-width 5
                     :divider-width "5px"
                     :objects rows
-                    :actions `("RET" (lambda (row) (pgmacs--edit-value row ',primary-keys))
+                    :actions `("RET" (lambda (row) (pgmacs--edit-value/minibuffer row ',primary-keys))
                                "w" (lambda (row) (pgmacs--edit-value/widget row ',primary-keys))
-                               "d" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                               "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                ;; TODO: "h" to show local help
-                               "i" pgmacs--insert-row
+                               "+" pgmacs--insert-row
+                               "i" pgmacs--insert-row/widget
                                "k" pgmacs--copy-row
                                "y" pgmacs--yank-row
                                "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                                "r" pgmacs--revert-vtable
                                "j" pgmacs--row-as-json
-                               ;; TODO: if paginated, "n" and "p" for next/prev
+                               ;; "n" and "p" are bound when table is paginated to next/prev page
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (erase-buffer)
       (setq-local pgmacs--con con
@@ -633,7 +711,7 @@ network link."
 
 
 (defun pgmacs--revert-vtable (&rest _ignore)
-  "Redraw the table in the current buffer."
+  "Redraw the vtable in the current buffer."
   ;; We are assuming that there is a single vtable in the buffer.
   (goto-char (point-max))
   (vtable-beginning-of-table)
@@ -696,18 +774,16 @@ network link."
          (column-names (mapcar #'cl-first (pg-result res :attributes)))
          (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
          (column-type-names (mapcar #'pg--lookup-type-name column-type-oids))
-         (column-meta (mapcar (lambda (col) (pgmacs--column-info con table col)) column-names))
          (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
          (value-widths (mapcar #'pgmacs--value-width column-type-names))
          (column-widths (cl-loop for w in value-widths
                                  for name in column-names
                                  collect (1+ (max w (length name)))))
          (columns (cl-loop for name in column-names
-                           for meta in column-meta
                            for fmt in column-formatters
                            for w in column-widths
                            collect (make-vtable-column
-                                    :name (propertize name 'face 'pgmacs-table-header 'help-echo meta)
+                                    :name (propertize name 'face 'pgmacs-table-header)
                                     :min-width (1+ (max w (length name)))
                                     :formatter fmt)))
          (inhibit-read-only t)
@@ -841,38 +917,38 @@ and application_name."
   (widget-insert "\n\n")
   (let* ((w-dbname
          (progn
-           (insert (format "%18s: " "Database name"))
+           (widget-insert (format "%18s: " "Database name"))
            (widget-create 'editable-field
                           :size 20)))
         (w-hostname
          (progn
-           (insert (format "\n%18s: " "Hostname"))
+           (widget-insert (format "\n%18s: " "Hostname"))
            (widget-create 'editable-field
                           :help-echo "The host where PostgreSQL is running"
                           :default ""
                           :size 20)))
         (w-port
          (progn
-           (insert (format "\n%18s: " "Port"))
+           (widget-insert (format "\n%18s: " "Port"))
            (widget-create 'natnum
                           :format "%v"
                           :size 20
                           "5432")))
         (w-username
          (progn
-           (insert (format "\n%18s: " "Username"))
+           (widget-insert (format "\n%18s: " "Username"))
            (widget-create 'editable-field
                           :help-echo "Authenticate as this user"
                           :size 20)))
         (w-password
          (progn
-           (insert (format "\n%18s: " "Password"))
+           (widget-insert (format "\n%18s: " "Password"))
            (widget-create 'editable-field
                           :secret ?*
                           :size 20)))
         (w-tls
          (progn
-           (insert (format "\n%18s: " "TLS encryption"))
+           (widget-insert (format "\n%18s: " "TLS encryption"))
            (widget-create 'checkbox
                           :help-echo "Whether to use an encrypted connection"))))
     (widget-insert "\n\n")
