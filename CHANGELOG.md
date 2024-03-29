@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.2] - Unreleased
+## [0.2] - 2024-03-29
 
 - New functions `pgmacs-open/string` to open PGMacs with a PostgreSQL connection string, and
   `pgmacs-open/uri` to open PGMacs with a PostgreSQL connection URI.
@@ -37,3 +37,9 @@
 
 - Variable `pgmacs-row-limit` specifies the maximum number of rows to retrieve per database query,
   before results are paginated.
+
+- Support for schema-qualified tables in the table list, with an updated version of the pg-el
+  library.
+
+- Some attempt to show query progress on slow connections to PostgreSQL using Emacs's
+  `make-progress-reporter` functionality.

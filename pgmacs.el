@@ -2,8 +2,8 @@
 
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
-;; Version: 0.1
-;; Package-Requires: ((emacs "29.1") (pg "0.29"))
+;; Version: 0.2
+;; Package-Requires: ((emacs "29.1") (pg "0.31"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
 ;; SPDX-License-Identifier: GPL-2.0-or-later
@@ -93,6 +93,9 @@ network link."
   :keymap pgmacs-paginated-map)
 
 
+;; Used for updating on progress retrieving information from PostgreSQL.
+(defvar pgmacs--progress nil)
+
 ;; Used for copying and pasting rows
 (defvar pgmacs--kill-ring nil)
 
@@ -165,6 +168,28 @@ network link."
         ((string= type-name "timespan") 12)
         (t 10)))
 
+;; Name may be a qualified name or a simple string. Transform this into a string for display to the
+;; user. We only want to show the outer ?" characters if they are necessary (if some characters in
+;; the identifier require quoting).
+(defun pgmacs--display-identifier (name)
+  (cl-labels ((safe-p (ch)
+                (string-match-p "[0-9a-zA-Z_]" (string ch)))
+              (user-facing (nm)
+                (if (cl-every #'safe-p nm)
+                    nm
+                  (pg-escape-identifier nm))))
+    (cond ((pg-qualified-name-p name)
+           (let ((schema (pg-qualified-name-schema name))
+                 (name (pg-qualified-name-name name)))
+             (if schema
+                 (format "%s.%s"
+                         (user-facing schema)
+                         (user-facing name))
+               (user-facing name))))
+          (t
+           (user-facing name)))))
+
+  
 (defun pgmacs--row-as-json (current-row)
   (unless (json-available-p)
     (error "Emacs is not compiled with JSON support"))
@@ -223,7 +248,7 @@ network link."
         (vtable-insert-object vtable new-row current-row)
         (vtable-remove-object vtable current-row)))))
 
-(defun pgmacs--widget-for (type current-value)
+(defun pgmacs--widget-for (_type current-value)
   ;; TODO improve this choice based on type
   (widget-create 'editable-field
                  :size 40
@@ -383,16 +408,12 @@ network link."
                                       for v in user-provided-values
                                       for vt in col-types
                                       with parser = (pg-lookup-parser vt)
-                                      collect (if parser (funcall parser v ce) v)))
+                                      collect (cons (if parser (funcall parser v ce) v) vt)))
                              (sql (format "INSERT INTO %s(%s) VALUES(%s)"
                                           (pg-escape-identifier pgmacs--table)
                                           (string-join target-cols ",")
                                           (string-join placeholders ",")))
-                             (param-values (cl-loop for v in user-provided-values
-                                                    for vt in col-types
-                                                    collect (cons v vt)))
-                             (_ignore (message "insert/widget params> %s" param-values))
-                             (res (pg-exec-prepared pgmacs--con sql param-values)))
+                             (res (pg-exec-prepared pgmacs--con sql values)))
                         (pgmacs--notify "%s" (pg-result res :status))
                         ;; It's tempting to use vtable-insert-object here to avoid a full refresh of
                         ;; the vtable. However, we don't know what values were chosen for any columns
@@ -408,8 +429,7 @@ network link."
       (widget-insert "\n\n")
       (dolist (ecv editable-cols)
         (let ((name (aref ecv 0))
-              (type (aref ecv 1))
-              (current (aref ecv 2)))
+              (type (aref ecv 1)))
           (widget-insert (format "\n%12s: " name))
           (push (pgmacs--widget-for type "") widgets)))
       (setq widgets (nreverse widgets))
@@ -477,43 +497,53 @@ network link."
 
 ;; We can also SELECT c.column_name, c.data_type
 (defun pgmacs--table-primary-keys (con table)
-  (let* ((sql (format "SELECT c.column_name
+  (let* ((t-id (pg-escape-identifier table))
+         (sql "SELECT c.column_name
       FROM information_schema.table_constraints tc
       JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name) 
       JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
       AND tc.table_name = c.table_name AND ccu.column_name = c.column_name
-      WHERE constraint_type = 'PRIMARY KEY' and tc.table_name = %s"
-                      (pg-escape-literal table)))
-         (res (pg-exec con sql)))
+      WHERE constraint_type = 'PRIMARY KEY' and tc.table_name = $1")
+         (res (pg-exec-prepared con sql `((,t-id . "text")))))
     (mapcar #'cl-first (pg-result res :tuples))))
 
-;; Return a string with information about this column, like the type name, PRIMARY KEY, UNIQUE, etc.
+
+(defun pgmacs--column-nullable-p (con table column)
+  "Is there a NOT NULL constraint on COLUMN in TABLE?
+Uses PostgreSQL connection CON."
+  (let* ((t-id (pg-escape-identifier table))
+         (sql "SELECT 1 from information_schema.columns WHERE table_name=$1 AND column_name=$2 AND is_nullable='YES'")
+         (res (pg-exec-prepared con sql `((,t-id . "text") (,column . "text")))))
+    (null (pg-result res :tuples))))
+
+;; Return a string with information about this column, like the type name, PRIMARY KEY, constraints
+;; such as UNIQUE, etc.
 (defun pgmacs--column-info (con table column)
-  (let* ((sql "SELECT tc.constraint_type FROM information_schema.table_constraints tc
+  (let* ((t-id (pg-escape-identifier table))
+         (sql "SELECT tc.constraint_type FROM information_schema.table_constraints tc
                JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name) 
                JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
                AND tc.table_name = c.table_name
                AND ccu.column_name = c.column_name
                WHERE tc.table_name = $1 AND c.column_name = $2")
-         (res (pg-exec-prepared con sql
-                                `((,table . "text") (,column . "text"))))
+         (res (pg-exec-prepared con sql `((,t-id . "text") (,column . "text"))))
          (constraints (pg-result res :tuples))
          (res (pg-exec-prepared
                con
                "SELECT character_maximum_length FROM information_schema.columns
                 WHERE table_name=$1 AND column_name=$2"
-               `((,table . "text") (,column . "text"))))
+               `((,t-id . "text") (,column . "text"))))
          (maxlen (pg-result res :tuple 0))
          (defaults (pg-column-default con table column))
-         (sql (format "SELECT %s FROM %s LIMIT 0"
-                      (pg-escape-identifier column)
-                      (pg-escape-identifier table)))
+         (sql (format "SELECT %s FROM %s LIMIT 0" (pg-escape-identifier column) t-id))
          (res (pg-exec con sql))
          (oid (cadar (pg-result res :attributes)))
          (type-name (pg--lookup-type-name oid))
          (column-info (list type-name)))
     (dolist (c constraints)
       (push (cl-first c) column-info))
+    (when (pgmacs--column-nullable-p con table column)
+      (push "NOT NULL" column-info))
     (when (cl-first maxlen)
       (push (format "max-len %s" (cl-first maxlen)) column-info))
     (unless (null defaults)
@@ -522,13 +552,25 @@ network link."
 
 ;; TODO also include VIEWs
 ;;   SELECT * FROM information_schema.views
+;;
+;; Note: we can't use the basic "SELECT COUNT(*) FROM $1" because the table name is not accepted as
+;; a parameter. We can't quote the table name using pg-escape-identifier because it might include a
+;; schema prefix, and when escaping we lose the prefix.
+;;
+;; We don't use SELECT reltuples::bigint FROM pg_class WHERE oid=$1::regclass as that returns -1 for
+;; any table for which a VACUUM has not yet been run (but is a faster query).
+;;
+;; Unfortunately n_live_tup in pg_stat_user_tables is zero for tables that haven't been VACUUMed.
 (defun pgmacs--list-tables ()
+  "Return a list of table-names and associated metadata for the current database.
+Table names are schema-qualified if the schema is non-default."
   (let ((entries (list)))
     (dolist (table (pg-tables pgmacs--con))
-      (let* ((sql (format "SELECT COUNT(*), pg_size_pretty(pg_total_relation_size(%s)) FROM %s"
-                          (pg-escape-literal table)
-                          (pg-escape-identifier table)))
-             (res (pg-exec pgmacs--con sql))
+      (let* ((tname (pg-escape-identifier table))
+             (sql "SELECT n_live_tup, pg_size_pretty(pg_total_relation_size($1))
+                    FROM pg_stat_user_tables
+                    WHERE relid=$1::regclass")
+             (res (pg-exec-prepared pgmacs--con sql `((,tname . "text"))))
              (rows (cl-first (pg-result res :tuple 0)))
              (size (cl-second (pg-result res :tuple 0)))
              (owner (pg-table-owner pgmacs--con table))
@@ -550,8 +592,10 @@ network link."
   "Dump the current PostgreSQL table in CSV format into an Emacs buffer."
   (let* ((con pgmacs--con)
          (table pgmacs--table)
-         (buf (get-buffer-create (format "*PostgreSQL CSV for %s*" table)))
-         (sql (format "COPY %s TO STDOUT WITH (FORMAT CSV)" (pg-escape-identifier table))))
+         (t-id (pg-escape-identifier table))
+         (t-pretty (pgmacs--display-identifier table))
+         (buf (get-buffer-create (format "*PostgreSQL CSV for %s*" t-pretty)))
+         (sql (format "COPY %s TO STDOUT WITH (FORMAT CSV)" t-id)))
     (pop-to-buffer buf)
     (pgmacs-transient-mode)
     (pg-copy-to-buffer con sql buf)))
@@ -562,7 +606,7 @@ network link."
     (when pk
       (error "Table %s already has a primary key %s" pgmacs--table pk)))
   (cl-flet ((exists (name) (cl-find name (pg-columns pgmacs--con pgmacs--table))))
-    (let* ((colname (or (cl-find-if-not #'exists (list "id" "idpk" "idcol" "pk" "_id"))
+    (let* ((colname (or (cl-find-if-not #'exists (list "id" "idpk" "idcol" "pk" "_id" "newpk"))
                         (error "Can't autogenerate a name for primary key")))
            (sql (format "ALTER TABLE %s ADD COLUMN %s BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
                         (pg-escape-identifier pgmacs--table)
@@ -570,6 +614,12 @@ network link."
       (when (y-or-n-p (format "Really run this SQL? %s" sql))
         (let ((res (pg-exec pgmacs--con sql)))
           (pgmacs--notify "%s" (pg-result res :status)))))))
+
+(defun pgmacs--run-analyze (&rest _ignore)
+  "Run ANALYZE on the current PostgreSQL table."
+  (let* ((sql (format "ANALYZE %s" (pg-escape-identifier pgmacs--table)))
+         (res (pg-exec pgmacs--con sql)))
+    (pgmacs--notify "%s" (pg-result res :status))))
 
 
 (defun pgmacs--paginated-next (&rest _ignore)
@@ -599,16 +649,23 @@ network link."
 ;; TABLE "book_author" CONSTRAINT "book_author_book_id_fkey" FOREIGN KEY (book_id) REFERENCES books(id)
 
 (defun pgmacs--display-table (table)
-  (let* ((con pgmacs--con))
-    (pop-to-buffer-same-window (format "*PostgreSQL %s %s*" (pgcon-dbname con) table))
+  (let* ((con pgmacs--con)
+         (t-id (pg-escape-identifier table))
+         (t-pretty (pgmacs--display-identifier table)))
+    (pop-to-buffer-same-window (format "*PostgreSQL %s %s*" (pgcon-dbname con) t-pretty))
+    (setq pgmacs--progress
+          (make-progress-reporter "Retrieving data from PostgreSQL"))
     (pgmacs-mode)
+    ;; Place some initial content in the buffer early up.
+    (let ((inhibit-read-only t)
+          (owner (pg-table-owner con table)))
+      (erase-buffer)
+      (insert (propertize (format "PostgreSQL table %s, owned by %s\n" t-pretty owner) 'face 'bold)))
     (let* ((primary-keys (pgmacs--table-primary-keys con table))
-           (owner (pg-table-owner con table))
            (comment (pg-table-comment con table))
            (offset (or pgmacs--offset 0))
-           (portal (format "pgbp%s" (pg-escape-identifier table)))
-           (sql (format "SELECT * FROM %s OFFSET %s"
-                        (pg-escape-identifier table) offset))
+           (portal (format "pgbp%s" t-pretty))
+           (sql (format "SELECT * FROM %s OFFSET %s" t-id offset))
            (res (pg-exec-prepared con sql (list) :max-rows pgmacs-row-limit :portal portal))
            (rows (pg-result res :tuples))
            (column-names (mapcar #'cl-first (pg-result res :attributes)))
@@ -652,22 +709,19 @@ network link."
                                "j" pgmacs--row-as-json
                                ;; "n" and "p" are bound when table is paginated to next/prev page
                                "q" (lambda (&rest ignore) (kill-buffer))))))
-      (erase-buffer)
       (setq-local pgmacs--con con
                   pgmacs--table table
                   pgmacs--offset offset
                   pgmacs--column-type-names (apply #'vector column-type-names)
                   buffer-read-only t
                   truncate-lines t)
-      (insert (propertize (format "PostgreSQL table %s, owned by %s\n" table owner) 'face 'bold))
       (when comment
         (insert (propertize "Comment" 'face 'bold))
         (insert (format ": %s" comment)))
-      (let* ((sql (format "SELECT pg_size_pretty(pg_total_relation_size(%s)),
-                                  pg_size_pretty(pg_indexes_size(%s))"
-                          (pg-escape-literal table)
-                          (pg-escape-literal table)))
-             (row (pg-result (pg-exec con sql) :tuple 0)))
+      (let* ((sql "SELECT pg_size_pretty(pg_total_relation_size($1)),
+                          pg_size_pretty(pg_indexes_size($1))")
+             (res (pg-exec-prepared con sql `((,t-id . "text") (,t-id . "text"))))
+             (row (pg-result res  :tuple 0)))
         (insert (propertize "On-disk-size" 'face 'bold))
         (insert (format ": %s" (cl-first row)))
         (insert (format " (indexes %s)\n" (cl-second row))))
@@ -693,6 +747,10 @@ network link."
         (insert-text-button "Add primary key to table"
                             'action #'pgmacs--add-primary-key
                             'help-echo "Add a PRIMARY KEY to enable editing"))
+      (insert "  ")
+      (insert-text-button "ANALYZE this table"
+                          'action #'pgmacs--run-analyze
+                          'help-echo "Run ANALYZE on this table")
       (insert "\n\n")
       (when (pg-result res :incomplete)
         (pgmacs-paginated-mode)
@@ -707,7 +765,9 @@ network link."
         (insert "\n\n"))
       (if (null rows)
           (insert "(no rows in table)")
-        (vtable-insert vtable)))))
+        (vtable-insert vtable))
+      (progress-reporter-done pgmacs--progress)
+      (setq pgmacs--progress nil))))
 
 
 (defun pgmacs--revert-vtable (&rest _ignore)
@@ -723,7 +783,7 @@ network link."
     (pgmacs-transient-mode)
     (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
            (row (pg-result res :tuple 0)))
-      (insert (apply #'format "Database running on %s:%s with pid %s\n" row)))
+      (insert (apply #'format "Running on %s:%s with pid %s\n" row)))
     (let* ((res (pg-exec con "SELECT current_user, current_setting('is_superuser')"))
            (row (pg-result res :tuple 0)))
       (insert (format "Connected as user %s (%ssuperuser)\n"
@@ -735,7 +795,7 @@ network link."
     (let* ((res (pg-exec con "SELECT pg_postmaster_start_time()"))
            (dtime (car (pg-result res :tuple 0)))
            (fmt (funcall (pgmacs--value-formatter "timestamp") dtime)))
-      (insert (format "Backend started at %s\n" fmt)))
+      (insert (format "PostgreSQL running since %s\n" fmt)))
     (let* ((res (pg-exec con "SELECT current_setting('client_encoding')"))
            (row (pg-result res :tuple 0)))
       (insert (apply #'format "Client encoding: %s\n" row)))
@@ -769,6 +829,16 @@ network link."
   (pgmacs-mode)
   (setq-local pgmacs--con con
               truncate-lines t)
+  (setq pgmacs--progress
+        (make-progress-reporter "Retrieving data from PostgreSQL"))
+  ;; Insert initial content into buffer early.
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (remove-overlays)
+    (insert (propertize "PostgreSQL query output" 'face 'bold))
+    (insert "\n")
+    (insert (propertize "SQL" 'face 'bold))
+    (insert (format ": %s\n\n" sql)))
   (let* ((res (pg-exec con sql))
          (rows (pg-result res :tuples))
          (column-names (mapcar #'cl-first (pg-result res :attributes)))
@@ -798,16 +868,14 @@ network link."
                   :objects rows
                   :actions `("e" (lambda (&rest _ignored) (pgmacs-run-sql))
                              "q" (lambda (&rest _ignore) (kill-buffer))))))
-    (erase-buffer)
-    (remove-overlays)
-    (insert (propertize "PostgreSQL query output" 'face 'bold))
-    (insert "\n")
-    (insert (propertize "SQL" 'face 'bold))
-    (insert (format ": %s\n\n" sql))
     (if (null rows)
         (insert "(no rows)")
-      (vtable-insert vtable))))
+      (vtable-insert vtable))
+    (progress-reporter-done pgmacs--progress)
+    (setq pgmacs--progress nil)))
 
+
+;; FIXME should iterate over existing schemas (see "\dn" psql command)
 ;;;###autoload
 (defun pgmacs-open (con)
   "Browse the contents of PostgreSQL database to which we are connected over CON."
@@ -816,7 +884,16 @@ network link."
   (setq-local pgmacs--con con
               buffer-read-only t
               truncate-lines t)
+  (if pgmacs--progress
+    (progress-reporter-update pgmacs--progress "Retrieving PostgreSQL table list")
+    (setq pgmacs--progress
+          (make-progress-reporter "Retrieving PostgreSQL table list")))
   (set-process-query-on-exit-flag (pgcon-process con) nil)
+  ;; Make sure some initial content is visible in the buffer, in case of a slow connection to
+  ;; PostgreSQL.
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (insert (pg-backend-version con)))
   (let* ((dbname (pgcon-dbname con))
          (inhibit-read-only t)
          (vtable (make-vtable
@@ -851,13 +928,11 @@ network link."
                              "q"  (lambda (&rest _ignored) (kill-buffer)))
                   :getter (lambda (object column vtable)
                             (pcase (vtable-column vtable column)
-                              ("Table" (cl-first object))
+                              ("Table" (pgmacs--display-identifier (cl-first object)))
                               ("Rows" (cl-second object))
                               ("Size on disk" (cl-third object))
                               ("Owner" (cl-fourth object))
                               ("Comment" (cl-fifth object)))))))
-    (erase-buffer)
-    (insert (pg-backend-version con))
     (let* ((res (pg-exec con "SELECT current_user, pg_backend_pid(), pg_is_in_recovery()"))
            (row (pg-result res :tuple 0)))
       (insert (format "\nConnected to database %s as user %s (pid %d %s)\n"
@@ -865,9 +940,8 @@ network link."
                       (cl-first row)
                       (cl-second row)
                       (if (cl-third row) "RECOVERING" "PRIMARY"))))
-    (let* ((sql (format "SELECT pg_size_pretty(pg_database_size(%s))"
-                        (pg-escape-literal dbname)))
-           (res (pg-exec con sql))
+    (let* ((sql "SELECT pg_size_pretty(pg_database_size($1))")
+           (res (pg-exec-prepared con sql `((,dbname . "text"))))
            (size (cl-first (pg-result res :tuple 0))))
       (insert (format "Total database size: %s\n" size)))
     ;; Perhaps also display output from
@@ -888,7 +962,9 @@ network link."
                (pgmacs-show-result con "SELECT * FROM pg_stat_replication"))
      'help-echo "Show information on PostgreSQL replication status")
     (insert "\n\n")
-    (vtable-insert vtable)))
+    (vtable-insert vtable)
+    (progress-reporter-done pgmacs--progress)
+    (setq pgmacs--progress nil)))
 
 
 ;;;###autoload
@@ -898,12 +974,16 @@ The supported keywords in the connection string are host,
 hostaddr, port, dbname, user, password, sslmode (partial support)
 and application_name."
   (interactive "sPostgreSQL connection string: ")
+  (setq pgmacs--progress
+        (make-progress-reporter "Connecting to PostgreSQL"))
   (pgmacs-open (pg-connect/string connection-string)))
 
 ;;;###autoload
 (defun pgmacs-open/uri (connection-uri)
   "Open PGMacs on database `postgresql://user:pass@host/dbname'."
   (interactive "sPostgreSQL connection URI: ")
+  (setq pgmacs--progress
+        (make-progress-reporter "Connecting to PostgreSQL"))
   (pgmacs-open (pg-connect/uri connection-uri)))
 
 ;;;###autoload
@@ -957,6 +1037,8 @@ and application_name."
     (widget-insert "\n\n")
     (widget-create 'push-button
                    :notify (lambda (&rest _ignore)
+                             (setq pgmacs--progress
+                                   (make-progress-reporter "Connecting to PostgreSQL"))
                              (let ((con (pg-connect (widget-value w-dbname)
                                                     (widget-value w-username)
                                                     (widget-value w-password)
