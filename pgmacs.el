@@ -95,6 +95,25 @@ network link."
 
 ;; Used for updating on progress retrieving information from PostgreSQL.
 (defvar pgmacs--progress nil)
+(defvar pgmacs--progress-timer nil)
+
+(defun pgmacs--start-progress-reporter (msg)
+  (setq pgmacs--progress (make-progress-reporter msg))
+  (setq pgmacs--progress-timer
+        (run-with-timer 0.2 0.2 (lambda () (progress-reporter-update pgmacs--progress)))))
+
+(defun pgmacs--update-progress (msg)
+  (when pgmacs--progress
+    (progress-reporter-update msg)))
+
+(defun pgmacs--stop-progress-reporter ()
+  (when pgmacs--progress
+    (progress-reporter-done pgmacs--progress)
+    (setq pgmacs--progress nil))
+  (when pgmacs--progress-timer
+    (cancel-timer pgmacs--progress-timer)
+    (setq pgmacs--progress-timer nil)))
+
 
 ;; Used for copying and pasting rows
 (defvar pgmacs--kill-ring nil)
@@ -217,36 +236,36 @@ network link."
 
 ;; Edit the column value at point by prompting for the new value in the minibuffer.
 (defun pgmacs--edit-value/minibuffer (row primary-keys)
-  (when (null primary-keys)
-    (error "Can't edit content of a table that has no PRIMARY KEY"))
-  (let* ((vtable (vtable-current-table))
-         (current-row (vtable-current-object))
-         (cols (vtable-columns vtable))
-         (col-id (vtable-current-column))
-         (col (nth col-id cols))
-         (col-name (vtable-column-name col))
-         (col-type (aref pgmacs--column-type-names col-id))
-         (pk (cl-first primary-keys))
-         (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
-         (pk-col-type (aref pgmacs--column-type-names pk-col-id))
-         (pk-value (and pk-col-id (nth pk-col-id row))))
-    (unless pk-value
-      (error "Can't find value for primary key %s" pk))
-    (let* ((current (nth col-id current-row))
-           (new-value (pgmacs--read-value col-name col-type "Change %s (%s) to: " current))
-           (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
-                        (pg-escape-identifier pgmacs--table)
-                        (pg-escape-identifier col-name)
-                        (pg-escape-identifier pk)))
-           (res (pg-exec-prepared pgmacs--con sql
-                                  `((,new-value . ,col-type)
-                                    (,pk-value . ,pk-col-type)))))
-      (pgmacs--notify "%s" (pg-result res :status))
-      (let ((new-row (copy-sequence current-row)))
-        (setf (nth col-id new-row) new-value)
-        ;; vtable-update-object doesn't work, so insert then delete old row
-        (vtable-insert-object vtable new-row current-row)
-        (vtable-remove-object vtable current-row)))))
+  (if (null primary-keys)
+      (warn "Can't edit content of a table that has no PRIMARY KEY")
+    (let* ((vtable (vtable-current-table))
+           (current-row (vtable-current-object))
+           (cols (vtable-columns vtable))
+           (col-id (vtable-current-column))
+           (col (nth col-id cols))
+           (col-name (vtable-column-name col))
+           (col-type (aref pgmacs--column-type-names col-id))
+           (pk (cl-first primary-keys))
+           (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
+           (pk-col-type (aref pgmacs--column-type-names pk-col-id))
+           (pk-value (and pk-col-id (nth pk-col-id row))))
+      (unless pk-value
+        (error "Can't find value for primary key %s" pk))
+      (let* ((current (nth col-id current-row))
+             (new-value (pgmacs--read-value col-name col-type "Change %s (%s) to: " current))
+             (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
+                          (pg-escape-identifier pgmacs--table)
+                          (pg-escape-identifier col-name)
+                          (pg-escape-identifier pk)))
+             (res (pg-exec-prepared pgmacs--con sql
+                                    `((,new-value . ,col-type)
+                                      (,pk-value . ,pk-col-type)))))
+        (pgmacs--notify "%s" (pg-result res :status))
+        (let ((new-row (copy-sequence current-row)))
+          (setf (nth col-id new-row) new-value)
+          ;; vtable-update-object doesn't work, so insert then delete old row
+          (vtable-insert-object vtable new-row current-row)
+          (vtable-remove-object vtable current-row))))))
 
 (defun pgmacs--widget-for (_type current-value)
   ;; TODO improve this choice based on type
@@ -257,88 +276,88 @@ network link."
 ;; Edit the current column value in a dedicated widget buffer
 (defun pgmacs--edit-value/widget (row primary-keys)
   (require 'widget)
-  (when (null primary-keys)
-    (error "Can't edit content of a table that has no PRIMARY KEY"))
-  (let* ((con pgmacs--con)
-         (table pgmacs--table)
-         (vtable (vtable-current-table))
-         (current-row (vtable-current-object))
-         (cols (vtable-columns vtable))
-         (col-id (vtable-current-column))
-         (col (nth col-id cols))
-         (col-name (vtable-column-name col))
-         (col-type (aref pgmacs--column-type-names col-id))
-         (pk (cl-first primary-keys))
-         (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
-         (pk-col-type (aref pgmacs--column-type-names pk-col-id))
-         (pk-value (and pk-col-id (nth pk-col-id row))))
-    (unless pk-value
-      (error "Can't find value for primary key %s" pk))
-    (let* ((current (nth col-id current-row))
-           (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
-                        (pg-escape-identifier pgmacs--table)
-                        (pg-escape-identifier col-name)
-                        (pg-escape-identifier pk)))
-           (updater (lambda (user-provided)
-                      (let* ((parser (pg-lookup-parser col-type))
-                             (ce (pgcon-client-encoding pgmacs--con))
-                             (new-value (if parser (funcall parser user-provided ce)
-                                          user-provided))
-                             (res (pg-exec-prepared pgmacs--con sql
-                                                    `((,new-value . ,col-type)
-                                                      (,pk-value . ,pk-col-type)))))
-                        (pgmacs--notify "%s" (pg-result res :status))
-                        (let ((new-row (copy-sequence current-row)))
-                          (setf (nth col-id new-row) new-value)
-                          ;; vtable-update-object doesn't work, so insert then delete old row
-                          (vtable-insert-object vtable new-row current-row)
-                          (vtable-remove-object vtable current-row))))))
-      (switch-to-buffer "*PGMacs update widget*")
-      (erase-buffer)
-      (remove-overlays)
-      (kill-all-local-variables)
-      (setq-local pgmacs--con con
-                  pgmacs--table table)
-      (widget-insert (propertize (format "Update column %s" col-name) 'face 'bold))
-      (widget-insert "\n\n")
-      (widget-insert (format "Change %s (type %s) to:" col-name col-type))
-      (widget-insert "\n\n")
-      (let* ((w-updated
-              (progn
-                (widget-insert (format "%12s: " "New value"))
-                (pgmacs--widget-for col-type current))))
-        (widget-insert "\n\n")
-        (widget-create 'push-button
-                       :notify (lambda (&rest _ignore)
-                                 (funcall updater (widget-value w-updated))
-                                 (kill-buffer (current-buffer)))
-                       "Update")
-        (widget-insert "\n")
-        (use-local-map widget-keymap)
-        (widget-setup)
-        (goto-char (point-min))
-        (widget-forward 1)))))
-
-(defun pgmacs--delete-row (row primary-keys)
-  (when (null primary-keys)
-    (error "Can't edit content of a table that has no PRIMARY KEY"))
-  (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
-    (let* ((vtable (vtable-current-table))
+  (if (null primary-keys)
+      (warn "Can't edit content of a table that has no PRIMARY KEY")
+    (let* ((con pgmacs--con)
+           (table pgmacs--table)
+           (vtable (vtable-current-table))
+           (current-row (vtable-current-object))
            (cols (vtable-columns vtable))
+           (col-id (vtable-current-column))
+           (col (nth col-id cols))
+           (col-name (vtable-column-name col))
+           (col-type (aref pgmacs--column-type-names col-id))
            (pk (cl-first primary-keys))
            (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
-           (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
+           (pk-col-type (aref pgmacs--column-type-names pk-col-id))
            (pk-value (and pk-col-id (nth pk-col-id row))))
       (unless pk-value
         (error "Can't find value for primary key %s" pk))
-      (let* ((res (pg-exec-prepared
-                   pgmacs--con
-                   (format "DELETE FROM %s WHERE %s = $1"
-                           (pg-escape-identifier pgmacs--table)
-                           (pg-escape-identifier pk))
-                   `((,pk-value . ,pk-col-type)))))
-        (pgmacs--notify "%s" (pg-result res :status)))
-      (vtable-remove-object vtable row))))
+      (let* ((current (nth col-id current-row))
+             (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
+                          (pg-escape-identifier pgmacs--table)
+                          (pg-escape-identifier col-name)
+                          (pg-escape-identifier pk)))
+             (updater (lambda (user-provided)
+                        (let* ((parser (pg-lookup-parser col-type))
+                               (ce (pgcon-client-encoding pgmacs--con))
+                               (new-value (if parser (funcall parser user-provided ce)
+                                            user-provided))
+                               (res (pg-exec-prepared pgmacs--con sql
+                                                      `((,new-value . ,col-type)
+                                                        (,pk-value . ,pk-col-type)))))
+                          (pgmacs--notify "%s" (pg-result res :status))
+                          (let ((new-row (copy-sequence current-row)))
+                            (setf (nth col-id new-row) new-value)
+                            ;; vtable-update-object doesn't work, so insert then delete old row
+                            (vtable-insert-object vtable new-row current-row)
+                            (vtable-remove-object vtable current-row))))))
+        (switch-to-buffer "*PGMacs update widget*")
+        (erase-buffer)
+        (remove-overlays)
+        (kill-all-local-variables)
+        (setq-local pgmacs--con con
+                    pgmacs--table table)
+        (widget-insert (propertize (format "Update column %s" col-name) 'face 'bold))
+        (widget-insert "\n\n")
+        (widget-insert (format "Change %s (type %s) to:" col-name col-type))
+        (widget-insert "\n\n")
+        (let* ((w-updated
+                (progn
+                  (widget-insert (format "%12s: " "New value"))
+                  (pgmacs--widget-for col-type current))))
+          (widget-insert "\n\n")
+          (widget-create 'push-button
+                         :notify (lambda (&rest _ignore)
+                                   (funcall updater (widget-value w-updated))
+                                   (kill-buffer (current-buffer)))
+                         "Update")
+          (widget-insert "\n")
+          (use-local-map widget-keymap)
+          (widget-setup)
+          (goto-char (point-min))
+          (widget-forward 1))))))
+
+(defun pgmacs--delete-row (row primary-keys)
+  (if (null primary-keys)
+      (warn "Can't edit content of a table that has no PRIMARY KEY")
+    (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
+      (let* ((vtable (vtable-current-table))
+             (cols (vtable-columns vtable))
+             (pk (cl-first primary-keys))
+             (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
+             (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
+             (pk-value (and pk-col-id (nth pk-col-id row))))
+        (unless pk-value
+          (error "Can't find value for primary key %s" pk))
+        (let* ((res (pg-exec-prepared
+                     pgmacs--con
+                     (format "DELETE FROM %s WHERE %s = $1"
+                             (pg-escape-identifier pgmacs--table)
+                             (pg-escape-identifier pk))
+                     `((,pk-value . ,pk-col-type)))))
+          (pgmacs--notify "%s" (pg-result res :status)))
+        (vtable-remove-object vtable row)))))
 
 (defun pgmacs--insert-row (current-row)
   ;; TODO we need to handle the case where there is no existing vtable because the underlying SQL table is empty.
@@ -497,45 +516,64 @@ network link."
 
 ;; We can also SELECT c.column_name, c.data_type
 (defun pgmacs--table-primary-keys (con table)
-  (let* ((t-id (pg-escape-identifier table))
+  (let* ((schema (if (pg-qualified-name-p table)
+                     (pg-qualified-name-schema table)
+                   "public"))
+         (tname (if (pg-qualified-name-p table)
+                    (pg-qualified-name-name table)
+                  table))
          (sql "SELECT c.column_name
       FROM information_schema.table_constraints tc
-      JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name) 
+      JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
       JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
       AND tc.table_name = c.table_name AND ccu.column_name = c.column_name
-      WHERE constraint_type = 'PRIMARY KEY' and tc.table_name = $1")
-         (res (pg-exec-prepared con sql `((,t-id . "text")))))
+      WHERE constraint_type = 'PRIMARY KEY' AND tc.table_schema=$1 AND tc.table_name = $2")
+         (res (pg-exec-prepared con sql `((,schema . "text") (,tname . "text")))))
     (mapcar #'cl-first (pg-result res :tuples))))
-
 
 (defun pgmacs--column-nullable-p (con table column)
   "Is there a NOT NULL constraint on COLUMN in TABLE?
 Uses PostgreSQL connection CON."
-  (let* ((t-id (pg-escape-identifier table))
-         (sql "SELECT 1 from information_schema.columns WHERE table_name=$1 AND column_name=$2 AND is_nullable='YES'")
-         (res (pg-exec-prepared con sql `((,t-id . "text") (,column . "text")))))
+  (let* ((schema (if (pg-qualified-name-p table)
+                     (pg-qualified-name-schema table)
+                   "public"))
+         (tname (if (pg-qualified-name-p table)
+                    (pg-qualified-name-name table)
+                  table))
+         (sql "SELECT 1 from information_schema.columns
+               WHERE table_schema=$1 AND table_name=$2 AND column_name=$3 AND is_nullable='YES'")
+         (params `((,schema . "text") (,tname . "text") (,column . "text")))
+         (res (pg-exec-prepared con sql params)))
     (null (pg-result res :tuples))))
 
 ;; Return a string with information about this column, like the type name, PRIMARY KEY, constraints
 ;; such as UNIQUE, etc.
 (defun pgmacs--column-info (con table column)
-  (let* ((t-id (pg-escape-identifier table))
+  (let* ((schema (if (pg-qualified-name-p table)
+                     (pg-qualified-name-schema table)
+                   "public"))
+         (tname (if (pg-qualified-name-p table)
+                    (pg-qualified-name-name table)
+                  table))
          (sql "SELECT tc.constraint_type FROM information_schema.table_constraints tc
-               JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name) 
+               JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
                JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
                AND tc.table_name = c.table_name
                AND ccu.column_name = c.column_name
-               WHERE tc.table_name = $1 AND c.column_name = $2")
-         (res (pg-exec-prepared con sql `((,t-id . "text") (,column . "text"))))
+               WHERE tc.constraint_schema = $1 AND tc.table_name = $2 AND c.column_name = $3")
+         (params `((,schema . "text") (,tname . "text") (,column . "text")))
+         (res (pg-exec-prepared con sql params))
          (constraints (pg-result res :tuples))
          (res (pg-exec-prepared
                con
                "SELECT character_maximum_length FROM information_schema.columns
-                WHERE table_name=$1 AND column_name=$2"
-               `((,t-id . "text") (,column . "text"))))
+                WHERE table_schema=$1 AND table_name=$2 AND column_name=$3"
+               `((,schema . "text") (,tname . "text") (,column . "text"))))
          (maxlen (pg-result res :tuple 0))
          (defaults (pg-column-default con table column))
-         (sql (format "SELECT %s FROM %s LIMIT 0" (pg-escape-identifier column) t-id))
+         (sql (format "SELECT %s FROM %s LIMIT 0"
+                      (pg-escape-identifier column)
+                      (pg-escape-identifier table)))
          (res (pg-exec con sql))
          (oid (cadar (pg-result res :attributes)))
          (type-name (pg--lookup-type-name oid))
@@ -604,8 +642,8 @@ Table names are schema-qualified if the schema is non-default."
   "Add a PRIMARY KEY to the current PostgreSQL table."
   (let ((pk (pgmacs--table-primary-keys pgmacs--con pgmacs--table)))
     (when pk
-      (error "Table %s already has a primary key %s" pgmacs--table pk)))
-  (cl-flet ((exists (name) (cl-find name (pg-columns pgmacs--con pgmacs--table))))
+      (error "Table %s already has a primary key %s" (pgmacs--display-identifier table) pk)))
+  (cl-flet ((exists (name) (cl-find name (pg-columns pgmacs--con pgmacs--table) :test #'string=)))
     (let* ((colname (or (cl-find-if-not #'exists (list "id" "idpk" "idcol" "pk" "_id" "newpk"))
                         (error "Can't autogenerate a name for primary key")))
            (sql (format "ALTER TABLE %s ADD COLUMN %s BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
@@ -653,8 +691,7 @@ Table names are schema-qualified if the schema is non-default."
          (t-id (pg-escape-identifier table))
          (t-pretty (pgmacs--display-identifier table)))
     (pop-to-buffer-same-window (format "*PostgreSQL %s %s*" (pgcon-dbname con) t-pretty))
-    (setq pgmacs--progress
-          (make-progress-reporter "Retrieving data from PostgreSQL"))
+    (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
     (pgmacs-mode)
     ;; Place some initial content in the buffer early up.
     (let ((inhibit-read-only t)
@@ -766,8 +803,7 @@ Table names are schema-qualified if the schema is non-default."
       (if (null rows)
           (insert "(no rows in table)")
         (vtable-insert vtable))
-      (progress-reporter-done pgmacs--progress)
-      (setq pgmacs--progress nil))))
+      (pgmacs--stop-progress-reporter))))
 
 
 (defun pgmacs--revert-vtable (&rest _ignore)
@@ -829,8 +865,7 @@ Table names are schema-qualified if the schema is non-default."
   (pgmacs-mode)
   (setq-local pgmacs--con con
               truncate-lines t)
-  (setq pgmacs--progress
-        (make-progress-reporter "Retrieving data from PostgreSQL"))
+  (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   ;; Insert initial content into buffer early.
   (let ((inhibit-read-only t))
     (erase-buffer)
@@ -871,8 +906,7 @@ Table names are schema-qualified if the schema is non-default."
     (if (null rows)
         (insert "(no rows)")
       (vtable-insert vtable))
-    (progress-reporter-done pgmacs--progress)
-    (setq pgmacs--progress nil)))
+    (pgmacs--stop-progress-reporter)))
 
 
 ;; FIXME should iterate over existing schemas (see "\dn" psql command)
@@ -884,10 +918,7 @@ Table names are schema-qualified if the schema is non-default."
   (setq-local pgmacs--con con
               buffer-read-only t
               truncate-lines t)
-  (if pgmacs--progress
-    (progress-reporter-update pgmacs--progress "Retrieving PostgreSQL table list")
-    (setq pgmacs--progress
-          (make-progress-reporter "Retrieving PostgreSQL table list")))
+  (pgmacs--start-progress-reporter "Retrieving PostgreSQL table list")
   (set-process-query-on-exit-flag (pgcon-process con) nil)
   ;; Make sure some initial content is visible in the buffer, in case of a slow connection to
   ;; PostgreSQL.
@@ -963,8 +994,7 @@ Table names are schema-qualified if the schema is non-default."
      'help-echo "Show information on PostgreSQL replication status")
     (insert "\n\n")
     (vtable-insert vtable)
-    (progress-reporter-done pgmacs--progress)
-    (setq pgmacs--progress nil)))
+    (pgmacs--stop-progress-reporter)))
 
 
 ;;;###autoload
@@ -974,16 +1004,14 @@ The supported keywords in the connection string are host,
 hostaddr, port, dbname, user, password, sslmode (partial support)
 and application_name."
   (interactive "sPostgreSQL connection string: ")
-  (setq pgmacs--progress
-        (make-progress-reporter "Connecting to PostgreSQL"))
+  (pgmacs--start-progress-reporter "Connecting to PostgreSQL")
   (pgmacs-open (pg-connect/string connection-string)))
 
 ;;;###autoload
 (defun pgmacs-open/uri (connection-uri)
   "Open PGMacs on database `postgresql://user:pass@host/dbname'."
   (interactive "sPostgreSQL connection URI: ")
-  (setq pgmacs--progress
-        (make-progress-reporter "Connecting to PostgreSQL"))
+  (pgmacs--start-progress-reporter "Connecting to PostgreSQL")
   (pgmacs-open (pg-connect/uri connection-uri)))
 
 ;;;###autoload
