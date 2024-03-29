@@ -642,7 +642,7 @@ Table names are schema-qualified if the schema is non-default."
   "Add a PRIMARY KEY to the current PostgreSQL table."
   (let ((pk (pgmacs--table-primary-keys pgmacs--con pgmacs--table)))
     (when pk
-      (error "Table %s already has a primary key %s" (pgmacs--display-identifier table) pk)))
+      (error "Table %s already has a primary key %s" (pgmacs--display-identifier pgmacs--table) pk)))
   (cl-flet ((exists (name) (cl-find name (pg-columns pgmacs--con pgmacs--table) :test #'string=)))
     (let* ((colname (or (cl-find-if-not #'exists (list "id" "idpk" "idcol" "pk" "_id" "newpk"))
                         (error "Can't autogenerate a name for primary key")))
@@ -757,7 +757,7 @@ Table names are schema-qualified if the schema is non-default."
         (insert (format ": %s" comment)))
       (let* ((sql "SELECT pg_size_pretty(pg_total_relation_size($1)),
                           pg_size_pretty(pg_indexes_size($1))")
-             (res (pg-exec-prepared con sql `((,t-id . "text") (,t-id . "text"))))
+             (res (pg-exec-prepared con sql `((,t-id . "text"))))
              (row (pg-result res  :tuple 0)))
         (insert (propertize "On-disk-size" 'face 'bold))
         (insert (format ": %s" (cl-first row)))
@@ -909,6 +909,25 @@ Table names are schema-qualified if the schema is non-default."
     (pgmacs--stop-progress-reporter)))
 
 
+;; Called on RET on a line in the db-list-of-tables buffer. If the cursor is on the Comment column,
+;; allow the user to set the table comment. Otherwise, display the table in a separate buffer.
+(defun pgmacs--dbbuf-handle-RET (table-row)
+  (let* ((vtable (vtable-current-table))
+         (col-id (vtable-current-column))
+         (col (nth col-id (vtable-columns vtable)))
+         (col-name (vtable-column-name col)))
+    (cond ((string= "Comment" col-name)
+           (let ((comment (read-from-minibuffer "New table comment: "))
+                 (new-row (copy-sequence table-row)))
+             (setf (pg-table-comment pgmacs--con (car table-row)) comment)
+             (setf (nth col-id new-row) comment)
+             ;; vtable-update-object doesn't work, so insert then delete old row
+             (vtable-insert-object vtable new-row table-row)
+             (vtable-remove-object vtable table-row)))
+          ;; TODO perhaps change owner (if we are superuser)
+          (t
+           (pgmacs--display-table (car table-row))))))
+
 ;; FIXME should iterate over existing schemas (see "\dn" psql command)
 ;;;###autoload
 (defun pgmacs-open (con)
@@ -954,7 +973,7 @@ Table names are schema-qualified if the schema is non-default."
                   ;; :separator-width 5
                   :divider-width "2px"
                   :objects (pgmacs--list-tables)
-                  :actions '("RET" (lambda (table-rows) (pgmacs--display-table (car table-rows)))
+                  :actions '("RET" pgmacs--dbbuf-handle-RET
                              "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                              "q"  (lambda (&rest _ignored) (kill-buffer)))
                   :getter (lambda (object column vtable)

@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3] - Unreleased
+
+- The comment on a table can be modified by pressing RET in the list-of-tables buffer.
+
 
 ## [0.2] - 2024-03-29
 
