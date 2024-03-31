@@ -563,9 +563,11 @@ Uses PostgreSQL connection CON."
          (res (pg-exec-prepared con sql params)))
     (null (pg-result res :tuples))))
 
-;; Return a string with information about this column, like the type name, PRIMARY KEY, constraints
-;; such as UNIQUE, etc.
 (defun pgmacs--column-info (con table column)
+  "Return a string containing metainformation on COLUMN in TABLE.
+The metainformation includes the type name, whether the column is a PRIMARY KEY, whether
+it is affected by constraints such as UNIQUE. Information is retrieved over the PostgreSQL
+connection CON."
   (let* ((schema (if (pg-qualified-name-p table)
                      (pg-qualified-name-schema table)
                    "public"))
@@ -608,23 +610,22 @@ Uses PostgreSQL connection CON."
 ;; TODO also include VIEWs
 ;;   SELECT * FROM information_schema.views
 ;;
-;; Note: we can't use the basic "SELECT COUNT(*) FROM $1" because the table name is not accepted as
-;; a parameter. We can't quote the table name using pg-escape-identifier because it might include a
-;; schema prefix, and when escaping we lose the prefix.
+;; The count of table rows using COUNT(*) is imperfect for a number of reasons: it's not using a
+;; parameterized query (not possible for a DDL query), and it's slow on large tables. However,
+;; alternatives are probably less good because they return incorrect results for tables that haven't
+;; yet been VACCUMed. Possible alternatives:
 ;;
-;; We don't use SELECT reltuples::bigint FROM pg_class WHERE oid=$1::regclass as that returns -1 for
-;; any table for which a VACUUM has not yet been run (but is a faster query).
+;;    SELECT reltuples::bigint FROM pg_class WHERE oid=$1::regclass (returns -1)
 ;;
-;; Unfortunately n_live_tup in pg_stat_user_tables is zero for tables that haven't been VACUUMed.
+;;    SELECT n_live_tup FROM pg_stat_user_tables (zero for non-VACUUMed tables)
 (defun pgmacs--list-tables ()
   "Return a list of table-names and associated metadata for the current database.
 Table names are schema-qualified if the schema is non-default."
   (let ((entries (list)))
     (dolist (table (pg-tables pgmacs--con))
       (let* ((tname (pg-escape-identifier table))
-             (sql "SELECT n_live_tup, pg_size_pretty(pg_total_relation_size($1))
-                    FROM pg_stat_user_tables
-                    WHERE relid=$1::regclass")
+             (sql (format "SELECT COUNT(*), pg_size_pretty(pg_total_relation_size($1)) FROM %s"
+                          tname))
              (res (pg-exec-prepared pgmacs--con sql `((,tname . "text"))))
              (rows (cl-first (pg-result res :tuple 0)))
              (size (cl-second (pg-result res :tuple 0)))
@@ -1007,8 +1008,6 @@ Table names are schema-qualified if the schema is non-default."
                   :row-colors pgmacs-row-colors
                   :face 'pgmacs-table-data
                   ;; :column-colors '("#202020" "#404040")
-                  ;; :separator-width 5
-                  :divider-width "2px"
                   :objects (pgmacs--list-tables)
                   :actions '("RET" pgmacs--dbbuf-handle-RET
                              ;; "h" for keybinding help

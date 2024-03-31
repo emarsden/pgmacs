@@ -1,5 +1,12 @@
 # Changelog
 
+
+## [0.4] - Unreleased
+
+- The row count shown in the list-of-tables buffer is now precise even when the tables have not been
+  VACUUMed. This precision is at the cost of speed on large tables (calculated with `COUNT(*)`).
+
+
 ## [0.3] - 2024-03-31
 
 - The comment on a table can be modified by pressing `RET` in the list-of-tables buffer.
