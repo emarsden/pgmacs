@@ -31,14 +31,14 @@
 (defface pgmacs-table-data
   '((t (:inherit fixed-pitch-serif
         :foreground "black")))
-  "Face used to display data in a PGMacs database table."
+  "Face used to display data in a PGmacs database table."
   :group 'pgmacs)
 
 (defface pgmacs-table-header
   '((t (:inherit bold
         :weight bold
         :foreground "black")))
-  "Face used to display a PGMacs database table header."
+  "Face used to display a PGmacs database table header."
   :group 'pgmacs)
 
 (defcustom pgmacs-row-colors
@@ -68,7 +68,7 @@ network link."
 (defun pgmacs-mode ()
   "Major mode for editing PostgreSQL database."
   (setq major-mode 'pgmacs-mode
-        mode-name "PGMacs")
+        mode-name "PGmacs")
   ;; Not appropriate for user to type stuff into our buffers.
   (put 'pgmacs-mode 'mode-class 'special)
   (use-local-map pgmacs-mode-map)
@@ -78,7 +78,7 @@ network link."
 (keymap-set pgmacs-transient-map (kbd "q") 'kill-buffer)
 
 (define-minor-mode pgmacs-transient-mode
-  "Minor mode for transient PGMacs buffers."
+  "Minor mode for transient PGmacs buffers."
   :global nil
   :init-value nil
   :keymap pgmacs-transient-map)
@@ -88,7 +88,7 @@ network link."
 (keymap-set pgmacs-paginated-map (kbd "p") 'pgmacs--paginated-prev)
 
 (define-minor-mode pgmacs-paginated-mode
-  "Minor mode for paginated PGMacs table buffers."
+  "Minor mode for paginated PGmacs table buffers."
   :global nil
   :init-value nil
   :keymap pgmacs-paginated-map)
@@ -117,7 +117,7 @@ network link."
 
 
 ;; Used for copying and pasting rows
-(defvar pgmacs--kill-ring nil)
+(defvar-local pgmacs--kill-ring nil)
 
 
 (defvar-local pgmacs--con nil)
@@ -291,8 +291,8 @@ network link."
                  :size 40
                  (format "%s" current-value)))
 
-;; Edit the current column value in a dedicated widget buffer
 (defun pgmacs--edit-value/widget (row primary-keys)
+  "Edit the current column value in ROW in a dedicated widget buffer."
   (if (null primary-keys)
       (warn "Can't edit content of a table that has no PRIMARY KEY")
     (let* ((con pgmacs--con)
@@ -329,7 +329,7 @@ network link."
                             ;; vtable-update-object doesn't work, so insert then delete old row
                             (vtable-insert-object vtable new-row current-row)
                             (vtable-remove-object vtable current-row))))))
-        (switch-to-buffer "*PGMacs update widget*")
+        (switch-to-buffer "*PGmacs update widget*")
         (erase-buffer)
         (remove-overlays)
         (kill-all-local-variables)
@@ -356,6 +356,7 @@ network link."
           (widget-forward 1))))))
 
 (defun pgmacs--delete-row (row primary-keys)
+  "Delete ROW from the current table."
   (if (null primary-keys)
       (warn "Can't edit content of a table that has no PRIMARY KEY")
     (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
@@ -377,6 +378,8 @@ network link."
         (vtable-remove-object vtable row)))))
 
 (defun pgmacs--insert-row (current-row)
+  "Insert a new row of data into the current table after CURRENT-ROW.
+Uses the minibuffer to prompt for new values."
   ;; TODO we need to handle the case where there is no existing vtable because the underlying SQL
   ;; table is empty.
   (let* ((vtable (vtable-current-table))
@@ -413,6 +416,8 @@ network link."
       (pgmacs--display-table pgmacs--table))))
 
 (defun pgmacs--insert-row/widget (current-row)
+  "Insert a new row of data into the current table after CURRENT-ROW.
+Uses a widget-based buffer to prompt for new values."
   (let* ((con pgmacs--con)
          (table pgmacs--table)
          (ce (pgcon-client-encoding pgmacs--con))
@@ -455,7 +460,7 @@ network link."
                         ;; the vtable. However, we don't know what values were chosen for any columns
                         ;; that have a default.
                         (pgmacs--display-table table)))))
-      (switch-to-buffer "*PGMacs insert row widget*")
+      (switch-to-buffer "*PGmacs insert row widget*")
       (erase-buffer)
       (remove-overlays)
       (kill-all-local-variables)
@@ -481,18 +486,19 @@ network link."
       (goto-char (point-min))
       (widget-forward 1))))
 
-;; Copy current row to our "kill ring".
 (defun pgmacs--copy-row (current-row)
+  "Copy current row to our internal kill-ring."
   (setq pgmacs--kill-ring (cons pgmacs--table current-row))
-  (message "Row copied to PGMacs kill ring"))
+  (message "Row copied to PGmacs kill ring"))
 
 ;; Insert new row at current position based on content of our "kill ring".
 (defun pgmacs--yank-row (_current-row)
+  "Insert a new row into the current table after the current row, based on the last copied row."
   (unless pgmacs--kill-ring
-    (error "PGMacs kill ring is empty"))
+    (error "PGmacs kill ring is empty"))
   (unless (eq (car pgmacs--kill-ring) pgmacs--table)
     (error "Can't paste into a different PostgreSQL table"))
-  (message "Pasting row from PGMacs kill ring")
+  (message "Pasting row from PGmacs kill ring")
   ;; Insert a new row based on the copied row, but without specifying values for the columns that
   ;; have a default value
   (let* ((yanked-row (cdr pgmacs--kill-ring))
@@ -704,6 +710,8 @@ Table names are schema-qualified if the schema is non-default."
 ;; TABLE "book_author" CONSTRAINT "book_author_book_id_fkey" FOREIGN KEY (book_id) REFERENCES books(id)
 
 (defun pgmacs--display-table (table)
+  "Create and populate a buffer to display PostgreSQL table TABLE.
+Table may be specified as a string or as a schema-qualified pg-qualified-name object."
   (let* ((con pgmacs--con)
          (t-id (pg-escape-identifier table))
          (t-pretty (pgmacs--display-identifier table)))
@@ -841,6 +849,7 @@ Table names are schema-qualified if the schema is non-default."
   (vtable-revert))
 
 (defun pgmacs--display-backend-information (&rest _ignore)
+  "Create a buffer with information concerning the current PostgreSQL backend".
   (let ((con pgmacs--con))
     (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
     (pgmacs-transient-mode)
@@ -888,6 +897,7 @@ Table names are schema-qualified if the schema is non-default."
 
 
 (defun pgmacs-show-result (con sql)
+  "Create a buffer to show the results of PostgreSQL query SQL."
   (pop-to-buffer (get-buffer-create "*PostgreSQL TMP*"))
   (pgmacs-mode)
   (setq-local pgmacs--con con
@@ -957,6 +967,7 @@ Table names are schema-qualified if the schema is non-default."
            (pgmacs--display-table (car table-row))))))
 
 (defun pgmacs--delete-table (table-row)
+  "Delete (drop) the PostgreSQL table specified by TABLE-ROW."
   (let* ((vtable (vtable-current-table))
          (table (car table-row))
          (t-id (pg-escape-identifier table)))
@@ -1056,7 +1067,7 @@ Table names are schema-qualified if the schema is non-default."
 
 ;;;###autoload
 (defun pgmacs-open/string (connection-string)
-  "Open PGMacs on database `dbname=mydb user=me host=localhost password=foo'.
+  "Open PGmacs on database `dbname=mydb user=me host=localhost password=foo'.
 The supported keywords in the connection string are host,
 hostaddr, port, dbname, user, password, sslmode (partial support)
 and application_name."
@@ -1066,15 +1077,16 @@ and application_name."
 
 ;;;###autoload
 (defun pgmacs-open/uri (connection-uri)
-  "Open PGMacs on database `postgresql://user:pass@host/dbname'."
+  "Open PGmacs on database `postgresql://user:pass@host/dbname'."
   (interactive "sPostgreSQL connection URI: ")
   (pgmacs--start-progress-reporter "Connecting to PostgreSQL")
   (pgmacs-open (pg-connect/uri connection-uri)))
 
 ;;;###autoload
 (defun pgmacs ()
+  "Open a widget-based login buffer for PostgreSQL."
   (interactive)
-  (switch-to-buffer "*PGMacs connection widget*")
+  (switch-to-buffer "*PGmacs connection widget*")
   (kill-all-local-variables)
   (remove-overlays)
   (widget-insert (propertize "Connect to PostgreSQL database" 'face 'bold))

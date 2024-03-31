@@ -5,7 +5,7 @@ the [MELPA](https://melpa.org/) package archive:
 
     M-x package-install RET pg
 
-PGMacs is not currently distributed in MELPA. In the meantime, do the following in a terminal:
+PGmacs is not currently distributed in MELPA. In the meantime, do the following in a terminal:
 
     git clone https://github.com/emarsden/pgmacs.git
 
@@ -25,10 +25,10 @@ port, etc.).
 
 ![Screenshot connection widget](img/connect-widget-table-list.gif)
 
-It will then open the PGMacs main buffer, which will show you a list of the tables available in the
+It will then open the PGmacs main buffer, which will show you a list of the tables available in the
 database.
 
-You can also open PGMacs with:
+You can also open PGmacs with:
 
 - a PostgreSQL connection object from the pg.el library, using function `pgmacs-open`
 
@@ -80,14 +80,14 @@ cursor to the relevant column and type `RET`. This will prompt you for the new v
 row to the value you specified (it sends PostgreSQL an SQL command similar to `UPDATE table_name SET
 column_name to X WHERE pk_col = the_value`).
 
-Note that PGMacs tells you the column type when prompting for the new value. You must specify a
+Note that PGmacs tells you the column type when prompting for the new value. You must specify a
 value in the format accepted by PostgreSQL for that type.
 
 
 
 ## Viewing output from an SQL query
 
-You can also view (but not edit!) the output from an SQL query you enter. Type `e` in a PGMacs
+You can also view (but not edit!) the output from an SQL query you enter. Type `e` in a PGmacs
 buffer, which will prompt you for an SQL query, then display the output in a dedicated temporary
 buffer. Type `q` to kill the temporary buffer.
 
@@ -103,7 +103,7 @@ of each column for which a default value is not specified, then the new row will
 To delete the row at point, press `<delete>` or `<backspace>` in a table buffer and confirm. Please
 note that this deletes in the PostgreSQL database, not only in the Emacs buffer.
 
-To copy/paste rows, press `k` to copy the row to the PGMacs kill buffer (this only copies, without
+To copy/paste rows, press `k` to copy the row to the PGmacs kill buffer (this only copies, without
 deleting the row), then `y` to insert a new row with the same values. Any columns that have a
 default value specified (for example, primary key rows that pull a value from an integer sequence,
 or are specified as `SERIAL`, or timestap values that default to `now`) will be inserted with a new

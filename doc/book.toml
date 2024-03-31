@@ -1,7 +1,7 @@
 [book]
-title = "Using PGMacs"
+title = "Using PGmacs"
 authors = ["Eric Marsden <eric.marsden@risk-engineering.org>"]
-description = "User manual for the the PGMacs PostgreSQL editor."
+description = "User manual for the the PGmacs PostgreSQL editor."
 language = "en"
 multilingual = false
 src = "src"

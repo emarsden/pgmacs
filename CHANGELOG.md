@@ -19,8 +19,8 @@
 
 ## [0.2] - 2024-03-29
 
-- New functions `pgmacs-open/string` to open PGMacs with a PostgreSQL connection string, and
-  `pgmacs-open/uri` to open PGMacs with a PostgreSQL connection URI.
+- New functions `pgmacs-open/string` to open PGmacs with a PostgreSQL connection string, and
+  `pgmacs-open/uri` to open PGmacs with a PostgreSQL connection URI.
   
 - New function `pgmacs` which opens a widget-based buffer to enter PostgreSQL connection information.
 

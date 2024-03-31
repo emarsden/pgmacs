@@ -1,4 +1,4 @@
-# PGMacs
+# PGmacs
 
 An Emacs browser and editor for the PostgreSQL database.
 
@@ -10,7 +10,7 @@ An Emacs browser and editor for the PostgreSQL database.
 ![Overview gif](img/edit-value.gif)
 
 
-PGMacs provides an editing interface for the PostgreSQL 🐘 object-relational DBMS from Emacs.
+PGmacs provides an editing interface for the PostgreSQL 🐘 object-relational DBMS from Emacs.
 It allows you to:
 
 - browse the **list of tables** in the database
@@ -21,13 +21,13 @@ It allows you to:
 
 - copy/paste rows of a database table (type `k` to copy, `y` to paste in a table display buffer)
 
-PGMacs works with Emacs running in a terminal (started with the `-nw` commandline option), or
+PGmacs works with Emacs running in a terminal (started with the `-nw` commandline option), or
 running in your platform's window system.
 
 
 ## Status
 
-PGMacs is in **alpha status**. Please only use it on test databases that do not contain important
+PGmacs is in **alpha status**. Please only use it on test databases that do not contain important
 data. 
 
 The library has been tested with PostgreSQL version 16.2, but should work with any PostgreSQL
@@ -38,7 +38,7 @@ MacOS. It won't run with Emacs versions earlier than 29 because it uses the `vta
 
 ## License
 
-PGMacs is distributed under the terms of the GNU General Public License, version 2.
+PGmacs is distributed under the terms of the GNU General Public License, version 2.
 
 Copyright 2023-2024 Eric Marsden.
 
