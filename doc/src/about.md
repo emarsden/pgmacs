@@ -7,7 +7,7 @@ An Emacs browser and editor for the PostgreSQL database.
 
 
 
-![Overview screenshot](img/screenshot-overview.png)
+![Overview gif](img/edit-value.gif)
 
 
 PGMacs provides an editing interface for the PostgreSQL 🐘 object-relational DBMS from Emacs.
@@ -32,8 +32,8 @@ data.
 
 The library has been tested with PostgreSQL version 16.2, but should work with any PostgreSQL
 version supported by the `pg-el` library that it uses to communicate with PostgreSQL. The code has
-been tested with Emacs 29.2 on Linux. It won't run with Emacs versions earlier than 29 because it
-uses the `vtable` library.
+mostly been tested with Emacs 29.2 on Linux, but should work as expected on Microsoft Windows and
+MacOS. It won't run with Emacs versions earlier than 29 because it uses the `vtable` library.
 
 
 ## License

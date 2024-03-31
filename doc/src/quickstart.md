@@ -23,7 +23,7 @@ With the pgmacs.el library loaded, say
 This will open a widget-based buffer to collect connection information (database name, hostname,
 port, etc.). 
 
-![Screenshot connection widget](img/screenshot-connection-widget.png)
+![Screenshot connection widget](img/connect-widget-table-list.gif)
 
 It will then open the PGMacs main buffer, which will show you a list of the tables available in the
 database.
@@ -66,7 +66,7 @@ The following keys are bound when the point is located in the table:
 | M-<left>  | Move to the previous column.                                        |
 | M-<right> | Move to the next column.                                            |
 | q         | Kill the current buffer.                                            |
-| i         | Insert a new row into the current table.                            |
+| +         | Insert a new row into the current table.                            |
 | d         | Delete the current row.                                             |
 | k         | Copy the current row.                                               |
 | y         | Paste (yank) the copied row.                                        |
@@ -97,11 +97,11 @@ buffer. Type `q` to kill the temporary buffer.
 
 ## Inserting, copying and deleting rows
 
-To insert a new row into a table, press `i` in the table buffer. You will be prompted for the values
+To insert a new row into a table, press `+` in the table buffer. You will be prompted for the values
 of each column for which a default value is not specified, then the new row will be inserted. 
 
-To delete the row at point, press `d` in a table buffer and confirm. Please note that this deletes
-in the PostgreSQL database, not only in the Emacs buffer.
+To delete the row at point, press `<delete>` or `<backspace>` in a table buffer and confirm. Please
+note that this deletes in the PostgreSQL database, not only in the Emacs buffer.
 
 To copy/paste rows, press `k` to copy the row to the PGMacs kill buffer (this only copies, without
 deleting the row), then `y` to insert a new row with the same values. Any columns that have a
