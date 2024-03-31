@@ -1,8 +1,13 @@
 # Changelog
 
-## [0.3] - Unreleased
+## [0.3] - 2024-03-31
 
-- The comment on a table can be modified by pressing RET in the list-of-tables buffer.
+- The comment on a table can be modified by pressing `RET` in the list-of-tables buffer.
+
+- Alignment of table headers should be improved, both in a window system and a terminal.
+
+- New keybinding for `<delete>` and `<backspace>` in the list-of-tables buffer, which allow easy
+  deletion of tables after `yes-or-no-p` confirmation.
 
 
 ## [0.2] - 2024-03-29

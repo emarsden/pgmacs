@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
-;; Version: 0.2
+;; Version: 0.3
 ;; Package-Requires: ((emacs "29.1") (pg "0.31"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
@@ -18,6 +18,7 @@
 (require 'cl-lib)
 (require 'vtable)                       ; note: requires Emacs 29
 (require 'button)
+(require 'widget)
 (require 'pg)
 
 
@@ -187,6 +188,17 @@ network link."
         ((string= type-name "timespan") 12)
         (t 10)))
 
+(defun pgmacs--alignment-for (type-name)
+  (cond ((string= type-name "smallint") 'right)
+        ((string= type-name "int2") 'right)
+        ((string= type-name "int4") 'right)
+        ((string= type-name "int8") 'right)
+        ((string= type-name "oid") 'right)
+        ((string= type-name "bool") 'left)
+        ((string= type-name "bit") 'right)
+        ((string= type-name "varbit") 'right)
+        (t 'left)))
+
 ;; Name may be a qualified name or a simple string. Transform this into a string for display to the
 ;; user. We only want to show the outer ?" characters if they are necessary (if some characters in
 ;; the identifier require quoting).
@@ -208,7 +220,6 @@ network link."
           (t
            (user-facing name)))))
 
-  
 (defun pgmacs--row-as-json (current-row)
   (unless (json-available-p)
     (error "Emacs is not compiled with JSON support"))
@@ -238,21 +249,28 @@ network link."
 (defun pgmacs--edit-value/minibuffer (row primary-keys)
   (if (null primary-keys)
       (warn "Can't edit content of a table that has no PRIMARY KEY")
-    (let* ((vtable (vtable-current-table))
-           (current-row (vtable-current-object))
+    (let* ((vtable (or (vtable-current-table)
+                       (error "Cursor is not in a current vtable")))
+           (current-row (or (vtable-current-object)
+                            (error "Cursor is not on a vtable row")))
            (cols (vtable-columns vtable))
-           (col-id (vtable-current-column))
+           (col-id (or (vtable-current-column)
+                       (error "Not on a vtable column")))
            (col (nth col-id cols))
            (col-name (vtable-column-name col))
            (col-type (aref pgmacs--column-type-names col-id))
            (pk (cl-first primary-keys))
-           (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
-           (pk-col-type (aref pgmacs--column-type-names pk-col-id))
+           (pk-col-id (or (cl-position pk cols :key #'vtable-column-name :test #'string=)
+                          (error "Can't find primary key %s in the vtable column list" pk)))
+           (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
            (pk-value (and pk-col-id (nth pk-col-id row))))
       (unless pk-value
         (error "Can't find value for primary key %s" pk))
       (let* ((current (nth col-id current-row))
-             (new-value (pgmacs--read-value col-name col-type "Change %s (%s) to: " current))
+             (new-value (pgmacs--read-value (substring-no-properties col-name)
+                                            (substring-no-properties col-type)
+                                            "Change %s (%s) to: "
+                                            (substring-no-properties current)))
              (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
                           (pg-escape-identifier pgmacs--table)
                           (pg-escape-identifier col-name)
@@ -275,7 +293,6 @@ network link."
 
 ;; Edit the current column value in a dedicated widget buffer
 (defun pgmacs--edit-value/widget (row primary-keys)
-  (require 'widget)
   (if (null primary-keys)
       (warn "Can't edit content of a table that has no PRIMARY KEY")
     (let* ((con pgmacs--con)
@@ -360,7 +377,8 @@ network link."
         (vtable-remove-object vtable row)))))
 
 (defun pgmacs--insert-row (current-row)
-  ;; TODO we need to handle the case where there is no existing vtable because the underlying SQL table is empty.
+  ;; TODO we need to handle the case where there is no existing vtable because the underlying SQL
+  ;; table is empty.
   (let* ((vtable (vtable-current-table))
          (cols (vtable-columns vtable))
          (col-names (list))
@@ -395,7 +413,6 @@ network link."
       (pgmacs--display-table pgmacs--table))))
 
 (defun pgmacs--insert-row/widget (current-row)
-  (require 'widget)
   (let* ((con pgmacs--con)
          (table pgmacs--table)
          (ce (pgcon-client-encoding pgmacs--con))
@@ -617,14 +634,13 @@ Table names are schema-qualified if the schema is non-default."
     entries))
 
 
-(defun pgmacs--make-column-displayer (help-echo)
+(defun pgmacs--make-column-displayer (metainfo)
   (lambda (fvalue max-width _table)
     (let ((truncated (if (> (string-pixel-width fvalue) max-width)
                          ;; TODO could include the ellipsis here
                          (vtable--limit-string fvalue max-width)
                        fvalue)))
-      (propertize truncated 'help-echo help-echo))))
-
+      (propertize truncated 'face 'pgmacs-table-data 'help-echo metainfo))))
 
 (defun pgmacs--table-to-csv (&rest _ignore)
   "Dump the current PostgreSQL table in CSV format into an Emacs buffer."
@@ -708,33 +724,43 @@ Table names are schema-qualified if the schema is non-default."
            (column-names (mapcar #'cl-first (pg-result res :attributes)))
            (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
            (column-type-names (mapcar #'pg--lookup-type-name column-type-oids))
+           (column-alignment (mapcar #'pgmacs--alignment-for column-type-names))
            (column-meta (mapcar (lambda (col) (pgmacs--column-info con table col)) column-names))
            (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
            (value-widths (mapcar #'pgmacs--value-width column-type-names))
            (column-widths (cl-loop for w in value-widths
                                    for name in column-names
                                    collect (1+ (max w (length name)))))
-           (columns (cl-loop for name in column-names
-                             for meta in column-meta
-                             for fmt in column-formatters
-                             for w in column-widths
-                             collect (make-vtable-column
-                                      :name (propertize name 'face 'pgmacs-table-header 'help-echo meta)
-                                      :min-width (1+ (max w (length name)))
-                                      :formatter fmt
-                                      :displayer (pgmacs--make-column-displayer meta))))
+           (columns (cl-loop
+                     for name in column-names
+                     for meta in column-meta
+                     for align in column-alignment
+                     for fmt in column-formatters
+                     for w in column-widths
+                     collect (make-vtable-column
+                              :name (propertize name
+                                                'face 'pgmacs-table-header
+                                                'help-echo meta)
+                              :align align
+                              :min-width (1+ (max w (length name)))
+                              :formatter fmt
+                              :displayer (pgmacs--make-column-displayer meta))))
            (inhibit-read-only t)
            (vtable (make-vtable
                     :insert nil
                     :use-header-line nil
-                    :face 'pgmacs-table-data
                     :columns columns
                     :row-colors pgmacs-row-colors
-                    :separator-width 5
-                    :divider-width "5px"
+                    ;; :separator-width 1
+                    ;; :separator-width (string-pixel-width " ")
+                    ;; :divider-width "5px"
                     :objects rows
+                    ;; same syntax for keys as keymap-set
                     :actions `("RET" (lambda (row) (pgmacs--edit-value/minibuffer row ',primary-keys))
                                "w" (lambda (row) (pgmacs--edit-value/widget row ',primary-keys))
+                               "<delete>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                               "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                               "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                ;; TODO: "h" to show local help
                                "+" pgmacs--insert-row
@@ -898,8 +924,9 @@ Table names are schema-qualified if the schema is non-default."
                   :face 'pgmacs-table-data
                   :columns columns
                   :row-colors pgmacs-row-colors
-                  :separator-width 5
-                  :divider-width "5px"
+                  ;; :separator-width 5
+                  ;; :separator-width (string-pixel-width " ")
+                  ;; :divider-width "5px"
                   :objects rows
                   :actions `("e" (lambda (&rest _ignored) (pgmacs-run-sql))
                              "q" (lambda (&rest _ignore) (kill-buffer))))))
@@ -928,7 +955,17 @@ Table names are schema-qualified if the schema is non-default."
           (t
            (pgmacs--display-table (car table-row))))))
 
-;; FIXME should iterate over existing schemas (see "\dn" psql command)
+(defun pgmacs--delete-table (table-row)
+  (let* ((vtable (vtable-current-table))
+         (table (car table-row))
+         (t-id (pg-escape-identifier table)))
+    (when (yes-or-no-p (format "Really drop PostgreSQL table %s? " t-id))
+      ;; We can't use a prepared statement for this dynamic SQL statement
+      (let* ((sql (format "DROP TABLE %s" t-id))
+             (res (pg-exec pgmacs--con sql)))
+        (pgmacs--notify "%s" (pg-result res :status))
+        (vtable-remove-object vtable table-row)))))
+
 ;;;###autoload
 (defun pgmacs-open (con)
   "Browse the contents of PostgreSQL database to which we are connected over CON."
@@ -954,7 +991,7 @@ Table names are schema-qualified if the schema is non-default."
                              :name (propertize "Table" 'face 'pgmacs-table-header)
                              :width 20
                              :primary t
-                             :align 'left)
+                             :align 'right)
                             (make-vtable-column
                              :name (propertize "Rows" 'face 'pgmacs-table-header)
                              :width 7 :align 'right)
@@ -963,7 +1000,7 @@ Table names are schema-qualified if the schema is non-default."
                              :width 13 :align 'right)
                             (make-vtable-column
                              :name (propertize "Owner" 'face 'pgmacs-table-header)
-                             :width 13 :align 'left)
+                             :width 13 :align 'right)
                             (make-vtable-column
                              :name (propertize "Comment" 'face 'pgmacs-table-header)
                              :width 30 :align 'left))
@@ -974,6 +1011,8 @@ Table names are schema-qualified if the schema is non-default."
                   :divider-width "2px"
                   :objects (pgmacs--list-tables)
                   :actions '("RET" pgmacs--dbbuf-handle-RET
+                             ;; "h" for keybinding help
+                             "<deletechar>" pgmacs--delete-table
                              "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                              "q"  (lambda (&rest _ignored) (kill-buffer)))
                   :getter (lambda (object column vtable)
@@ -1036,7 +1075,6 @@ and application_name."
 ;;;###autoload
 (defun pgmacs ()
   (interactive)
-  (require 'widget)
   (switch-to-buffer "*PGMacs connection widget*")
   (kill-all-local-variables)
   (remove-overlays)
@@ -1099,6 +1137,60 @@ and application_name."
     (widget-setup)
     (goto-char (point-min))
     (widget-forward 1)))
+
+
+;; This is a replacement for vtable--insert-header-line, which produces poor alignment of the header
+;; line.
+(defun pgmacs--insert-header-line (table widths spacer)
+  (cl-flet ((space-for (width)
+              (propertize " " 'display (list 'space :width (list width)))))
+    (let ((start (point))
+          (divider (vtable-divider table))
+          (cmap (define-keymap
+                  "<header-line> <drag-mouse-1>" #'vtable--drag-resize-column
+                  "<header-line> <down-mouse-1>" #'ignore))
+          (dmap (define-keymap
+                  "<header-line> <drag-mouse-1>"
+                  (lambda (e)
+                    (interactive "e")
+                    (vtable--drag-resize-column e t))
+                  "<header-line> <down-mouse-1>" #'ignore)))
+      (seq-do-indexed
+       (lambda (column index)
+         (let* ((name (propertize
+                       (vtable-column-name column)
+                       'face (list 'pgmacs-table-header)
+                       'mouse-face 'header-line-highlight
+                       'keymap cmap))
+                (start (point))
+                (indicator (vtable--indicator table index))
+                (indicator-width (string-pixel-width indicator))
+                (last (= index (1- (length (vtable-columns table)))))
+                (displayed (if (> (string-pixel-width name)
+                                  (- (elt widths index) indicator-width))
+                               (vtable--limit-string
+                                name (- (elt widths index) indicator-width))
+                             name)))
+           (let ((fill-width (- (elt widths index)
+                                (string-pixel-width displayed)
+                                indicator-width)))
+             (if (eq (vtable-column-align column) 'left)
+                 (insert displayed (space-for fill-width) indicator)
+               (insert (space-for fill-width) displayed indicator)))
+           (unless last
+             (insert (space-for spacer)))
+           (when (and divider (not last))
+             (insert (propertize divider 'keymap dmap)))
+           (put-text-property start (point) 'vtable-column index)))
+       (vtable-columns table))
+      (insert "\n")
+      (add-face-text-property start (point) 'header-line))))
+
+(defun pgmacs--insert-header-line-replace (_orig-fun &rest args)
+  (apply #'pgmacs--insert-header-line args))
+
+(advice-add 'vtable--insert-header-line :around #'pgmacs--insert-header-line-replace)
+
 
 (provide 'pgmacs)
 
