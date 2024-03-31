@@ -15,7 +15,7 @@ It allows you to:
 
 - copy/paste rows of a database table (type `k` to copy, `y` to paste in a table display buffer)
 
-![Screenshot table list](doc/src/img/screenshot-overview.png)
+![GIF editing](doc/src/img/edit-value.gif)
 
 
 
@@ -47,7 +47,8 @@ data.
 
 The library has been tested with PostgreSQL version 16.2, but should work with any PostgreSQL
 version supported by the `pg-el` library that it uses to communicate with PostgreSQL. The code has
-been tested with Emacs 29.2 on Linux. It requires version 29.x because it uses the `vtable` library.
+mostly been tested with Emacs 29.2 on Linux, but should work as expected on Microsoft Windows and
+MacOS. It requires Emacs version 29.x because it uses the `vtable` library.
 
 
 ## License
