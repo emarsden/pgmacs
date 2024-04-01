@@ -116,9 +116,9 @@ network link."
     (setq pgmacs--progress-timer nil)))
 
 
-;; Used for copying and pasting rows
-(defvar-local pgmacs--kill-ring nil)
-
+(defvar-local pgmacs--kill-ring
+    "Used for copying and pasting rows in a buffer's table."
+  nil)
 
 (defvar-local pgmacs--con nil)
 (defvar-local pgmacs--table nil)
@@ -127,9 +127,11 @@ network link."
 
 
 (defun pgmacs--notify (fmt &rest args)
+  "Display a notification regarding PGmacs activity."
   (message (concat "PostgreSQL> " (apply #'format (cons fmt args)))))
 
 (defun pgmacs--value-formatter (type-name)
+  "Return a function that formats a value of type TYPE-NAME."
   (cond ((or (string= type-name "timestamp")
              (string= type-name "timestamptz")
 	     (string= type-name "date"))
@@ -151,8 +153,8 @@ network link."
         (t
          (lambda (val) (format "%s" val)))))
 
-;; How wide should we make a column containing elements of this type?
 (defun pgmacs--value-width (type-name)
+  "How wide should we make a column containing elements of this type?"
   (cond ((string= type-name "smallint") 4)
         ((string= type-name "int2") 4)
         ((string= type-name "int4") 6)
@@ -189,6 +191,7 @@ network link."
         (t 10)))
 
 (defun pgmacs--alignment-for (type-name)
+  "Returns the alignment for type TYPE-NAME, either \='left or \='right."
   (cond ((string= type-name "smallint") 'right)
         ((string= type-name "int2") 'right)
         ((string= type-name "int4") 'right)
@@ -203,6 +206,7 @@ network link."
 ;; user. We only want to show the outer ?" characters if they are necessary (if some characters in
 ;; the identifier require quoting).
 (defun pgmacs--display-identifier (name)
+  "Return the identifier NAME in a form suitable for display to the user."
   (cl-labels ((safe-p (ch)
                 (string-match-p "[0-9a-zA-Z_]" (string ch)))
               (user-facing (nm)
@@ -221,6 +225,7 @@ network link."
            (user-facing name)))))
 
 (defun pgmacs--row-as-json (current-row)
+  "Copy the current row as JSON to the kill ring."
   (unless (json-available-p)
     (error "Emacs is not compiled with JSON support"))
   (let* ((vtable (vtable-current-table))
@@ -245,8 +250,8 @@ network link."
          (ce (pgcon-client-encoding pgmacs--con)))
     (if parser (funcall parser user-provided ce) user-provided)))
 
-;; Edit the column value at point by prompting for the new value in the minibuffer.
 (defun pgmacs--edit-value/minibuffer (row primary-keys)
+  "Edit the column value at point by prompting for the new value in the minibuffer."
   (if (null primary-keys)
       (warn "Can't edit content of a table that has no PRIMARY KEY")
     (let* ((vtable (or (vtable-current-table)
@@ -539,6 +544,8 @@ Uses a widget-based buffer to prompt for new values."
 
 ;; We can also SELECT c.column_name, c.data_type
 (defun pgmacs--table-primary-keys (con table)
+  "Return the columns active as PRIMARY KEY in TABLE.
+Uses PostgreSQL connection CON."
   (let* ((schema (if (pg-qualified-name-p table)
                      (pg-qualified-name-schema table)
                    "public"))
@@ -695,6 +702,7 @@ Table names are schema-qualified if the schema is non-default."
 
 
 (defun pgmacs--row-list-help (&rest _ignore)
+  "Open a buffer describing keybindings in a row-list buffer."
   (pop-to-buffer "*PGmacs row-list help*")
   (erase-buffer)
   (help-mode)
@@ -925,6 +933,7 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
 ;;
 ;; TODO: allow input from a buffer which is set to sql-mode.
 (defun pgmacs-run-sql ()
+  "Prompt for an SQL query and display the output in a dedicated buffer."
   (let ((sql (read-from-minibuffer "SQL query: ")))
     (pgmacs-show-result pgmacs--con sql)))
 
@@ -977,9 +986,10 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
     (pgmacs--stop-progress-reporter)))
 
 
-;; Called on RET on a line in the db-list-of-tables buffer. If the cursor is on the Comment column,
+;; If the cursor is on the Comment column,
 ;; allow the user to set the table comment. Otherwise, display the table in a separate buffer.
 (defun pgmacs--dbbuf-handle-RET (table-row)
+  "Called on RET on a line in the list-of-tables buffer."
   (let* ((vtable (vtable-current-table))
          (col-id (vtable-current-column))
          (col (nth col-id (vtable-columns vtable)))
@@ -1009,6 +1019,7 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
         (vtable-remove-object vtable table-row)))))
 
 (defun pgmacs--table-list-help (&rest _ignore)
+  "Show keybindings active in a table-list buffer."
   (pop-to-buffer "*PGmacs table-list help*")
   (erase-buffer)
   (help-mode)
@@ -1125,7 +1136,9 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
 
 ;;;###autoload
 (defun pgmacs-open/string (connection-string)
-  "Open PGmacs on database `dbname=mydb user=me host=localhost password=foo'.
+  "Open PGmacs on database specified by CONNECTION-STRING.
+CONNECTION-STRING is a PostgreSQL connection string of the form
+`dbname=mydb user=me host=localhost password=foo'.
 The supported keywords in the connection string are host,
 hostaddr, port, dbname, user, password, sslmode (partial support)
 and application_name."
@@ -1135,7 +1148,9 @@ and application_name."
 
 ;;;###autoload
 (defun pgmacs-open/uri (connection-uri)
-  "Open PGmacs on database `postgresql://user:pass@host/dbname'."
+  "Open PGmacs on database specified by CONNECTION-URI.
+CONNECTION-URI is a PostgreSQL connection URI of the form
+`postgresql://user:pass@host/dbname'."
   (interactive "sPostgreSQL connection URI: ")
   (pgmacs--start-progress-reporter "Connecting to PostgreSQL")
   (pgmacs-open (pg-connect/uri connection-uri)))
@@ -1255,8 +1270,10 @@ and application_name."
       (insert "\n")
       (add-face-text-property start (point) 'header-line))))
 
-(defun pgmacs--insert-header-line-replace (_orig-fun &rest args)
-  (apply #'pgmacs--insert-header-line args))
+(defun pgmacs--insert-header-line-replace (orig-fun &rest args)
+  (if (eq major-mode 'pgmacs)
+      (apply #'pgmacs--insert-header-line args)
+    (apply orig-fun args)))
 
 (advice-add 'vtable--insert-header-line :around #'pgmacs--insert-header-line-replace)
 

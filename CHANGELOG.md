@@ -6,6 +6,11 @@
 - The row count shown in the list-of-tables buffer is now precise even when the tables have not been
   VACUUMed. This precision is at the cost of speed on large tables (calculated with `COUNT(*)`).
 
+- Add `h` keybinding in row-list and table-list buffers that show a buffer with the main keybindings.
+
+- New keybindings `<` and `>` in row-list and table-list buffers to move to the beginning and the
+  end of the vtable, respectively.
+
 
 ## [0.3] - 2024-03-31
 
