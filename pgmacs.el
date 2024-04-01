@@ -694,6 +694,36 @@ Table names are schema-qualified if the schema is non-default."
   (pgmacs--display-table pgmacs--table))
 
 
+(defun pgmacs--row-list-help (&rest _ignore)
+  (pop-to-buffer "*PGmacs row-list help*")
+  (erase-buffer)
+  (help-mode)
+  (cl-flet ((shw (key msg)
+              (insert (propertize (format "%12s" key) 'face '(:foreground "blue")))
+              (insert (propertize " → " 'face '(:foreground "gray")))
+              (insert msg "\n")))
+    (let ((inhibit-read-only t))
+      (shw "RET" "Edit the value at point in the minibuffer")
+      (shw "w" "Edit the value at point in a widget-based buffer")
+      (shw "<backspace>" "Delete the row at point")
+      (shw "DEL" "Delete the row at point")
+      (shw "+" "Insert a new row, prompting for new values in minibuffer")
+      (shw "i" "Insert a new row, prompting for new values in a dedicated buffer")
+      (shw "k" "Copy the row at point")
+      (shw "y" "Yank the previously copied row and insert into the table")
+      (shw "j" "Copy the current row to the kill-ring in JSON format")
+      (shw "n" "Next page of output (if table contents are paginated)")
+      (shw "p" "Previous page of output (if table contents are paginated)")
+      (shw "e" "New buffer with output from SQL query")
+      (shw "<" "Go to the first table in the table list")
+      (shw ">" "Go to the last table in the table list")
+      (shw "{" "Shrink the horizontal space used by the current column")
+      (shw "}" "Grow the horizontal space used by the current column")
+      (shw "q" "Bury this buffer")
+      (shrink-window-if-larger-than-buffer)
+      (goto-char (point-min)))))
+
+
 ;; TODO: add additional information as per psql
 ;; Table « public.books »
 ;; Colonne |           Type           | Collationnement | NULL-able |            Par défaut             
@@ -760,9 +790,6 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
                     :use-header-line nil
                     :columns columns
                     :row-colors pgmacs-row-colors
-                    ;; :separator-width 1
-                    ;; :separator-width (string-pixel-width " ")
-                    ;; :divider-width "5px"
                     :objects rows
                     ;; same syntax for keys as keymap-set
                     :actions `("RET" (lambda (row) (pgmacs--edit-value/minibuffer row ',primary-keys))
@@ -771,7 +798,7 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
                                "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                               ;; TODO: "h" to show local help
+                               "h" pgmacs--row-list-help
                                "+" pgmacs--insert-row
                                "i" pgmacs--insert-row/widget
                                "k" pgmacs--copy-row
@@ -780,6 +807,12 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
                                "r" pgmacs--revert-vtable
                                "j" pgmacs--row-as-json
                                ;; "n" and "p" are bound when table is paginated to next/prev page
+                               "<" (lambda (&rest _ignored)
+                                     (text-property-search-backward 'vtable)
+                                     (next-line))
+                               ">" (lambda (&rest _ignored)
+                                     (text-property-search-forward 'vtable)
+                                     (previous-line))
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (setq-local pgmacs--con con
                   pgmacs--table table
@@ -849,7 +882,7 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
   (vtable-revert))
 
 (defun pgmacs--display-backend-information (&rest _ignore)
-  "Create a buffer with information concerning the current PostgreSQL backend".
+  "Create a buffer with information concerning the current PostgreSQL backend."
   (let ((con pgmacs--con))
     (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
     (pgmacs-transient-mode)
@@ -935,9 +968,6 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
                   :face 'pgmacs-table-data
                   :columns columns
                   :row-colors pgmacs-row-colors
-                  ;; :separator-width 5
-                  ;; :separator-width (string-pixel-width " ")
-                  ;; :divider-width "5px"
                   :objects rows
                   :actions `("e" (lambda (&rest _ignored) (pgmacs-run-sql))
                              "q" (lambda (&rest _ignore) (kill-buffer))))))
@@ -977,6 +1007,26 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
              (res (pg-exec pgmacs--con sql)))
         (pgmacs--notify "%s" (pg-result res :status))
         (vtable-remove-object vtable table-row)))))
+
+(defun pgmacs--table-list-help (&rest _ignore)
+  (pop-to-buffer "*PGmacs table-list help*")
+  (erase-buffer)
+  (help-mode)
+  (cl-flet ((shw (key msg)
+              (insert (propertize (format "%12s" key) 'face '(:foreground "blue")))
+              (insert (propertize " → " 'face '(:foreground "gray")))
+              (insert msg "\n")))
+    (let ((inhibit-read-only t))
+      (shw "RET" "New buffer to edit this table")
+      (shw "<deletechar>" "Delete the table at point")
+      (shw "e" "New buffer with output from SQL query")
+      (shw "<" "Go to the first table in the table list")
+      (shw ">" "Go to the last table in the table list")
+      (shw "{" "Shrink the horizontal space used by the current column")
+      (shw "}" "Grow the horizontal space used by the current column")
+      (shw "q" "Bury this buffer")
+      (shrink-window-if-larger-than-buffer)
+      (goto-char (point-min)))))
 
 ;;;###autoload
 (defun pgmacs-open (con)
@@ -1020,10 +1070,18 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
                   :face 'pgmacs-table-data
                   ;; :column-colors '("#202020" "#404040")
                   :objects (pgmacs--list-tables)
-                  :actions '("RET" pgmacs--dbbuf-handle-RET
-                             ;; "h" for keybinding help
+                  :actions '("h" pgmacs--table-list-help
+                             "RET" pgmacs--dbbuf-handle-RET
                              "<deletechar>" pgmacs--delete-table
                              "e" (lambda (&rest _ignored) (pgmacs-run-sql))
+                             ;; the functions vtable-beginning-of-table and vtable-end-of-table don't work when
+                             ;; we have inserted text before the vtable.
+                             "<" (lambda (&rest _ignored)
+                                   (text-property-search-backward 'vtable)
+                                   (next-line))
+                             ">" (lambda (&rest _ignored)
+                                   (text-property-search-forward 'vtable)
+                                   (previous-line))
                              "q"  (lambda (&rest _ignored) (kill-buffer)))
                   :getter (lambda (object column vtable)
                             (pcase (vtable-column vtable column)
