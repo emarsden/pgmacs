@@ -180,8 +180,6 @@ network link."
         ((string= type-name "float4") 10)
         ((string= type-name "float8") 10)
         ((string= type-name "date") 18)
-        ((string= type-name "float8") 10)
-        ((string= type-name "float8") 10)
         ((string= type-name "timestamp") 20)
         ((string= type-name "timestamptz") 20)
         ((string= type-name "datetime") 20)
@@ -275,7 +273,7 @@ network link."
              (new-value (pgmacs--read-value (substring-no-properties col-name)
                                             (substring-no-properties col-type)
                                             "Change %s (%s) to: "
-                                            (substring-no-properties current)))
+                                            current))
              (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
                           (pg-escape-identifier pgmacs--table)
                           (pg-escape-identifier col-name)
@@ -290,11 +288,26 @@ network link."
           (vtable-insert-object vtable new-row current-row)
           (vtable-remove-object vtable current-row))))))
 
-(defun pgmacs--widget-for (_type current-value)
-  ;; TODO improve this choice based on type
-  (widget-create 'editable-field
-                 :size 40
-                 (format "%s" current-value)))
+(defun pgmacs--widget-for (type current-value)
+  (cond ((string= "bool" type)
+         (widget-create 'boolean current-value))
+        ((or (string= "smallint" type)
+             (string= "int2" type)
+             (string= "int4" type)
+             (string= "int8" type)
+             (string= "oid" type))
+         (widget-create 'integer current-value))
+        ((or (string= type "numeric")
+             (string= type "float4")
+             (string= type "float8"))
+         (widget-create 'float current-value))
+        ((or (string= type "char")
+             (string= type "bpchar"))
+         (widget-create 'character current-value))
+        (t
+         (widget-create 'editable-field
+                        :size (min 200 (+ 5 (length current-value)))
+                        (format "%s" current-value)))))
 
 (defun pgmacs--edit-value/widget (row primary-keys)
   "Edit the current column value in ROW in a dedicated widget buffer."
@@ -323,7 +336,10 @@ network link."
              (updater (lambda (user-provided)
                         (let* ((parser (pg-lookup-parser col-type))
                                (ce (pgcon-client-encoding pgmacs--con))
-                               (new-value (if parser (funcall parser user-provided ce)
+                               ;; Some of the input widgets we use return a pre-parsed type (e.g. a
+                               ;; floating point number) rather than a string
+                               (new-value (if (and (stringp user-provided) parser)
+                                              (funcall parser user-provided ce)
                                             user-provided))
                                (res (pg-exec-prepared pgmacs--con sql
                                                       `((,new-value . ,col-type)
@@ -338,6 +354,7 @@ network link."
         (erase-buffer)
         (remove-overlays)
         (kill-all-local-variables)
+        (pgmacs-mode)
         (setq-local pgmacs--con con
                     pgmacs--table table)
         (widget-insert (propertize (format "Update column %s" col-name) 'face 'bold))
@@ -346,7 +363,7 @@ network link."
         (widget-insert "\n\n")
         (let* ((w-updated
                 (progn
-                  (widget-insert (format "%12s: " "New value"))
+                  ;; (widget-insert (format "%12s: " "New value"))
                   (pgmacs--widget-for col-type current))))
           (widget-insert "\n\n")
           (widget-create 'push-button
@@ -476,7 +493,7 @@ Uses a widget-based buffer to prompt for new values."
       (dolist (ecv editable-cols)
         (let ((name (aref ecv 0))
               (type (aref ecv 1)))
-          (widget-insert (format "\n%12s: " name))
+          (widget-insert (format "\n%7s (SQL type %s): " name type))
           (push (pgmacs--widget-for type "") widgets)))
       (setq widgets (nreverse widgets))
       (widget-insert "\n\n")
