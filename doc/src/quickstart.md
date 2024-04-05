@@ -58,19 +58,26 @@ variable `pgmacs-row-limit`.
 The following keys are bound when the point is located in the table: 
 
 
-| Key       | Binding                                                             |
-|-----------|---------------------------------------------------------------------|
-| S         | Sort the table by the current column.                               |
-| {         | Make the current column narrower.                                   |
-| }         | Make the current column wider.                                      |
-| M-<left>  | Move to the previous column.                                        |
-| M-<right> | Move to the next column.                                            |
-| q         | Kill the current buffer.                                            |
-| +         | Insert a new row into the current table.                            |
-| d         | Delete the current row.                                             |
-| k         | Copy the current row.                                               |
-| y         | Paste (yank) the copied row.                                        |
-| e         | Open a new buffer to display the result of an SQL query.            |
+| Key       | Binding                                                                              |
+|-----------|--------------------------------------------------------------------------------------|
+| RET       | Edit the value at point in the minibuffer.                                           |
+| w         | Edit the value at point in a widget-based buffer.                                    |
+| DEL       | Delete the row at point.                                                             |
+| S         | Sort the table by the current column.                                                |
+| {         | Make the current column narrower.                                                    |
+| }         | Make the current column wider.                                                       |
+| M-<left>  | Move to the previous column.                                                         |
+| M-<right> | Move to the next column.                                                             |
+| +         | Insert a new row into the current table, prompting for new values in the minibuffer. |
+| i         | Insert a new row, prompting for new values in a dedicated buffer.                    |
+| d         | Delete the current row.                                                              |
+| k         | Copy the current row.                                                                |
+| y         | Paste (yank) the copied row.                                                         |
+| j         | Copy the current row to the kill ring in JSON format.                                |
+| <         | Move to the beginning of the table.                                                  |
+| >         | Move to the end of the table.                                                        |
+| e         | Open a new buffer to display the result of an SQL query.                             |
+| q         | Kill the current buffer.                                                             |
 
 
 ## Editing a column value
@@ -98,10 +105,13 @@ buffer. Type `q` to kill the temporary buffer.
 ## Inserting, copying and deleting rows
 
 To insert a new row into a table, press `+` in the table buffer. You will be prompted for the values
-of each column for which a default value is not specified, then the new row will be inserted. 
+of each column for which a default value is not specified (in the minibuffer), then the new row will
+be inserted. You can also insert a new row by entering new values in a widget-based buffer by
+pressing `i` (this may be more convenient if the table contains many rows, or the values to enter
+are very long).
 
 To delete the row at point, press `<delete>` or `<backspace>` in a table buffer and confirm. Please
-note that this deletes in the PostgreSQL database, not only in the Emacs buffer.
+note that this deletes the current row in the PostgreSQL database, as well as in the Emacs buffer.
 
 To copy/paste rows, press `k` to copy the row to the PGmacs kill buffer (this only copies, without
 deleting the row), then `y` to insert a new row with the same values. Any columns that have a
