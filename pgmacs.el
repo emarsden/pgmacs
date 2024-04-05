@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
-;; Version: 0.3
+;; Version: 0.4
 ;; Package-Requires: ((emacs "29.1") (pg "0.31"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
@@ -127,7 +127,8 @@ network link."
 
 
 (defun pgmacs--notify (fmt &rest args)
-  "Display a notification regarding PGmacs activity."
+  "Display a notification regarding PGmacs activity.
+Applies format string FMT to ARGS."
   (message (concat "PostgreSQL> " (apply #'format (cons fmt args)))))
 
 (defun pgmacs--value-formatter (type-name)
@@ -154,7 +155,7 @@ network link."
          (lambda (val) (format "%s" val)))))
 
 (defun pgmacs--value-width (type-name)
-  "How wide should we make a column containing elements of this type?"
+  "Width for a column containing elements of type TYPE-NAME."
   (cond ((string= type-name "smallint") 4)
         ((string= type-name "int2") 4)
         ((string= type-name "int4") 6)
@@ -189,7 +190,7 @@ network link."
         (t 10)))
 
 (defun pgmacs--alignment-for (type-name)
-  "Returns the alignment for type TYPE-NAME, either \='left or \='right."
+  "Return the alignment for type TYPE-NAME, either \='left or \='right."
   (cond ((string= type-name "smallint") 'right)
         ((string= type-name "int2") 'right)
         ((string= type-name "int4") 'right)
@@ -223,7 +224,7 @@ network link."
            (user-facing name)))))
 
 (defun pgmacs--row-as-json (current-row)
-  "Copy the current row as JSON to the kill ring."
+  "Copy the CURRENT-ROW as JSON to the kill ring."
   (unless (json-available-p)
     (error "Emacs is not compiled with JSON support"))
   (let* ((vtable (vtable-current-table))
@@ -243,13 +244,18 @@ network link."
 ;; TODO: perhaps if the field value is very long or of BYTEA type, prompt "really want to edit in
 ;; minibuffer" and suggest using the widget editing mode instead.
 (defun pgmacs--read-value (name type prompt current-value)
+  "Read a value for column NAME of SQL type TYPE.
+Use PROMPT in the minibuffer and show the current value CURRENT-VALUE."
   (let* ((user-provided (pgmacs--read-value/minibuffer name type prompt current-value))
          (parser (pg-lookup-parser type))
          (ce (pgcon-client-encoding pgmacs--con)))
     (if parser (funcall parser user-provided ce) user-provided)))
 
 (defun pgmacs--edit-value/minibuffer (row primary-keys)
-  "Edit the column value at point by prompting for the new value in the minibuffer."
+  "Edit and update in PostgreSQL the column value at point.
+The new value in database row ROW is read in the minibuffer.
+Editing requires the database table to have primary keys named in the list
+PRIMARY-KEYS."
   (if (null primary-keys)
       (warn "Can't edit content of a table that has no PRIMARY KEY")
     (let* ((vtable (or (vtable-current-table)
@@ -289,6 +295,7 @@ network link."
           (vtable-remove-object vtable current-row))))))
 
 (defun pgmacs--widget-for (type current-value)
+  "Create a widget for TYPE and CURRENT-VALUE in the current buffer."
   (cond ((string= "bool" type)
          (widget-create 'boolean current-value))
         ((or (string= "smallint" type)
@@ -310,7 +317,9 @@ network link."
                         (format "%s" current-value)))))
 
 (defun pgmacs--edit-value/widget (row primary-keys)
-  "Edit the current column value in ROW in a dedicated widget buffer."
+  "Edit and update in PostgreSQL the current column value in ROW.
+Uses a dedicated widget buffer. Editing is only possible if the current table
+has primary keys, named in the list PRIMARY-KEYS."
   (if (null primary-keys)
       (warn "Can't edit content of a table that has no PRIMARY KEY")
     (let* ((con pgmacs--con)
@@ -378,7 +387,9 @@ network link."
           (widget-forward 1))))))
 
 (defun pgmacs--delete-row (row primary-keys)
-  "Delete ROW from the current table."
+  "Delete ROW from the current table.
+Modifying the PostgreSQL database is only possible when the current table has
+primary keys, whose names are given by the list PRIMARY-KEYS."
   (if (null primary-keys)
       (warn "Can't edit content of a table that has no PRIMARY KEY")
     (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
@@ -439,7 +450,7 @@ Uses the minibuffer to prompt for new values."
 
 (defun pgmacs--insert-row/widget (current-row)
   "Insert a new row of data into the current table after CURRENT-ROW.
-Uses a widget-based buffer to prompt for new values."
+Uses a widget-based buffer to prompt for new values. Updates the PostgreSQL database."
   (let* ((con pgmacs--con)
          (table pgmacs--table)
          (ce (pgcon-client-encoding pgmacs--con))
@@ -509,7 +520,7 @@ Uses a widget-based buffer to prompt for new values."
       (widget-forward 1))))
 
 (defun pgmacs--copy-row (current-row)
-  "Copy current row to our internal kill-ring."
+  "Copy CURRENT-ROW to the PGMacs internal kill ring."
   (setq pgmacs--kill-ring (cons pgmacs--table current-row))
   (message "Row copied to PGmacs kill ring"))
 
@@ -595,9 +606,9 @@ Uses PostgreSQL connection CON."
 
 (defun pgmacs--column-info (con table column)
   "Return a string containing metainformation on COLUMN in TABLE.
-The metainformation includes the type name, whether the column is a PRIMARY KEY, whether
-it is affected by constraints such as UNIQUE. Information is retrieved over the PostgreSQL
-connection CON."
+The metainformation includes the type name, whether the column is a PRIMARY KEY,
+whether it is affected by constraints such as UNIQUE. Information is retrieved
+over the PostgreSQL connection CON."
   (let* ((schema (if (pg-qualified-name-p table)
                      (pg-qualified-name-schema table)
                    "public"))
@@ -708,11 +719,13 @@ Table names are schema-qualified if the schema is non-default."
 
 
 (defun pgmacs--paginated-next (&rest _ignore)
+  "Move to the next page of the paginated PostgreSQL table."
   (interactive)
   (cl-incf pgmacs--offset pgmacs-row-limit)
   (pgmacs--display-table pgmacs--table))
 
 (defun pgmacs--paginated-prev (&rest _ignore)
+  "Move to the previous page of the paginated PostgreSQL table."
   (interactive)
   (cl-decf pgmacs--offset pgmacs-row-limit)
   (pgmacs--display-table pgmacs--table))
@@ -941,6 +954,7 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
   (list "datname" "usename" "client_addr" "backend_start" "xact_start" "query_start" "wait_event"))
 
 (defun pgmacs--display-stat-activity (&rest _ignore)
+  "Display information from PostgreSQL's pg_stat_activity table."
   (let* ((cols (string-join pgmacs--stat-activity-columns ","))
          (sql (format "SELECT %s FROM pg_stat_activity" cols)))
     (pgmacs-show-result pgmacs--con sql)))
@@ -956,7 +970,8 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
 
 
 (defun pgmacs-show-result (con sql)
-  "Create a buffer to show the results of PostgreSQL query SQL."
+  "Create a buffer to show the results of PostgreSQL query SQL.
+Uses PostgreSQL connection CON."
   (pop-to-buffer (get-buffer-create "*PostgreSQL TMP*"))
   (pgmacs-mode)
   (setq-local pgmacs--con con
@@ -1006,7 +1021,7 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
 ;; If the cursor is on the Comment column,
 ;; allow the user to set the table comment. Otherwise, display the table in a separate buffer.
 (defun pgmacs--dbbuf-handle-RET (table-row)
-  "Called on RET on a line in the list-of-tables buffer."
+  "Called on RET on a line in the list-of-tables buffer TABLE-ROW."
   (let* ((vtable (vtable-current-table))
          (col-id (vtable-current-column))
          (col (nth col-id (vtable-columns vtable)))
