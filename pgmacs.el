@@ -256,43 +256,46 @@ Use PROMPT in the minibuffer and show the current value CURRENT-VALUE."
 The new value in database row ROW is read in the minibuffer.
 Editing requires the database table to have primary keys named in the list
 PRIMARY-KEYS."
-  (if (null primary-keys)
-      (warn "Can't edit content of a table that has no PRIMARY KEY")
-    (let* ((vtable (or (vtable-current-table)
-                       (error "Cursor is not in a current vtable")))
-           (current-row (or (vtable-current-object)
-                            (error "Cursor is not on a vtable row")))
-           (cols (vtable-columns vtable))
-           (col-id (or (vtable-current-column)
-                       (error "Not on a vtable column")))
-           (col (nth col-id cols))
-           (col-name (vtable-column-name col))
-           (col-type (aref pgmacs--column-type-names col-id))
-           (pk (cl-first primary-keys))
-           (pk-col-id (or (cl-position pk cols :key #'vtable-column-name :test #'string=)
-                          (error "Can't find primary key %s in the vtable column list" pk)))
-           (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
-           (pk-value (and pk-col-id (nth pk-col-id row))))
-      (unless pk-value
-        (error "Can't find value for primary key %s" pk))
-      (let* ((current (nth col-id current-row))
-             (new-value (pgmacs--read-value (substring-no-properties col-name)
-                                            (substring-no-properties col-type)
-                                            "Change %s (%s) to: "
-                                            current))
-             (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
-                          (pg-escape-identifier pgmacs--table)
-                          (pg-escape-identifier col-name)
-                          (pg-escape-identifier pk)))
-             (res (pg-exec-prepared pgmacs--con sql
-                                    `((,new-value . ,col-type)
-                                      (,pk-value . ,pk-col-type)))))
-        (pgmacs--notify "%s" (pg-result res :status))
-        (let ((new-row (copy-sequence current-row)))
-          (setf (nth col-id new-row) new-value)
-          ;; vtable-update-object doesn't work, so insert then delete old row
-          (vtable-insert-object vtable new-row current-row)
-          (vtable-remove-object vtable current-row))))))
+  (when (null primary-keys)
+    (error "Can't edit content of a table that has no PRIMARY KEY"))
+  (let* ((vtable (or (vtable-current-table)
+                     (error "Cursor is not in a vtable")))
+         (current-row (or (vtable-current-object)
+                          (error "Cursor is not on a vtable row")))
+         (cols (vtable-columns vtable))
+         (col-id (or (vtable-current-column)
+                     (error "Not on a vtable column")))
+         (col (nth col-id cols))
+         (col-name (vtable-column-name col))
+         (col-type (aref pgmacs--column-type-names col-id))
+         (pk (cl-first primary-keys))
+         (pk-col-id (or (cl-position pk cols :key #'vtable-column-name :test #'string=)
+                        (error "Can't find primary key %s in the vtable column list" pk)))
+         (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
+         (pk-value (and pk-col-id (nth pk-col-id row))))
+    (unless pk-value
+      (error "Can't find value for primary key %s" pk))
+    (let* ((current (nth col-id current-row))
+           (new-value (pgmacs--read-value (substring-no-properties col-name)
+                                          (substring-no-properties col-type)
+                                          "Change %s (%s) to: "
+                                          current))
+           (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
+                        (pg-escape-identifier pgmacs--table)
+                        (pg-escape-identifier col-name)
+                        (pg-escape-identifier pk)))
+           (res (pg-exec-prepared pgmacs--con sql
+                                  `((,new-value . ,col-type)
+                                    (,pk-value . ,pk-col-type)))))
+      (pgmacs--notify "%s" (pg-result res :status))
+      (let ((new-row (copy-sequence current-row)))
+        (setf (nth col-id new-row) new-value)
+        ;; vtable-update-object doesn't work, so insert then delete old row
+        (vtable-insert-object vtable new-row current-row)
+        (vtable-remove-object vtable current-row)
+        ;; redrawing is necessary to ensure that all keybindings are present for the newly inserted
+        ;; row.
+        (pgmacs--redraw-vtable)))))
 
 (defun pgmacs--widget-for (type current-value)
   "Create a widget for TYPE and CURRENT-VALUE in the current buffer."
@@ -320,95 +323,97 @@ PRIMARY-KEYS."
   "Edit and update in PostgreSQL the current column value in ROW.
 Uses a dedicated widget buffer. Editing is only possible if the current table
 has primary keys, named in the list PRIMARY-KEYS."
-  (if (null primary-keys)
-      (warn "Can't edit content of a table that has no PRIMARY KEY")
-    (let* ((con pgmacs--con)
-           (table pgmacs--table)
-           (vtable (vtable-current-table))
-           (current-row (vtable-current-object))
-           (cols (vtable-columns vtable))
-           (col-id (vtable-current-column))
-           (col (nth col-id cols))
-           (col-name (vtable-column-name col))
-           (col-type (aref pgmacs--column-type-names col-id))
-           (pk (cl-first primary-keys))
-           (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
-           (pk-col-type (aref pgmacs--column-type-names pk-col-id))
-           (pk-value (and pk-col-id (nth pk-col-id row))))
-      (unless pk-value
-        (error "Can't find value for primary key %s" pk))
-      (let* ((current (nth col-id current-row))
-             (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
-                          (pg-escape-identifier pgmacs--table)
-                          (pg-escape-identifier col-name)
-                          (pg-escape-identifier pk)))
-             (updater (lambda (user-provided)
-                        (let* ((parser (pg-lookup-parser col-type))
-                               (ce (pgcon-client-encoding pgmacs--con))
-                               ;; Some of the input widgets we use return a pre-parsed type (e.g. a
-                               ;; floating point number) rather than a string
-                               (new-value (if (and (stringp user-provided) parser)
-                                              (funcall parser user-provided ce)
-                                            user-provided))
-                               (res (pg-exec-prepared pgmacs--con sql
-                                                      `((,new-value . ,col-type)
-                                                        (,pk-value . ,pk-col-type)))))
-                          (pgmacs--notify "%s" (pg-result res :status))
-                          (let ((new-row (copy-sequence current-row)))
-                            (setf (nth col-id new-row) new-value)
-                            ;; vtable-update-object doesn't work, so insert then delete old row
-                            (vtable-insert-object vtable new-row current-row)
-                            (vtable-remove-object vtable current-row))))))
-        (switch-to-buffer "*PGmacs update widget*")
-        (erase-buffer)
-        (remove-overlays)
-        (kill-all-local-variables)
-        (pgmacs-mode)
-        (setq-local pgmacs--con con
-                    pgmacs--table table)
-        (widget-insert (propertize (format "Update column %s" col-name) 'face 'bold))
+  (when (null primary-keys)
+      (error "Can't edit content of a table that has no PRIMARY KEY"))
+  (let* ((con pgmacs--con)
+         (table pgmacs--table)
+         (vtable (vtable-current-table))
+         (current-row (vtable-current-object))
+         (cols (vtable-columns vtable))
+         (col-id (vtable-current-column))
+         (col (nth col-id cols))
+         (col-name (vtable-column-name col))
+         (col-type (aref pgmacs--column-type-names col-id))
+         (pk (cl-first primary-keys))
+         (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
+         (pk-col-type (aref pgmacs--column-type-names pk-col-id))
+         (pk-value (and pk-col-id (nth pk-col-id row))))
+    (unless pk-value
+      (error "Can't find value for primary key %s" pk))
+    (let* ((current (nth col-id current-row))
+           (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
+                        (pg-escape-identifier pgmacs--table)
+                        (pg-escape-identifier col-name)
+                        (pg-escape-identifier pk)))
+           (updater (lambda (user-provided)
+                      (let* ((parser (pg-lookup-parser col-type))
+                             (ce (pgcon-client-encoding pgmacs--con))
+                             ;; Some of the input widgets we use return a pre-parsed type (e.g. a
+                             ;; floating point number) rather than a string
+                             (new-value (if (and (stringp user-provided) parser)
+                                            (funcall parser user-provided ce)
+                                          user-provided))
+                             (res (pg-exec-prepared pgmacs--con sql
+                                                    `((,new-value . ,col-type)
+                                                      (,pk-value . ,pk-col-type)))))
+                        (pgmacs--notify "%s" (pg-result res :status))
+                        (let ((new-row (copy-sequence current-row)))
+                          (setf (nth col-id new-row) new-value)
+                          ;; vtable-update-object doesn't work, so insert then delete old row
+                          (vtable-insert-object vtable new-row current-row)
+                          (vtable-remove-object vtable current-row)
+                          (pgmacs--redraw-vtable))))))
+      (switch-to-buffer "*PGmacs update widget*")
+      (erase-buffer)
+      (remove-overlays)
+      (kill-all-local-variables)
+      (pgmacs-mode)
+      (setq-local pgmacs--con con
+                  pgmacs--table table)
+      (widget-insert (propertize (format "Update column %s" col-name) 'face 'bold))
+      (widget-insert "\n\n")
+      (widget-insert (format "Change %s (type %s) to:" col-name col-type))
+      (widget-insert "\n\n")
+      (let* ((w-updated
+              (progn
+                ;; (widget-insert (format "%12s: " "New value"))
+                (pgmacs--widget-for col-type current))))
         (widget-insert "\n\n")
-        (widget-insert (format "Change %s (type %s) to:" col-name col-type))
-        (widget-insert "\n\n")
-        (let* ((w-updated
-                (progn
-                  ;; (widget-insert (format "%12s: " "New value"))
-                  (pgmacs--widget-for col-type current))))
-          (widget-insert "\n\n")
-          (widget-create 'push-button
-                         :notify (lambda (&rest _ignore)
-                                   (funcall updater (widget-value w-updated))
-                                   (kill-buffer (current-buffer)))
-                         "Update")
-          (widget-insert "\n")
-          (use-local-map widget-keymap)
-          (widget-setup)
-          (goto-char (point-min))
-          (widget-forward 1))))))
+        (widget-create 'push-button
+                       :notify (lambda (&rest _ignore)
+                                 (funcall updater (widget-value w-updated))
+                                 (kill-buffer (current-buffer)))
+                       "Update")
+        (widget-insert "\n")
+        (use-local-map widget-keymap)
+        (widget-setup)
+        (goto-char (point-min))
+        (widget-forward 1)))))
 
 (defun pgmacs--delete-row (row primary-keys)
   "Delete ROW from the current table.
 Modifying the PostgreSQL database is only possible when the current table has
 primary keys, whose names are given by the list PRIMARY-KEYS."
-  (if (null primary-keys)
-      (warn "Can't edit content of a table that has no PRIMARY KEY")
-    (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
-      (let* ((vtable (vtable-current-table))
-             (cols (vtable-columns vtable))
-             (pk (cl-first primary-keys))
-             (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
-             (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
-             (pk-value (and pk-col-id (nth pk-col-id row))))
-        (unless pk-value
-          (error "Can't find value for primary key %s" pk))
-        (let* ((res (pg-exec-prepared
-                     pgmacs--con
-                     (format "DELETE FROM %s WHERE %s = $1"
-                             (pg-escape-identifier pgmacs--table)
-                             (pg-escape-identifier pk))
-                     `((,pk-value . ,pk-col-type)))))
-          (pgmacs--notify "%s" (pg-result res :status)))
-        (vtable-remove-object vtable row)))))
+  (when (null primary-keys)
+    (error "Can't edit content of a table that has no PRIMARY KEY"))
+  (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
+    (let* ((vtable (vtable-current-table))
+           (cols (vtable-columns vtable))
+           (pk (cl-first primary-keys))
+           (pk-col-id (cl-position pk cols :key #'vtable-column-name :test #'string=))
+           (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
+           (pk-value (and pk-col-id (nth pk-col-id row))))
+      (unless pk-value
+        (error "Can't find value for primary key %s" pk))
+      (let* ((res (pg-exec-prepared
+                   pgmacs--con
+                   (format "DELETE FROM %s WHERE %s = $1"
+                           (pg-escape-identifier pgmacs--table)
+                           (pg-escape-identifier pk))
+                   `((,pk-value . ,pk-col-type)))))
+        (pgmacs--notify "%s" (pg-result res :status)))
+      (vtable-remove-object vtable row)
+      (pgmacs--redraw-vtable))))
 
 (defun pgmacs--insert-row (current-row)
   "Insert a new row of data into the current table after CURRENT-ROW.
@@ -445,7 +450,8 @@ Uses the minibuffer to prompt for new values."
                           collect (cons v vt)))))
       (pgmacs--notify "%s" (pg-result res :status))
       ;; It's tempting to use vtable-insert-object here to avoid a full refresh of the vtable.
-      ;; However, we don't know what values were chosen for any columns that have a default.
+      ;; However, we don't know what values were chosen for any columns that have a default, so we
+      ;; need to refetch the data from PostgreSQL.
       (pgmacs--display-table pgmacs--table))))
 
 (defun pgmacs--insert-row/widget (current-row)
@@ -757,6 +763,7 @@ Table names are schema-qualified if the schema is non-default."
       (shw ">" "Go to the last table in the table list")
       (shw "{" "Shrink the horizontal space used by the current column")
       (shw "}" "Grow the horizontal space used by the current column")
+      (shw "r" "Redraw the table (does not refetch data from PostgreSQL)")
       (shw "q" "Bury this buffer")
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min)))))
@@ -842,7 +849,7 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
                                "k" pgmacs--copy-row
                                "y" pgmacs--yank-row
                                "e" (lambda (&rest _ignored) (pgmacs-run-sql))
-                               "r" pgmacs--revert-vtable
+                               "r" pgmacs--redraw-vtable
                                "j" pgmacs--row-as-json
                                ;; "n" and "p" are bound when table is paginated to next/prev page
                                "<" (lambda (&rest _ignored)
@@ -912,12 +919,30 @@ Table may be specified as a string or as a schema-qualified pg-qualified-name ob
       (pgmacs--stop-progress-reporter))))
 
 
-(defun pgmacs--revert-vtable (&rest _ignore)
+;; This is similar to vtable-revert, but works correctly with a buffer than contains content other
+;; than the vtable.
+(defun pgmacs--redraw-vtable (&rest _ignore)
   "Redraw the vtable in the current buffer."
-  ;; We are assuming that there is a single vtable in the buffer.
-  (goto-char (point-max))
-  (vtable-beginning-of-table)
-  (vtable-revert))
+  (let ((vtable (vtable-current-table))
+        (object (vtable-current-object))
+        (column (vtable-current-column))
+        (inhibit-read-only t)
+        (start (save-excursion
+                 (goto-char (point-max))
+                 (text-property-search-backward 'vtable)
+                 (point)))
+        (end (save-excursion
+               (goto-char (point-min))
+               (text-property-search-forward 'vtable)
+               (point))))
+    (unless vtable
+      (user-error "No table under point"))
+    (delete-region start end)
+    (vtable-insert vtable)
+    (when object
+      (vtable-goto-object object))
+    (when column
+      (vtable-goto-column column))))
 
 (defun pgmacs--display-backend-information (&rest _ignore)
   "Create a buffer with information concerning the current PostgreSQL backend."
@@ -1033,7 +1058,8 @@ Uses PostgreSQL connection CON."
              (setf (nth col-id new-row) comment)
              ;; vtable-update-object doesn't work, so insert then delete old row
              (vtable-insert-object vtable new-row table-row)
-             (vtable-remove-object vtable table-row)))
+             (vtable-remove-object vtable table-row)
+             (pgmacs--redraw-vtable)))
           ;; TODO perhaps change owner (if we are superuser)
           (t
            (pgmacs--display-table (car table-row))))))
@@ -1048,7 +1074,8 @@ Uses PostgreSQL connection CON."
       (let* ((sql (format "DROP TABLE %s" t-id))
              (res (pg-exec pgmacs--con sql)))
         (pgmacs--notify "%s" (pg-result res :status))
-        (vtable-remove-object vtable table-row)))))
+        (vtable-remove-object vtable table-row)
+        (pgmacs--redraw-vtable)))))
 
 (defun pgmacs--table-list-help (&rest _ignore)
   "Show keybindings active in a table-list buffer."
