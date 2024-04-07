@@ -135,7 +135,7 @@ Applies format string FMT to ARGS."
   "Return a function that formats a value of type TYPE-NAME."
   (cond ((or (string= type-name "timestamp")
              (string= type-name "timestamptz")
-	     (string= type-name "date"))
+	     (string= type-name "datetime"))
          ;; these are represented as a `decode-time' structure
          (lambda (val) (format-time-string "%Y-%m-%dT%T" val)))
         ((or (string= type-name "text")
@@ -147,7 +147,7 @@ Applies format string FMT to ARGS."
         ((string= type-name "hstore")
          (lambda (ht)
            (let ((items (list)))
-             (maphash (lambda (k v) (push (format "%s=>%s" k v) items)) ht)
+             (maphash (lambda (k v) (push (format "\"%s\"=>\"%s\"" k v) items)) ht)
              (string-join items ","))))
         ((string= type-name "json")
          #'json-serialize)
@@ -275,7 +275,8 @@ PRIMARY-KEYS."
          (pk-value (and pk-col-id (nth pk-col-id row))))
     (unless pk-value
       (error "Can't find value for primary key %s" pk))
-    (let* ((current (nth col-id current-row))
+    (let* ((current (funcall (vtable-column-formatter col)
+                             (nth col-id current-row)))
            (new-value (pgmacs--read-value (substring-no-properties col-name)
                                           (substring-no-properties col-type)
                                           "Change %s (%s) to: "
@@ -320,7 +321,7 @@ PRIMARY-KEYS."
                         (format "%s" current-value)))))
 
 (defun pgmacs--edit-value/widget (row primary-keys)
-  "Edit and update in PostgreSQL the current column value in ROW.
+  "Edit and update in PostgreSQL the value at point in ROW.
 Uses a dedicated widget buffer. Editing is only possible if the current table
 has primary keys, named in the list PRIMARY-KEYS."
   (when (null primary-keys)
@@ -340,7 +341,8 @@ has primary keys, named in the list PRIMARY-KEYS."
          (pk-value (and pk-col-id (nth pk-col-id row))))
     (unless pk-value
       (error "Can't find value for primary key %s" pk))
-    (let* ((current (nth col-id current-row))
+    (let* ((current (funcall (vtable-column-formatter col)
+                             (nth col-id current-row)))
            (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
                         (pg-escape-identifier pgmacs--table)
                         (pg-escape-identifier col-name)
@@ -381,8 +383,8 @@ has primary keys, named in the list PRIMARY-KEYS."
         (widget-insert "\n\n")
         (widget-create 'push-button
                        :notify (lambda (&rest _ignore)
-                                 (funcall updater (widget-value w-updated))
-                                 (kill-buffer (current-buffer)))
+                                 (kill-buffer (current-buffer))
+                                 (funcall updater (widget-value w-updated)))
                        "Update")
         (widget-insert "\n")
         (use-local-map widget-keymap)
@@ -1101,6 +1103,8 @@ Uses PostgreSQL connection CON."
 ;;;###autoload
 (defun pgmacs-open (con)
   "Browse the contents of PostgreSQL database to which we are connected over CON."
+  ;; (pg-enable-query-log con)
+  (pg-hstore-setup con)
   (pop-to-buffer-same-window (format "*PostgreSQL %s*" (pgcon-dbname con)))
   (pgmacs-mode)
   (setq-local pgmacs--con con
