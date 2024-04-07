@@ -19,6 +19,7 @@
 (require 'vtable)                       ; note: requires Emacs 29
 (require 'button)
 (require 'widget)
+(require 'wid-edit)
 (require 'pg)
 
 
@@ -49,9 +50,9 @@
 
 (defcustom pgmacs-row-limit 1000
   "The maximum number of rows to retrieve per database query.
-If more rows are present in the PostgreSQL query result, the display of results will be
-paginated. You may wish to set this to a low value if accessing PostgreSQL over a slow
-network link."
+If more rows are present in the PostgreSQL query result, the display of results
+will be paginated. You may wish to set this to a low value if accessing
+PostgreSQL over a slow network link."
   :type 'number
   :group 'pgmacs)
 
@@ -458,7 +459,8 @@ Uses the minibuffer to prompt for new values."
 
 (defun pgmacs--insert-row/widget (current-row)
   "Insert a new row of data into the current table after CURRENT-ROW.
-Uses a widget-based buffer to prompt for new values. Updates the PostgreSQL database."
+Uses a widget-based buffer to prompt for new values. Updates the
+PostgreSQL database."
   (let* ((con pgmacs--con)
          (table pgmacs--table)
          (ce (pgcon-client-encoding pgmacs--con))
@@ -534,7 +536,8 @@ Uses a widget-based buffer to prompt for new values. Updates the PostgreSQL data
 
 ;; Insert new row at current position based on content of our "kill ring".
 (defun pgmacs--yank-row (_current-row)
-  "Insert a new row into the current table after the current row, based on the last copied row."
+  "Insert a new row into the current table after the current row, based on
+the last copied row."
   (unless pgmacs--kill-ring
     (error "PGmacs kill ring is empty"))
   (unless (eq (car pgmacs--kill-ring) pgmacs--table)
@@ -652,7 +655,7 @@ over the PostgreSQL connection CON."
       (push "NOT NULL" column-info))
     (when (cl-first maxlen)
       (push (format "max-len %s" (cl-first maxlen)) column-info))
-    (unless (null defaults)
+    (when defaults
       (push (format "DEFAULT %s" defaults) column-info))
     (string-join (reverse column-info) ", ")))
 
@@ -788,7 +791,8 @@ Table names are schema-qualified if the schema is non-default."
 
 (defun pgmacs--display-table (table)
   "Create and populate a buffer to display PostgreSQL table TABLE.
-Table may be specified as a string or as a schema-qualified pg-qualified-name object."
+Table may be specified as a string or as a schema-qualified pg-qualified-name
+object."
   (let* ((con pgmacs--con)
          (t-id (pg-escape-identifier table))
          (t-pretty (pgmacs--display-identifier table)))
