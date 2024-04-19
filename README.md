@@ -26,7 +26,14 @@ You will need the [pg-el library](https://github.com/emarsden/pg-el/) installed,
 
     M-x package-install RET pg
 
-Load this library, then say 
+In your Emacs initialization file, include the following to check out the latest version of the code
+from the git repository:
+
+    (require 'pg)
+    (package-vc-install
+       '(pgmacs :url "https://github.com/emarsden/pgmacs.git"))
+
+To load PGmacs, say 
 
     M-x pgmacs
     
