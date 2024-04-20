@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 ;; Version: 0.4
-;; Package-Requires: ((emacs "29.1") (pg "0.31"))
+;; Package-Requires: ((emacs "29.1") (pg "0.32"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
 ;; SPDX-License-Identifier: GPL-2.0-or-later
@@ -100,6 +100,7 @@ PostgreSQL over a slow network link."
 (defvar pgmacs--progress-timer nil)
 
 (defun pgmacs--start-progress-reporter (msg)
+  "Create a progress reporter that displays message MSG."
   (setq pgmacs--progress (make-progress-reporter msg))
   (setq pgmacs--progress-timer
         (run-with-timer 0.2 0.2 (lambda ()
@@ -107,10 +108,12 @@ PostgreSQL over a slow network link."
                                     (progress-reporter-update pgmacs--progress))))))
 
 (defun pgmacs--update-progress (msg)
+  "Update the progress reporter with message MSG."
   (when pgmacs--progress
     (progress-reporter-update msg)))
 
 (defun pgmacs--stop-progress-reporter ()
+  "Stop the progress reporter."
   (when pgmacs--progress
     (progress-reporter-done pgmacs--progress))
   (when pgmacs--progress-timer
@@ -242,6 +245,8 @@ Applies format string FMT to ARGS."
     (message "JSON copied to kill ring")))
 
 (defun pgmacs--read-value/minibuffer (name type prompt current-value)
+  "Read a value for column NAME in the minibuffer using PROMPT.
+The column has SQL type TYPE and has current value CURRENT-VALUE."
   (let* ((prompt (format prompt name type)))
     (read-string prompt (format "%s" current-value))))
 
@@ -539,8 +544,8 @@ PostgreSQL database."
 
 ;; Insert new row at current position based on content of our "kill ring".
 (defun pgmacs--yank-row (_current-row)
-  "Insert a new row into the current table after the current row, based on
-the last copied row."
+  "Insert a new row into the current table after the current row.
+The new row contents are based on the last copied row."
   (unless pgmacs--kill-ring
     (error "PGmacs kill ring is empty"))
   (unless (eq (car pgmacs--kill-ring) pgmacs--table)
@@ -691,6 +696,7 @@ Table names are schema-qualified if the schema is non-default."
 
 
 (defun pgmacs--make-column-displayer (metainfo)
+  "Return a display function which echos METAINFO in minibuffer."
   (lambda (fvalue max-width _table)
     (let ((truncated (if (> (string-pixel-width fvalue) max-width)
                          ;; TODO could include the ellipsis here
@@ -721,7 +727,7 @@ Table names are schema-qualified if the schema is non-default."
            (sql (format "ALTER TABLE %s ADD COLUMN %s BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
                         (pg-escape-identifier pgmacs--table)
                         (pg-escape-identifier colname))))
-      (when (y-or-n-p (format "Really run this SQL? %s" sql))
+      (when (y-or-n-p (format "Really run SQL '%s'?" sql))
         (let ((res (pg-exec pgmacs--con sql)))
           (pgmacs--notify "%s" (pg-result res :status)))))))
 
@@ -779,11 +785,11 @@ Table names are schema-qualified if the schema is non-default."
 
 ;; TODO: add additional information as per psql
 ;; Table « public.books »
-;; Colonne |           Type           | Collationnement | NULL-able |            Par défaut             
+;; Colonne |           Type           | Collationnement | NULL-able |            Par défaut
 ;; ---------+--------------------------+-----------------+-----------+-----------------------------------
 ;; id      | integer                  |                 | not null  | nextval('books_id_seq'::regclass)
-;; title   | text                     |                 |           | 
-;; price   | numeric                  |                 |           | 
+;; title   | text                     |                 |           |
+;; price   | numeric                  |                 |           |
 ;; created | timestamp with time zone |                 | not null  | now()
 ;; Index :
 ;; "books_pkey" PRIMARY KEY, btree (id)
@@ -1291,61 +1297,6 @@ CONNECTION-URI is a PostgreSQL connection URI of the form
     (widget-setup)
     (goto-char (point-min))
     (widget-forward 1)))
-
-
-;; This is a replacement for xtable--insert-header-line, which produces poor alignment of the header
-;; line.
-(defun pgmacs--insert-header-line (table widths spacer)
-  (cl-flet ((space-for (width)
-              (propertize " " 'display (list 'space :width (list width)))))
-    (let ((start (point))
-          (divider (xtable-divider table))
-          (cmap (define-keymap
-                  "<header-line> <drag-mouse-1>" #'xtable--drag-resize-column
-                  "<header-line> <down-mouse-1>" #'ignore))
-          (dmap (define-keymap
-                  "<header-line> <drag-mouse-1>"
-                  (lambda (e)
-                    (interactive "e")
-                    (xtable--drag-resize-column e t))
-                  "<header-line> <down-mouse-1>" #'ignore)))
-      (seq-do-indexed
-       (lambda (column index)
-         (let* ((name (propertize
-                       (xtable-column-name column)
-                       'face (list 'pgmacs-table-header)
-                       'mouse-face 'header-line-highlight
-                       'keymap cmap))
-                (start (point))
-                (indicator (xtable--indicator table index))
-                (indicator-width (string-pixel-width indicator))
-                (last (= index (1- (length (xtable-columns table)))))
-                (displayed (if (> (string-pixel-width name)
-                                  (- (elt widths index) indicator-width))
-                               (xtable--limit-string
-                                name (- (elt widths index) indicator-width))
-                             name)))
-           (let ((fill-width (- (elt widths index)
-                                (string-pixel-width displayed)
-                                indicator-width)))
-             (if (eq (xtable-column-align column) 'left)
-                 (insert displayed (space-for fill-width) indicator)
-               (insert (space-for fill-width) displayed indicator)))
-           (unless last
-             (insert (space-for spacer)))
-           (when (and divider (not last))
-             (insert (propertize divider 'keymap dmap)))
-           (put-text-property start (point) 'xtable-column index)))
-       (xtable-columns table))
-      (insert "\n")
-      (add-face-text-property start (point) 'header-line))))
-
-(defun pgmacs--insert-header-line-replace (orig-fun &rest args)
-  (if (eq major-mode 'pgmacs)
-      (apply #'pgmacs--insert-header-line args)
-    (apply orig-fun args)))
-
-;; (advice-add 'xtable--insert-header-line :around #'pgmacs--insert-header-line-replace)
 
 
 (provide 'pgmacs)
