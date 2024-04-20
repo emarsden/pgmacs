@@ -2,6 +2,8 @@
 
 ;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
 ;; Copyright (C) 2024 Eric Marsden
+;; Package-Requires: ((emacs "29.1"))
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This library is distributed under the terms of the GNU General Public License
 ;; as published by the Free Software Foundation, either version 3 of the
@@ -11,9 +13,9 @@
 
 ;; This code is a fork of the vtable library included with Emacs 29, written by
 ;; Lars Ingebrigtsen. It includes modifications/fixes for a few issues that
-;; arise when including vtables in a buffer which also includes other content.
-;; Some of these fixes may be fed back upstream once this library has been
-;; stabilized.
+;; arise when including a vtable in a buffer which also includes other content.
+;; Some of these fixes will hopefully be fed back upstream once this library has
+;; been stabilized.
 
 ;;; Code:
 
@@ -235,12 +237,16 @@ See info node `(xtable)Top' for xtable documentation."
 (defun xtable-beginning-of-table ()
   "Go to the start of the current table."
   (goto-char (point-max))
-  (text-property-search-backward 'xtable))
+  (if (text-property-search-backward 'xtable)
+      (point)
+    (goto-char (point-min))))
 
 (defun xtable-end-of-table ()
   "Go to the end of the current table."
   (goto-char (point-min))
-  (text-property-search-forward 'xtable))
+  (if (text-property-search-forward 'xtable)
+      (point)
+    (goto-char (point-max))))
 
 (defun xtable-goto-object (object)
   "Go to OBJECT in the current table.
@@ -661,82 +667,6 @@ This also updates the displayed table."
        (xtable-columns table))
       (insert "\n")
       (add-face-text-property start (point) 'header-line))))
-
-(defun xtable--insert-header-line/old (table widths spacer)
-  ;; Insert the header directly into the buffer.
-  (let ((start (point))
-        (divider (xtable-divider table))
-        (cmap (define-keymap
-                "<header-line> <drag-mouse-1>" #'xtable--drag-resize-column
-                "<header-line> <down-mouse-1>" #'ignore))
-        (dmap (define-keymap
-                "<header-line> <drag-mouse-1>"
-                (lambda (e)
-                  (interactive "e")
-                  (xtable--drag-resize-column e t))
-                "<header-line> <down-mouse-1>" #'ignore)))
-    (seq-do-indexed
-     (lambda (column index)
-       (let* ((name (propertize
-                     (xtable-column-name column)
-                     'face (list 'header-line (xtable-face table))
-                     'mouse-face 'header-line-highlight
-                     'keymap cmap))
-              (start (point))
-              (indicator (xtable--indicator table index))
-              (indicator-width (string-pixel-width indicator))
-              (last (= index (1- (length (xtable-columns table)))))
-              displayed)
-         (setq displayed
-               (if (> (string-pixel-width name)
-                      (- (elt widths index) indicator-width))
-                   (xtable--limit-string
-                    name (- (elt widths index) indicator-width))
-                 name))
-         (let ((fill-width
-                (+ (- (elt widths index)
-                      (string-pixel-width displayed)
-                      indicator-width
-                      (xtable-separator-width table)
-                      ;; We want the indicator to not be quite flush
-                      ;; right.
-                      (/ (xtable--char-width table) 2.0))
-                   (if last 0 spacer))))
-           (if (or (not last)
-                   (zerop indicator-width)
-                   (< (seq-reduce #'+ widths 0) (window-width nil t)))
-               ;; Normal case.
-               (insert
-                displayed
-                (propertize " " 'display
-                            (list 'space :width (list fill-width)))
-                indicator)
-             ;; This is the final column, and we have a sorting
-             ;; indicator, and the table is too wide for the window.
-             (let* ((pre-indicator (string-pixel-width
-                                    (buffer-substring (point-min) (point))))
-                    (pre-fill
-                     (- (window-width nil t)
-                        pre-indicator
-                        (string-pixel-width displayed))))
-               (insert
-                displayed
-                (propertize " " 'display
-                            (list 'space :width (list pre-fill)))
-                indicator
-                (propertize " " 'display
-                            (list 'space :width
-                                  (list (- fill-width pre-fill))))))))
-         (when (and divider (not last))
-           (insert (propertize divider 'keymap dmap)))
-         (insert (propertize
-                  " " 'display
-                  (list 'space :width (list
-                                       (/ (xtable--char-width table) 2.0)))))
-         (put-text-property start (point) 'xtable-column index)))
-     (xtable-columns table))
-    (insert "\n")
-    (add-face-text-property start (point) 'header-line)))
 
 (defun xtable--drag-resize-column (e &optional next)
   "Resize the column by dragging.
