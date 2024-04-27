@@ -6,6 +6,9 @@
 - Information on available and installed PostgreSQL extensions is included in the buffer generated
   by `pgmacs--display-backend-information`.
 
+- API change: `pgmacs-open/string` and `pgmacs-open/uri` renamed to `pgmacs-open-string` and
+  `pgmacs-open-uri` to follow the conservative Emacs Lisp style guide.
+
 
 ## [0.4] - 2024-04-05
 

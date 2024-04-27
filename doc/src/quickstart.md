@@ -5,13 +5,12 @@ the [MELPA](https://melpa.org/) package archive:
 
     M-x package-install RET pg
 
-PGmacs is not currently distributed in MELPA. In the meantime, do the following in a terminal:
+PGmacs is not currently distributed in MELPA. In the meantime, include the following in your Emacs
+initialization file to check out the latest version of the code from the git repository:
 
-    git clone https://github.com/emarsden/pgmacs.git
-
-Load the library from Emacs with 
-
-    M-x load-file RET /path/to/pgmacs/pgmacs.el
+    (require 'pg)
+    (package-vc-install
+       '(pgmacs :url "https://github.com/emarsden/pgmacs.git"))
 
 
 ## Connecting to a PostgreSQL database
@@ -33,10 +32,10 @@ You can also open PGmacs with:
 - a PostgreSQL connection object from the pg.el library, using function `pgmacs-open`
 
 - a PostgreSQL connection string such as `user=myself port=5432 dbname=mydb`, using function
-  `pgmacs-open/string`
+  `pgmacs-open-string`
 
 - a PostgreSQL connection URI such as `postgresql://%2Fvar%2Flib%2Fpostgresql/dbname`, using
-  function `pgmacs-open/uri`.
+  function `pgmacs-open-uri`.
 
 
 ![Screenshot table list](img/screenshot-overview.png)

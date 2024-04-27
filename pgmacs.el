@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
-;; Version: 0.4
+;; Version: 0.5
 ;; Package-Requires: ((emacs "29.1") (pg "0.32"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
@@ -395,7 +395,7 @@ has primary keys, named in the list PRIMARY-KEYS."
                                  (kill-buffer (current-buffer))
                                  (funcall updater (widget-value w-updated)))
                        "Update")
-        (widget-insert "\n")
+        (widget-insert "\n\n\nTo abort editing the column, simply kill this buffer.\n")
         (use-local-map widget-keymap)
         (widget-setup)
         (goto-char (point-min))
@@ -1236,7 +1236,7 @@ Uses PostgreSQL connection CON."
 
 
 ;;;###autoload
-(defun pgmacs-open/string (connection-string)
+(defun pgmacs-open-string (connection-string)
   "Open PGmacs on database specified by CONNECTION-STRING.
 CONNECTION-STRING is a PostgreSQL connection string of the form
 `dbname=mydb user=me host=localhost password=foo'.
@@ -1248,7 +1248,7 @@ and application_name."
   (pgmacs-open (pg-connect/string connection-string)))
 
 ;;;###autoload
-(defun pgmacs-open/uri (connection-uri)
+(defun pgmacs-open-uri (connection-uri)
   "Open PGmacs on database specified by CONNECTION-URI.
 CONNECTION-URI is a PostgreSQL connection URI of the form
 `postgresql://user:pass@host/dbname'."

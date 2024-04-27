@@ -11,9 +11,18 @@ It allows you to:
 
 - browse the contents of a table, row by row, in paginated mode for large tables
 
-- edit the value of a column (type `RET` on the value you want to modify)
+- edit the value of a column: type `RET` on the value you want to modify to edit the value in the
+  minibuffer, or type `w` to edit the value in a widget-based buffer
+
+- insert new rows into the table: type `+` in a table buffer to insert a row with new values
+  obtained from the minibuffer, or type `i` to insert a new row with values obtained from a
+  dedicated widget-based buffer.
+
+- delete a row: type `DEL` in a table buffer to delete the row at point
 
 - copy/paste rows of a database table (type `k` to copy, `y` to paste in a table display buffer)
+
+- save the contents of a table in CSV or TSV format
 
 ![GIF editing](doc/src/img/edit-value.gif)
 
@@ -43,8 +52,8 @@ available in the database.
 
 You can also open PGmacs with a connection object from the pg.el library (function `pgmacs-open`),
 or with a PostgreSQL connection string such as `user=myself port=5432 dbname=mydb` (function
-`pgmacs-open/string`) or with a PostgreSQL connection URI such as
-`postgresql://%2Fvar%2Flib%2Fpostgresql/dbname` (function `pgmacs-open/uri`). 
+`pgmacs-open-string`) or with a PostgreSQL connection URI such as
+`postgresql://%2Fvar%2Flib%2Fpostgresql/dbname` (function `pgmacs-open-uri`). 
 
 
 ## Status
@@ -55,7 +64,7 @@ data.
 The library has been tested with PostgreSQL version 16.2, but should work with any PostgreSQL
 version supported by the `pg-el` library that it uses to communicate with PostgreSQL. The code has
 mostly been tested with Emacs 29.2 on Linux, but should work as expected on Microsoft Windows and
-MacOS. It requires Emacs version 29.x because it uses the `vtable` library.
+MacOS. It works both in graphical mode and in the terminal.
 
 
 ## License
