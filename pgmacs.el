@@ -138,9 +138,11 @@ Applies format string FMT to ARGS."
 
 (defun pgmacs--value-formatter (type-name)
   "Return a function that formats a value of type TYPE-NAME."
-  (cond ((or (string= type-name "timestamp")
-             (string= type-name "timestamptz")
-	     (string= type-name "datetime"))
+  (cond ((string= type-name "date")
+         (lambda (val) (format-time-string "%Y-%m-%d" val)))
+        ((or (string= type-name "timestamp")
+            (string= type-name "timestamptz")
+	    (string= type-name "datetime"))
          ;; these are represented as a `decode-time' structure
          (lambda (val) (format-time-string "%Y-%m-%dT%T" val)))
         ((or (string= type-name "text")
@@ -185,7 +187,7 @@ Applies format string FMT to ARGS."
         ((string= type-name "numeric") 10)
         ((string= type-name "float4") 10)
         ((string= type-name "float8") 10)
-        ((string= type-name "date") 18)
+        ((string= type-name "date") 16)
         ((string= type-name "timestamp") 20)
         ((string= type-name "timestamptz") 20)
         ((string= type-name "datetime") 20)
