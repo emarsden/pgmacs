@@ -712,7 +712,8 @@ Table names are schema-qualified if the schema is non-default."
          (sql (format "COPY %s TO STDOUT WITH (FORMAT CSV)" t-id)))
     (pop-to-buffer buf)
     (pgmacs-transient-mode)
-    (pg-copy-to-buffer con sql buf)))
+    (pg-copy-to-buffer con sql buf)
+    (goto-char (point-min))))
 
 (defun pgmacs--add-primary-key (&rest _ignore)
   "Add a PRIMARY KEY to the current PostgreSQL table."
@@ -963,8 +964,14 @@ object."
     (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
     (pgmacs-transient-mode)
     (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
-           (row (pg-result res :tuple 0)))
-      (insert (apply #'format "Running on %s:%s with pid %s\n" row)))
+           (row (pg-result res :tuple 0))
+           (addr (cl-first row))
+           (port (cl-second row))
+           (pid (cl-third row)))
+      (insert (format "Connected to backend with pid %s" pid))
+      (if addr
+          (insert (format " at %s:%s\n" addr port))
+        (insert " over Unix-domain socket\n")))
     (let* ((res (pg-exec con "SELECT current_user, current_setting('is_superuser')"))
            (row (pg-result res :tuple 0)))
       (insert (format "Connected as user %s (%ssuperuser)\n"
@@ -985,7 +992,24 @@ object."
       (insert (apply #'format "Server encoding: %s\n" row)))
     (let* ((res (pg-exec con "SELECT current_setting('TimeZone')"))
            (row (pg-result res :tuple 0)))
-      (insert (apply #'format "Server timezone: %s\n" row)))))
+      (insert (apply #'format "Server timezone: %s\n" row)))
+    (let* ((res (pg-exec con "SELECT pg_listening_channels()"))
+           (channels (pg-result res :tuples)))
+      (when channels
+        (insert "Asynchronous notification channels for the current session:\n")
+        (dolist (ch channels)
+          (insert "  " ch "\n"))))
+    (let* ((res (pg-exec con "SELECT name, default_version, installed_version FROM pg_available_extensions"))
+           (exts (pg-result res :tuples)))
+      (insert "PostgreSQL extensions:")
+      (if exts (insert "\n") (insert " (none)\n"))
+      (when exts
+        (push (list "Name" "Default version" "Installed version") exts))
+      ;; TODO: could include a "Install" button for uninstalled extensions
+      (dolist (ext exts)
+        (insert (apply #'format "%20s %17s %18s\n" ext))))
+    (shrink-window-if-larger-than-buffer)
+    (goto-char (point-min))))
 
 
 (defvar pgmacs--stat-activity-columns
@@ -1053,6 +1077,7 @@ Uses PostgreSQL connection CON."
     (if (null rows)
         (insert "(no rows)")
       (pgmacstbl-insert pgmacstbl))
+    (shrink-window-if-larger-than-buffer)
     (pgmacs--stop-progress-reporter)))
 
 

@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.5] - 2024-04-27
+
+- Information on available and installed PostgreSQL extensions is included in the buffer generated
+  by `pgmacs--display-backend-information`.
+
+
 ## [0.4] - 2024-04-05
 
 - The row count shown in the list-of-tables buffer is now precise even when the tables have not been
