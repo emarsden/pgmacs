@@ -20,8 +20,6 @@
 (require 'widget)
 (require 'wid-edit)
 (require 'pg)
-(require 'xtable)
-
 
 (defgroup pgmacs nil
   "Edit a PostgreSQL database from Emacs."
@@ -234,17 +232,17 @@ Applies format string FMT to ARGS."
   "Copy the CURRENT-ROW as JSON to the kill ring."
   (unless (json-available-p)
     (error "Emacs is not compiled with JSON support"))
-  (let* ((xtable (xtable-current-table))
-         (cols (xtable-columns xtable))
+  (let* ((pgmacstbl (pgmacstbl-current-table))
+         (cols (pgmacstbl-columns pgmacstbl))
          (ht (make-hash-table :test #'equal)))
     (cl-loop
      for col in cols
      for v in current-row
-     do (puthash (xtable-column-name col) v ht))
+     do (puthash (pgmacstbl-column-name col) v ht))
     (kill-new (json-encode ht))
     (message "JSON copied to kill ring")))
 
-(defun pgmacs--read-value/minibuffer (name type prompt current-value)
+(defun pgmacs--read-value-minibuffer (name type prompt current-value)
   "Read a value for column NAME in the minibuffer using PROMPT.
 The column has SQL type TYPE and has current value CURRENT-VALUE."
   (let* ((prompt (format prompt name type)))
@@ -255,36 +253,36 @@ The column has SQL type TYPE and has current value CURRENT-VALUE."
 (defun pgmacs--read-value (name type prompt current-value)
   "Read a value for column NAME of SQL type TYPE.
 Use PROMPT in the minibuffer and show the current value CURRENT-VALUE."
-  (let* ((user-provided (pgmacs--read-value/minibuffer name type prompt current-value))
+  (let* ((user-provided (pgmacs--read-value-minibuffer name type prompt current-value))
          (parser (pg-lookup-parser type))
          (ce (pgcon-client-encoding pgmacs--con)))
     (if parser (funcall parser user-provided ce) user-provided)))
 
-(defun pgmacs--edit-value/minibuffer (row primary-keys)
+(defun pgmacs--edit-value-minibuffer (row primary-keys)
   "Edit and update in PostgreSQL the column value at point.
 The new value in database row ROW is read in the minibuffer.
 Editing requires the database table to have primary keys named in the list
 PRIMARY-KEYS."
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
-  (let* ((xtable (or (xtable-current-table)
-                     (error "Cursor is not in a xtable")))
-         (current-row (or (xtable-current-object)
-                          (error "Cursor is not on a xtable row")))
-         (cols (xtable-columns xtable))
-         (col-id (or (xtable-current-column)
-                     (error "Not on a xtable column")))
+  (let* ((pgmacstbl (or (pgmacstbl-current-table)
+                     (error "Cursor is not in a pgmacstbl")))
+         (current-row (or (pgmacstbl-current-object)
+                          (error "Cursor is not on a pgmacstbl row")))
+         (cols (pgmacstbl-columns pgmacstbl))
+         (col-id (or (pgmacstbl-current-column)
+                     (error "Not on a pgmacstbl column")))
          (col (nth col-id cols))
-         (col-name (xtable-column-name col))
+         (col-name (pgmacstbl-column-name col))
          (col-type (aref pgmacs--column-type-names col-id))
          (pk (cl-first primary-keys))
-         (pk-col-id (or (cl-position pk cols :key #'xtable-column-name :test #'string=)
-                        (error "Can't find primary key %s in the xtable column list" pk)))
+         (pk-col-id (or (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=)
+                        (error "Can't find primary key %s in the pgmacstbl column list" pk)))
          (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
          (pk-value (and pk-col-id (nth pk-col-id row))))
     (unless pk-value
       (error "Can't find value for primary key %s" pk))
-    (let* ((current (funcall (xtable-column-formatter col)
+    (let* ((current (funcall (pgmacstbl-column-formatter col)
                              (nth col-id current-row)))
            (new-value (pgmacs--read-value (substring-no-properties col-name)
                                           (substring-no-properties col-type)
@@ -300,12 +298,12 @@ PRIMARY-KEYS."
       (pgmacs--notify "%s" (pg-result res :status))
       (let ((new-row (copy-sequence current-row)))
         (setf (nth col-id new-row) new-value)
-        ;; xtable-update-object doesn't work, so insert then delete old row
-        (xtable-insert-object xtable new-row current-row)
-        (xtable-remove-object xtable current-row)
+        ;; pgmacstbl-update-object doesn't work, so insert then delete old row
+        (pgmacstbl-insert-object pgmacstbl new-row current-row)
+        (pgmacstbl-remove-object pgmacstbl current-row)
         ;; redrawing is necessary to ensure that all keybindings are present for the newly inserted
         ;; row.
-        (pgmacs--redraw-xtable)))))
+        (pgmacs--redraw-pgmacstbl)))))
 
 (defun pgmacs--widget-for (type current-value)
   "Create a widget for TYPE and CURRENT-VALUE in the current buffer."
@@ -329,7 +327,7 @@ PRIMARY-KEYS."
                         :size (min 200 (+ 5 (length current-value)))
                         (format "%s" current-value)))))
 
-(defun pgmacs--edit-value/widget (row primary-keys)
+(defun pgmacs--edit-value-widget (row primary-keys)
   "Edit and update in PostgreSQL the value at point in ROW.
 Uses a dedicated widget buffer. Editing is only possible if the current table
 has primary keys, named in the list PRIMARY-KEYS."
@@ -337,20 +335,20 @@ has primary keys, named in the list PRIMARY-KEYS."
       (error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((con pgmacs--con)
          (table pgmacs--table)
-         (xtable (xtable-current-table))
-         (current-row (xtable-current-object))
-         (cols (xtable-columns xtable))
-         (col-id (xtable-current-column))
+         (pgmacstbl (pgmacstbl-current-table))
+         (current-row (pgmacstbl-current-object))
+         (cols (pgmacstbl-columns pgmacstbl))
+         (col-id (pgmacstbl-current-column))
          (col (nth col-id cols))
-         (col-name (xtable-column-name col))
+         (col-name (pgmacstbl-column-name col))
          (col-type (aref pgmacs--column-type-names col-id))
          (pk (cl-first primary-keys))
-         (pk-col-id (cl-position pk cols :key #'xtable-column-name :test #'string=))
+         (pk-col-id (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=))
          (pk-col-type (aref pgmacs--column-type-names pk-col-id))
          (pk-value (and pk-col-id (nth pk-col-id row))))
     (unless pk-value
       (error "Can't find value for primary key %s" pk))
-    (let* ((current (funcall (xtable-column-formatter col)
+    (let* ((current (funcall (pgmacstbl-column-formatter col)
                              (nth col-id current-row)))
            (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
                         (pg-escape-identifier pgmacs--table)
@@ -370,10 +368,10 @@ has primary keys, named in the list PRIMARY-KEYS."
                         (pgmacs--notify "%s" (pg-result res :status))
                         (let ((new-row (copy-sequence current-row)))
                           (setf (nth col-id new-row) new-value)
-                          ;; xtable-update-object doesn't work, so insert then delete old row
-                          (xtable-insert-object xtable new-row current-row)
-                          (xtable-remove-object xtable current-row)
-                          (pgmacs--redraw-xtable))))))
+                          ;; pgmacstbl-update-object doesn't work, so insert then delete old row
+                          (pgmacstbl-insert-object pgmacstbl new-row current-row)
+                          (pgmacstbl-remove-object pgmacstbl current-row)
+                          (pgmacs--redraw-pgmacstbl))))))
       (switch-to-buffer "*PGmacs update widget*")
       (erase-buffer)
       (remove-overlays)
@@ -408,10 +406,10 @@ primary keys, whose names are given by the list PRIMARY-KEYS."
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
   (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
-    (let* ((xtable (xtable-current-table))
-           (cols (xtable-columns xtable))
+    (let* ((pgmacstbl (pgmacstbl-current-table))
+           (cols (pgmacstbl-columns pgmacstbl))
            (pk (cl-first primary-keys))
-           (pk-col-id (cl-position pk cols :key #'xtable-column-name :test #'string=))
+           (pk-col-id (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=))
            (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
            (pk-value (and pk-col-id (nth pk-col-id row))))
       (unless pk-value
@@ -423,22 +421,22 @@ primary keys, whose names are given by the list PRIMARY-KEYS."
                            (pg-escape-identifier pk))
                    `((,pk-value . ,pk-col-type)))))
         (pgmacs--notify "%s" (pg-result res :status)))
-      (xtable-remove-object xtable row)
-      (pgmacs--redraw-xtable))))
+      (pgmacstbl-remove-object pgmacstbl row)
+      (pgmacs--redraw-pgmacstbl))))
 
 (defun pgmacs--insert-row (current-row)
   "Insert a new row of data into the current table after CURRENT-ROW.
 Uses the minibuffer to prompt for new values."
-  ;; TODO we need to handle the case where there is no existing xtable because the underlying SQL
+  ;; TODO we need to handle the case where there is no existing pgmacstbl because the underlying SQL
   ;; table is empty.
-  (let* ((xtable (xtable-current-table))
-         (cols (xtable-columns xtable))
+  (let* ((pgmacstbl (pgmacstbl-current-table))
+         (cols (pgmacstbl-columns pgmacstbl))
          (col-names (list))
          (values (list))
          (value-types (list)))
     (dolist (col cols)
-      (let* ((col-name (xtable-column-name col))
-             (col-id (cl-position col-name cols :key #'xtable-column-name :test #'string=))
+      (let* ((col-name (pgmacstbl-column-name col))
+             (col-id (cl-position col-name cols :key #'pgmacstbl-column-name :test #'string=))
              (col-type (aref pgmacs--column-type-names col-id))
              (col-has-default (not (null (pg-column-default pgmacs--con pgmacs--table col-name)))))
         (unless col-has-default
@@ -460,27 +458,27 @@ Uses the minibuffer to prompt for new values."
                           for vt in value-types
                           collect (cons v vt)))))
       (pgmacs--notify "%s" (pg-result res :status))
-      ;; It's tempting to use xtable-insert-object here to avoid a full refresh of the xtable.
+      ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
       ;; However, we don't know what values were chosen for any columns that have a default, so we
       ;; need to refetch the data from PostgreSQL.
       (pgmacs--display-table pgmacs--table))))
 
-(defun pgmacs--insert-row/widget (current-row)
+(defun pgmacs--insert-row-widget (current-row)
   "Insert a new row of data into the current table after CURRENT-ROW.
 Uses a widget-based buffer to prompt for new values. Updates the
 PostgreSQL database."
   (let* ((con pgmacs--con)
          (table pgmacs--table)
          (ce (pgcon-client-encoding pgmacs--con))
-         (xtable (xtable-current-table))
-         (cols (xtable-columns xtable))
+         (pgmacstbl (pgmacstbl-current-table))
+         (cols (pgmacstbl-columns pgmacstbl))
          (editable-cols (list))
          (col-names (list))
          (col-types (list)))
     ;; Determine which of the columns are editable (those that do not have a defined default)
     (dolist (col cols)
-      (let* ((col-name (xtable-column-name col))
-             (col-id (cl-position col-name cols :key #'xtable-column-name :test #'string=))
+      (let* ((col-name (pgmacstbl-column-name col))
+             (col-id (cl-position col-name cols :key #'pgmacstbl-column-name :test #'string=))
              (current (nth col-id current-row))
              (col-type (aref pgmacs--column-type-names col-id))
              (col-has-default (not (null (pg-column-default pgmacs--con pgmacs--table col-name)))))
@@ -507,8 +505,8 @@ PostgreSQL database."
                                           (string-join placeholders ",")))
                              (res (pg-exec-prepared pgmacs--con sql values)))
                         (pgmacs--notify "%s" (pg-result res :status))
-                        ;; It's tempting to use xtable-insert-object here to avoid a full refresh of
-                        ;; the xtable. However, we don't know what values were chosen for any columns
+                        ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of
+                        ;; the pgmacstbl. However, we don't know what values were chosen for any columns
                         ;; that have a default.
                         (pgmacs--display-table table)))))
       (switch-to-buffer "*PGmacs insert row widget*")
@@ -554,16 +552,16 @@ The new row contents are based on the last copied row."
   ;; Insert a new row based on the copied row, but without specifying values for the columns that
   ;; have a default value
   (let* ((yanked-row (cdr pgmacs--kill-ring))
-         (xtable (xtable-current-table))
-         (cols (xtable-columns xtable))
+         (pgmacstbl (pgmacstbl-current-table))
+         (cols (pgmacstbl-columns pgmacstbl))
          (col-names (list))
          (values (list))
          (value-types (list)))
     (cl-loop
      for col in cols
      for pasted-val in yanked-row
-     do (let* ((col-name (xtable-column-name col))
-               (col-id (cl-position col-name cols :key #'xtable-column-name :test #'string=))
+     do (let* ((col-name (pgmacstbl-column-name col))
+               (col-id (cl-position col-name cols :key #'pgmacstbl-column-name :test #'string=))
                (col-type (aref pgmacs--column-type-names col-id))
                (col-has-default (not (null (pg-column-default pgmacs--con pgmacs--table col-name)))))
           (unless col-has-default
@@ -583,7 +581,7 @@ The new row contents are based on the last copied row."
                           for vt in value-types
                           collect (cons v vt)))))
       (pgmacs--notify "%s" (pg-result res :status))
-      ;; It's tempting to use xtable-insert-object here to avoid a full refresh of the xtable.
+      ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
       ;; However, we don't know what values were chosen for any columns that have a default.
       ;; This means that we can't insert at the current-row position.
       (pgmacs--display-table pgmacs--table))))
@@ -700,7 +698,7 @@ Table names are schema-qualified if the schema is non-default."
   (lambda (fvalue max-width _table)
     (let ((truncated (if (> (string-pixel-width fvalue) max-width)
                          ;; TODO could include the ellipsis here
-                         (xtable--limit-string fvalue max-width)
+                         (pgmacstbl--limit-string fvalue max-width)
                        fvalue)))
       (propertize truncated 'face 'pgmacs-table-data 'help-echo metainfo))))
 
@@ -836,7 +834,7 @@ object."
                      for align in column-alignment
                      for fmt in column-formatters
                      for w in column-widths
-                     collect (make-xtable-column
+                     collect (make-pgmacstbl-column
                               :name (propertize name
                                                 'face 'pgmacs-table-header
                                                 'help-echo meta)
@@ -845,33 +843,33 @@ object."
                               :formatter fmt
                               :displayer (pgmacs--make-column-displayer meta))))
            (inhibit-read-only t)
-           (xtable (make-xtable
+           (pgmacstbl (make-pgmacstbl
                     :insert nil
                     :use-header-line nil
                     :columns columns
                     :row-colors pgmacs-row-colors
                     :objects rows
                     ;; same syntax for keys as keymap-set
-                    :actions `("RET" (lambda (row) (pgmacs--edit-value/minibuffer row ',primary-keys))
-                               "w" (lambda (row) (pgmacs--edit-value/widget row ',primary-keys))
+                    :actions `("RET" (lambda (row) (pgmacs--edit-value-minibuffer row ',primary-keys))
+                               "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
                                "<delete>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "h" pgmacs--row-list-help
                                "+" pgmacs--insert-row
-                               "i" pgmacs--insert-row/widget
+                               "i" pgmacs--insert-row-widget
                                "k" pgmacs--copy-row
                                "y" pgmacs--yank-row
                                "e" (lambda (&rest _ignored) (pgmacs-run-sql))
-                               "r" pgmacs--redraw-xtable
+                               "r" pgmacs--redraw-pgmacstbl
                                "j" pgmacs--row-as-json
                                ;; "n" and "p" are bound when table is paginated to next/prev page
                                "<" (lambda (&rest _ignored)
-                                     (text-property-search-backward 'xtable)
+                                     (text-property-search-backward 'pgmacstbl)
                                      (next-line))
                                ">" (lambda (&rest _ignored)
-                                     (text-property-search-forward 'xtable)
+                                     (text-property-search-forward 'pgmacstbl)
                                      (previous-line))
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (setq-local pgmacs--con con
@@ -930,34 +928,34 @@ object."
         (insert "\n\n"))
       (if (null rows)
           (insert "(no rows in table)")
-        (xtable-insert xtable))
+        (pgmacstbl-insert pgmacstbl))
       (pgmacs--stop-progress-reporter))))
 
 
-;; This is similar to xtable-revert, but works correctly with a buffer than contains content other
-;; than the xtable.
-(defun pgmacs--redraw-xtable (&rest _ignore)
-  "Redraw the xtable in the current buffer."
-  (let ((xtable (xtable-current-table))
-        (object (xtable-current-object))
-        (column (xtable-current-column))
+;; This is similar to pgmacstbl-revert, but works correctly with a buffer than contains content other
+;; than the pgmacstbl.
+(defun pgmacs--redraw-pgmacstbl (&rest _ignore)
+  "Redraw the pgmacstbl in the current buffer."
+  (let ((pgmacstbl (pgmacstbl-current-table))
+        (object (pgmacstbl-current-object))
+        (column (pgmacstbl-current-column))
         (inhibit-read-only t)
         (start (save-excursion
                  (goto-char (point-max))
-                 (text-property-search-backward 'xtable)
+                 (text-property-search-backward 'pgmacstbl)
                  (point)))
         (end (save-excursion
                (goto-char (point-min))
-               (text-property-search-forward 'xtable)
+               (text-property-search-forward 'pgmacstbl)
                (point))))
-    (unless xtable
+    (unless pgmacstbl
       (user-error "No table under point"))
     (delete-region start end)
-    (xtable-insert xtable)
+    (pgmacstbl-insert pgmacstbl)
     (when object
-      (xtable-goto-object object))
+      (pgmacstbl-goto-object object))
     (when column
-      (xtable-goto-column column))))
+      (pgmacstbl-goto-column column))))
 
 (defun pgmacs--display-backend-information (&rest _ignore)
   "Create a buffer with information concerning the current PostgreSQL backend."
@@ -1038,12 +1036,12 @@ Uses PostgreSQL connection CON."
          (columns (cl-loop for name in column-names
                            for fmt in column-formatters
                            for w in column-widths
-                           collect (make-xtable-column
+                           collect (make-pgmacstbl-column
                                     :name (propertize name 'face 'pgmacs-table-header)
                                     :min-width (1+ (max w (length name)))
                                     :formatter fmt)))
          (inhibit-read-only t)
-         (xtable (make-xtable
+         (pgmacstbl (make-pgmacstbl
                   :insert nil
                   :use-header-line nil
                   :face 'pgmacs-table-data
@@ -1054,7 +1052,7 @@ Uses PostgreSQL connection CON."
                              "q" (lambda (&rest _ignore) (kill-buffer))))))
     (if (null rows)
         (insert "(no rows)")
-      (xtable-insert xtable))
+      (pgmacstbl-insert pgmacstbl))
     (pgmacs--stop-progress-reporter)))
 
 
@@ -1062,26 +1060,26 @@ Uses PostgreSQL connection CON."
 ;; allow the user to set the table comment. Otherwise, display the table in a separate buffer.
 (defun pgmacs--dbbuf-handle-RET (table-row)
   "Called on RET on a line in the list-of-tables buffer TABLE-ROW."
-  (let* ((xtable (xtable-current-table))
-         (col-id (xtable-current-column))
-         (col (nth col-id (xtable-columns xtable)))
-         (col-name (xtable-column-name col)))
+  (let* ((pgmacstbl (pgmacstbl-current-table))
+         (col-id (pgmacstbl-current-column))
+         (col (nth col-id (pgmacstbl-columns pgmacstbl)))
+         (col-name (pgmacstbl-column-name col)))
     (cond ((string= "Comment" col-name)
            (let ((comment (read-from-minibuffer "New table comment: "))
                  (new-row (copy-sequence table-row)))
              (setf (pg-table-comment pgmacs--con (car table-row)) comment)
              (setf (nth col-id new-row) comment)
-             ;; xtable-update-object doesn't work, so insert then delete old row
-             (xtable-insert-object xtable new-row table-row)
-             (xtable-remove-object xtable table-row)
-             (pgmacs--redraw-xtable)))
+             ;; pgmacstbl-update-object doesn't work, so insert then delete old row
+             (pgmacstbl-insert-object pgmacstbl new-row table-row)
+             (pgmacstbl-remove-object pgmacstbl table-row)
+             (pgmacs--redraw-pgmacstbl)))
           ;; TODO perhaps change owner (if we are superuser)
           (t
            (pgmacs--display-table (car table-row))))))
 
 (defun pgmacs--delete-table (table-row)
   "Delete (drop) the PostgreSQL table specified by TABLE-ROW."
-  (let* ((xtable (xtable-current-table))
+  (let* ((pgmacstbl (pgmacstbl-current-table))
          (table (car table-row))
          (t-id (pg-escape-identifier table)))
     (when (yes-or-no-p (format "Really drop PostgreSQL table %s? " t-id))
@@ -1089,8 +1087,8 @@ Uses PostgreSQL connection CON."
       (let* ((sql (format "DROP TABLE %s" t-id))
              (res (pg-exec pgmacs--con sql)))
         (pgmacs--notify "%s" (pg-result res :status))
-        (xtable-remove-object xtable table-row)
-        (pgmacs--redraw-xtable)))))
+        (pgmacstbl-remove-object pgmacstbl table-row)
+        (pgmacs--redraw-pgmacstbl)))))
 
 (defun pgmacs--table-list-help (&rest _ignore)
   "Show keybindings active in a table-list buffer."
@@ -1132,25 +1130,25 @@ Uses PostgreSQL connection CON."
     (insert (pg-backend-version con)))
   (let* ((dbname (pgcon-dbname con))
          (inhibit-read-only t)
-         (xtable (make-xtable
+         (pgmacstbl (make-pgmacstbl
                   :insert nil
                   :use-header-line nil
                   :columns (list
-                            (make-xtable-column
+                            (make-pgmacstbl-column
                              :name (propertize "Table" 'face 'pgmacs-table-header)
                              :width 20
                              :primary t
                              :align 'right)
-                            (make-xtable-column
+                            (make-pgmacstbl-column
                              :name (propertize "Rows" 'face 'pgmacs-table-header)
                              :width 7 :align 'right)
-                            (make-xtable-column
+                            (make-pgmacstbl-column
                              :name (propertize "Size on disk" 'face 'pgmacs-table-header)
                              :width 13 :align 'right)
-                            (make-xtable-column
+                            (make-pgmacstbl-column
                              :name (propertize "Owner" 'face 'pgmacs-table-header)
                              :width 13 :align 'right)
-                            (make-xtable-column
+                            (make-pgmacstbl-column
                              :name (propertize "Comment" 'face 'pgmacs-table-header)
                              :width 30 :align 'left))
                   :row-colors pgmacs-row-colors
@@ -1161,17 +1159,17 @@ Uses PostgreSQL connection CON."
                              "RET" pgmacs--dbbuf-handle-RET
                              "<deletechar>" pgmacs--delete-table
                              "e" (lambda (&rest _ignored) (pgmacs-run-sql))
-                             ;; the functions xtable-beginning-of-table and xtable-end-of-table don't work when
-                             ;; we have inserted text before the xtable.
+                             ;; the functions pgmacstbl-beginning-of-table and pgmacstbl-end-of-table don't work when
+                             ;; we have inserted text before the pgmacstbl.
                              "<" (lambda (&rest _ignored)
-                                   (text-property-search-backward 'xtable)
+                                   (text-property-search-backward 'pgmacstbl)
                                    (next-line))
                              ">" (lambda (&rest _ignored)
-                                   (text-property-search-forward 'xtable)
+                                   (text-property-search-forward 'pgmacstbl)
                                    (previous-line))
                              "q"  (lambda (&rest _ignored) (kill-buffer)))
-                  :getter (lambda (object column xtable)
-                            (pcase (xtable-column xtable column)
+                  :getter (lambda (object column pgmacstbl)
+                            (pcase (pgmacstbl-column pgmacstbl column)
                               ("Table" (pgmacs--display-identifier (cl-first object)))
                               ("Rows" (cl-second object))
                               ("Size on disk" (cl-third object))
@@ -1206,7 +1204,7 @@ Uses PostgreSQL connection CON."
                (pgmacs-show-result con "SELECT * FROM pg_stat_replication"))
      'help-echo "Show information on PostgreSQL replication status")
     (insert "\n\n")
-    (xtable-insert xtable)
+    (pgmacstbl-insert pgmacstbl)
     (pgmacs--stop-progress-reporter)))
 
 

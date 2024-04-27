@@ -1,4 +1,4 @@
-;;; xtable.el --- Displaying data in tables  -*- lexical-binding: t; -*-
+;;; pgmacstbl.el --- Displaying data in tables  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
 ;; Copyright (C) 2024 Eric Marsden
@@ -16,6 +16,8 @@
 ;; arise when including a vtable in a buffer which also includes other content.
 ;; Some of these fixes will hopefully be fed back upstream once this library has
 ;; been stabilized.
+;;
+;; For this reason, please don't use this code from outside of PGmacs.
 
 ;;; Code:
 
@@ -24,14 +26,14 @@
 (require 'text-property-search)
 (require 'mule-util)
 
-(defface xtable
+(defface pgmacstbl
   '((t :inherit variable-pitch))
-  "Face used (by default) for xtables."
+  "Face used (by default) for pgmacstbls."
   :version "29.1"
   :group 'faces)
 
-(cl-defstruct xtable-column
-  "A xtable column."
+(cl-defstruct pgmacstbl-column
+  "A pgmacstbl column."
   name
   width
   min-width
@@ -43,50 +45,50 @@
   displayer
   -numerical)
 
-(defclass xtable ()
-  ((columns :initarg :columns :accessor xtable-columns)
-   (objects :initarg :objects :accessor xtable-objects)
+(defclass pgmacstbl ()
+  ((columns :initarg :columns :accessor pgmacstbl-columns)
+   (objects :initarg :objects :accessor pgmacstbl-objects)
    (objects-function :initarg :objects-function
-                     :accessor xtable-objects-function)
-   (getter :initarg :getter :accessor xtable-getter)
-   (formatter :initarg :formatter :accessor xtable-formatter)
-   (displayer :initarg :displayer :accessor xtable-displayer)
+                     :accessor pgmacstbl-objects-function)
+   (getter :initarg :getter :accessor pgmacstbl-getter)
+   (formatter :initarg :formatter :accessor pgmacstbl-formatter)
+   (displayer :initarg :displayer :accessor pgmacstbl-displayer)
    (use-header-line :initarg :use-header-line
-                    :accessor xtable-use-header-line)
-   (face :initarg :face :accessor xtable-face)
-   (actions :initarg :actions :accessor xtable-actions)
-   (keymap :initarg :keymap :accessor xtable-keymap)
-   (separator-width :initarg :separator-width :accessor xtable-separator-width)
-   (divider :initarg :divider :accessor xtable-divider :initform nil)
-   (sort-by :initarg :sort-by :accessor xtable-sort-by)
-   (ellipsis :initarg :ellipsis :accessor xtable-ellipsis)
-   (column-colors :initarg :column-colors :accessor xtable-column-colors)
-   (row-colors :initarg :row-colors :accessor xtable-row-colors)
+                    :accessor pgmacstbl-use-header-line)
+   (face :initarg :face :accessor pgmacstbl-face)
+   (actions :initarg :actions :accessor pgmacstbl-actions)
+   (keymap :initarg :keymap :accessor pgmacstbl-keymap)
+   (separator-width :initarg :separator-width :accessor pgmacstbl-separator-width)
+   (divider :initarg :divider :accessor pgmacstbl-divider :initform nil)
+   (sort-by :initarg :sort-by :accessor pgmacstbl-sort-by)
+   (ellipsis :initarg :ellipsis :accessor pgmacstbl-ellipsis)
+   (column-colors :initarg :column-colors :accessor pgmacstbl-column-colors)
+   (row-colors :initarg :row-colors :accessor pgmacstbl-row-colors)
    (-cached-colors :initform nil)
    (-cache :initform (make-hash-table :test #'equal))
    (-cached-keymap :initform nil)
    (-has-column-spec :initform nil))
   "An object to hold the data for a table.")
 
-(defvar-keymap xtable-map
-  "S" #'xtable-sort-by-current-column
-  "{" #'xtable-narrow-current-column
-  "}" #'xtable-widen-current-column
-  "g" #'xtable-revert-command
-  "M-<left>" #'xtable-previous-column
-  "M-<right>" #'xtable-next-column)
+(defvar-keymap pgmacstbl-map
+  "S" #'pgmacstbl-sort-by-current-column
+  "{" #'pgmacstbl-narrow-current-column
+  "}" #'pgmacstbl-widen-current-column
+  "g" #'pgmacstbl-revert-command
+  "M-<left>" #'pgmacstbl-previous-column
+  "M-<right>" #'pgmacstbl-next-column)
 
-(defvar-keymap xtable-header-line-map
-  :parent xtable-map
+(defvar-keymap pgmacstbl-header-line-map
+  :parent pgmacstbl-map
   "<follow-link>" 'mouse-face
-  "<mouse-2>" #'xtable-header-line-sort)
+  "<mouse-2>" #'pgmacstbl-header-line-sort)
 
-(cl-defun make-xtable (&key columns objects objects-function
+(cl-defun make-pgmacstbl (&key columns objects objects-function
                             getter
                             formatter
                             displayer
                             (use-header-line t)
-                            (face 'xtable)
+                            (face 'pgmacstbl)
                             actions keymap
                             (separator-width 1)
                             divider
@@ -96,18 +98,18 @@
                             (insert t)
                             row-colors
                             column-colors)
-  "Create and insert a xtable at point.
-The xtable object is returned.  If INSERT is nil, the table won't
+  "Create and insert a pgmacstbl at point.
+The pgmacstbl object is returned.  If INSERT is nil, the table won't
 be inserted.
 
-See info node `(xtable)Top' for xtable documentation."
+See info node `(pgmacstbl)Top' for pgmacstbl documentation."
   (when objects-function
     (setq objects (funcall objects-function)))
   ;; We'll be altering the list, so create a copy.
   (setq objects (copy-sequence objects))
   (let ((table
          (make-instance
-          'xtable
+          'pgmacstbl
           :objects objects
           :objects-function objects-function
           :getter getter
@@ -129,78 +131,78 @@ See info node `(xtable)Top' for xtable documentation."
       (unless objects
         (error "Can't auto-generate columns; no objects"))
       (setq columns (make-list (length (car objects)) "")))
-    (setf (xtable-columns table)
+    (setf (pgmacstbl-columns table)
           (mapcar (lambda (column)
                     (cond
                      ;; We just have the name (as a string).
                      ((stringp column)
-                      (make-xtable-column :name column))
+                      (make-pgmacstbl-column :name column))
                      ;; A plist of keywords/values.
                      ((listp column)
-                      (apply #'make-xtable-column column))
-                     ;; A full `xtable-column' object.
+                      (apply #'make-pgmacstbl-column column))
+                     ;; A full `pgmacstbl-column' object.
                      (t
                       column)))
                   columns))
     ;; Compute missing column data.
-    (setf (xtable-columns table) (xtable--compute-columns table))
+    (setf (pgmacstbl-columns table) (pgmacstbl--compute-columns table))
     ;; Compute the colors.
     (when (or row-colors column-colors)
       (setf (slot-value table '-cached-colors)
-            (xtable--compute-colors row-colors column-colors)))
+            (pgmacstbl--compute-colors row-colors column-colors)))
     ;; Compute the divider.
     (when (or divider divider-width)
-      (setf (xtable-divider table)
+      (setf (pgmacstbl-divider table)
             (propertize
              (or (copy-sequence divider)
                  (propertize
                   " " 'display
                   (list 'space :width
-                        (list (xtable--compute-width table divider-width)))))
+                        (list (pgmacstbl--compute-width table divider-width)))))
              'mouse-face 'highlight
              'keymap
              (define-keymap
-               "<drag-mouse-1>" #'xtable--drag-resize-column
+               "<drag-mouse-1>" #'pgmacstbl--drag-resize-column
                "<down-mouse-1>" #'ignore))))
     ;; Compute the keymap.
-    (setf (slot-value table '-cached-keymap) (xtable--make-keymap table))
+    (setf (slot-value table '-cached-keymap) (pgmacstbl--make-keymap table))
     (unless sort-by
       (seq-do-indexed (lambda (column index)
-                        (when (xtable-column-primary column)
-                          (push (cons index (xtable-column-primary column))
-                                (xtable-sort-by table))))
-                      (xtable-columns table)))
+                        (when (pgmacstbl-column-primary column)
+                          (push (cons index (pgmacstbl-column-primary column))
+                                (pgmacstbl-sort-by table))))
+                      (pgmacstbl-columns table)))
     (when insert
-      (xtable-insert table))
+      (pgmacstbl-insert table))
     table))
 
-(defun xtable--compute-colors (row-colors column-colors)
+(defun pgmacstbl--compute-colors (row-colors column-colors)
   (cond
    ((null column-colors)
-    (mapcar #'xtable--make-color-face row-colors))
+    (mapcar #'pgmacstbl--make-color-face row-colors))
    ((null row-colors)
-    (mapcar #'xtable--make-color-face column-colors))
+    (mapcar #'pgmacstbl--make-color-face column-colors))
    (t
     (cl-loop for row in row-colors
              collect (cl-loop for column in column-colors
-                              collect (xtable--face-blend
-                                       (xtable--make-color-face row)
-                                       (xtable--make-color-face column)))))))
+                              collect (pgmacstbl--face-blend
+                                       (pgmacstbl--make-color-face row)
+                                       (pgmacstbl--make-color-face column)))))))
 
-(defun xtable--make-color-face (object)
+(defun pgmacstbl--make-color-face (object)
   (if (stringp object)
       (list :background object)
     object))
 
-(defun xtable--face-blend (face1 face2)
-  (let ((foreground (xtable--face-color face1 face2 #'face-foreground
+(defun pgmacstbl--face-blend (face1 face2)
+  (let ((foreground (pgmacstbl--face-color face1 face2 #'face-foreground
                                         :foreground))
-        (background (xtable--face-color face1 face2 #'face-background
+        (background (pgmacstbl--face-color face1 face2 #'face-background
                                         :background)))
     `(,@(and foreground (list :foreground foreground))
       ,@(and background (list :background background)))))
 
-(defun xtable--face-color (face1 face2 accessor slot)
+(defun pgmacstbl--face-color (face1 face2 accessor slot)
   (let ((col1 (if (facep face1)
                   (funcall accessor face1)
                 (plist-get face1 slot)))
@@ -208,12 +210,12 @@ See info node `(xtable)Top' for xtable documentation."
                   (funcall accessor face2)
                 (plist-get face2 slot))))
     (if (and col1 col2)
-        (xtable--color-blend col1 col2)
+        (pgmacstbl--color-blend col1 col2)
       (or col1 col2))))
 
 ;;; FIXME: This is probably not the right way to blend two colors, is
 ;;; it?
-(defun xtable--color-blend (color1 color2)
+(defun pgmacstbl--color-blend (color1 color2)
   (cl-destructuring-bind (r g b)
       (mapcar (lambda (n) (* (/ n 2) 255.0))
               (cl-mapcar #'+ (color-name-to-rgb color1)
@@ -222,72 +224,72 @@ See info node `(xtable)Top' for xtable documentation."
 
 ;;; Interface utility functions.
 
-(defun xtable-current-table ()
+(defun pgmacstbl-current-table ()
   "Return the table under point."
-  (get-text-property (point) 'xtable))
+  (get-text-property (point) 'pgmacstbl))
 
-(defun xtable-current-object ()
+(defun pgmacstbl-current-object ()
   "Return the object under point."
-  (get-text-property (point) 'xtable-object))
+  (get-text-property (point) 'pgmacstbl-object))
 
-(defun xtable-current-column ()
+(defun pgmacstbl-current-column ()
   "Return the index of the column under point."
-  (get-text-property (point) 'xtable-column))
+  (get-text-property (point) 'pgmacstbl-column))
 
-(defun xtable-beginning-of-table ()
+(defun pgmacstbl-beginning-of-table ()
   "Go to the start of the current table."
   (goto-char (point-max))
-  (if (text-property-search-backward 'xtable)
+  (if (text-property-search-backward 'pgmacstbl)
       (point)
     (goto-char (point-min))))
 
-(defun xtable-end-of-table ()
+(defun pgmacstbl-end-of-table ()
   "Go to the end of the current table."
   (goto-char (point-min))
-  (if (text-property-search-forward 'xtable)
+  (if (text-property-search-forward 'pgmacstbl)
       (point)
     (goto-char (point-max))))
 
-(defun xtable-goto-object (object)
+(defun pgmacstbl-goto-object (object)
   "Go to OBJECT in the current table.
 Return the position of the object if found, and nil if not."
   (let ((start (point)))
-    (xtable-beginning-of-table)
+    (pgmacstbl-beginning-of-table)
     (save-restriction
-      (narrow-to-region (point) (save-excursion (xtable-end-of-table)))
-      (if (text-property-search-forward 'xtable-object object #'eq)
+      (narrow-to-region (point) (save-excursion (pgmacstbl-end-of-table)))
+      (if (text-property-search-forward 'pgmacstbl-object object #'eq)
           (progn
             (forward-line -1)
             (point))
         (goto-char start)
         nil))))
 
-(defun xtable-goto-table (table)
+(defun pgmacstbl-goto-table (table)
   "Go to TABLE in the current buffer.
 If TABLE is found, return the position of the start of the table.
 If it can't be found, return nil and don't move point."
   (let ((start (point)))
     (goto-char (point-min))
-    (if-let ((match (text-property-search-forward 'xtable table t)))
+    (if-let ((match (text-property-search-forward 'pgmacstbl table t)))
         (goto-char (prop-match-beginning match))
       (goto-char start)
       nil)))
 
-(defun xtable-goto-column (column)
+(defun pgmacstbl-goto-column (column)
   "Go to COLUMN on the current line."
   (beginning-of-line)
-  (if-let ((match (text-property-search-forward 'xtable-column column t)))
+  (if-let ((match (text-property-search-forward 'pgmacstbl-column column t)))
       (goto-char (prop-match-beginning match))
     (end-of-line)))
 
-(defun xtable-update-object (table object old-object)
+(defun pgmacstbl-update-object (table object old-object)
   "Replace OLD-OBJECT in TABLE with OBJECT."
-  (let* ((objects (xtable-objects table))
+  (let* ((objects (pgmacstbl-objects table))
          (inhibit-read-only t))
     ;; First replace the object in the object storage.
     (if (eq old-object (car objects))
         ;; It's at the head, so replace it there.
-        (setf (xtable-objects table)
+        (setf (pgmacstbl-objects table)
               (cons object (cdr objects)))
       ;; Otherwise splice into the list.
       (while (and (cdr objects)
@@ -297,42 +299,42 @@ If it can't be found, return nil and don't move point."
         (error "Can't find the old object"))
       (setcar (cdr objects) object))
     ;; Then update the cache...
-    (let* ((line-number (seq-position old-object (car (xtable--cache table))))
-           (line (elt (car (xtable--cache table)) line-number)))
+    (let* ((line-number (seq-position old-object (car (pgmacstbl--cache table))))
+           (line (elt (car (pgmacstbl--cache table)) line-number)))
       (unless line
         (error "Can't find cached object"))
       (setcar line object)
-      (setcdr line (xtable--compute-cached-line table object))
+      (setcdr line (pgmacstbl--compute-cached-line table object))
       ;; ... and redisplay the line in question.
       (save-excursion
-        (xtable-goto-object old-object)
+        (pgmacstbl-goto-object old-object)
         (let ((keymap (get-text-property (point) 'keymap))
               (start (point)))
           (delete-line)
-          (xtable--insert-line table line line-number
-                               (nth 1 (xtable--cache table))
-                               (xtable--spacer table))
+          (pgmacstbl--insert-line table line line-number
+                               (nth 1 (pgmacstbl--cache table))
+                               (pgmacstbl--spacer table))
           (add-text-properties start (point) (list 'keymap keymap
-                                                   'xtable table))))
+                                                   'pgmacstbl table))))
       ;; We may have inserted a non-numerical value into a previously
       ;; all-numerical table, so recompute.
-      (xtable--recompute-numerical table (cdr line)))))
+      (pgmacstbl--recompute-numerical table (cdr line)))))
 
-(defun xtable-remove-object (table object)
+(defun pgmacstbl-remove-object (table object)
   "Remove OBJECT from TABLE.
 This will also remove the displayed line."
   ;; First remove from the objects.
-  (setf (xtable-objects table) (delq object (xtable-objects table)))
+  (setf (pgmacstbl-objects table) (delq object (pgmacstbl-objects table)))
   ;; Then adjust the cache and display.
-  (let ((cache (xtable--cache table))
+  (let ((cache (pgmacstbl--cache table))
         (inhibit-read-only t))
     (setcar cache (delq (assq object (car cache)) (car cache)))
     (save-excursion
-      (xtable-goto-table table)
-      (when (xtable-goto-object object)
+      (pgmacstbl-goto-table table)
+      (when (pgmacstbl-goto-object object)
         (delete-line)))))
 
-(defun xtable-insert-object (table object &optional after-object)
+(defun pgmacstbl-insert-object (table object &optional after-object)
   "Insert OBJECT into TABLE after AFTER-OBJECT.
 If AFTER-OBJECT is nil (or doesn't exist in the table), insert
 OBJECT at the end.
@@ -340,61 +342,61 @@ This also updates the displayed table."
   ;; First insert into the objects.
   (let (pos)
     (if (and after-object
-             (setq pos (memq after-object (xtable-objects table))))
+             (setq pos (memq after-object (pgmacstbl-objects table))))
         ;; Splice into list.
         (setcdr pos (cons object (cdr pos)))
       ;; Append.
-      (nconc (xtable-objects table) (list object))))
+      (nconc (pgmacstbl-objects table) (list object))))
   ;; Then adjust the cache and display.
   (save-excursion
-    (xtable-goto-table table)
-    (let* ((cache (xtable--cache table))
+    (pgmacstbl-goto-table table)
+    (let* ((cache (pgmacstbl--cache table))
            (inhibit-read-only t)
            (keymap (get-text-property (point) 'keymap))
-           (ellipsis (if (xtable-ellipsis table)
+           (ellipsis (if (pgmacstbl-ellipsis table)
                          (propertize (truncate-string-ellipsis)
-                                     'face (xtable-face table))
+                                     'face (pgmacstbl-face table))
                        ""))
            (ellipsis-width (string-pixel-width ellipsis))
            (elem (and after-object
                       (assq after-object (car cache))))
-           (line (cons object (xtable--compute-cached-line table object))))
+           (line (cons object (pgmacstbl--compute-cached-line table object))))
       (if (not elem)
           ;; Append.
           (progn
             (setcar cache (nconc (car cache) (list line)))
-            (xtable-end-of-table))
+            (pgmacstbl-end-of-table))
         ;; Splice into list.
         (let ((pos (memq elem (car cache))))
           (setcdr pos (cons line (cdr pos)))
-          (unless (xtable-goto-object after-object)
-            (xtable-end-of-table))))
+          (unless (pgmacstbl-goto-object after-object)
+            (pgmacstbl-end-of-table))))
       (let ((start (point)))
         ;; FIXME: We have to adjust colors in lines below this if we
         ;; have :row-colors.
-        (xtable--insert-line table line 0
-                             (nth 1 cache) (xtable--spacer table)
+        (pgmacstbl--insert-line table line 0
+                             (nth 1 cache) (pgmacstbl--spacer table)
                              ellipsis ellipsis-width)
         (add-text-properties start (point) (list 'keymap keymap
-                                                 'xtable table)))
+                                                 'pgmacstbl table)))
       ;; We may have inserted a non-numerical value into a previously
       ;; all-numerical table, so recompute.
-      (xtable--recompute-numerical table (cdr line)))))
+      (pgmacstbl--recompute-numerical table (cdr line)))))
 
-(defun xtable-column (table index)
+(defun pgmacstbl-column (table index)
   "Return the name of the INDEXth column in TABLE."
-  (xtable-column-name (elt (xtable-columns table) index)))
+  (pgmacstbl-column-name (elt (pgmacstbl-columns table) index)))
 
 ;;; Generating the table.
 
-(defun xtable--get-value (object index column table)
+(defun pgmacstbl--get-value (object index column table)
   "Compute a cell value."
   (cond
-   ((xtable-column-getter column)
-    (funcall (xtable-column-getter column)
+   ((pgmacstbl-column-getter column)
+    (funcall (pgmacstbl-column-getter column)
              object table))
-   ((xtable-getter table)
-    (funcall (xtable-getter table)
+   ((pgmacstbl-getter table)
+    (funcall (pgmacstbl-getter table)
              object index table))
    ;; No getter functions; standard getters.
    ((stringp object)
@@ -402,94 +404,94 @@ This also updates the displayed table."
    (t
     (elt object index))))
 
-(defun xtable--compute-columns (table)
-  (let ((numerical (make-vector (length (xtable-columns table)) t))
-        (columns (xtable-columns table)))
+(defun pgmacstbl--compute-columns (table)
+  (let ((numerical (make-vector (length (pgmacstbl-columns table)) t))
+        (columns (pgmacstbl-columns table)))
     ;; First determine whether there are any all-numerical columns.
-    (dolist (object (xtable-objects table))
+    (dolist (object (pgmacstbl-objects table))
       (seq-do-indexed
        (lambda (_elem index)
-         (unless (numberp (xtable--get-value object index (elt columns index)
+         (unless (numberp (pgmacstbl--get-value object index (elt columns index)
                                              table))
            (setf (elt numerical index) nil)))
-       (xtable-columns table)))
+       (pgmacstbl-columns table)))
     ;; Then fill in defaults.
     (seq-map-indexed
      (lambda (column index)
        ;; This is used when displaying.
-       (unless (xtable-column-align column)
-         (setf (xtable-column-align column)
+       (unless (pgmacstbl-column-align column)
+         (setf (pgmacstbl-column-align column)
                (if (elt numerical index)
                    'right
                  'left)))
        ;; This is used for sorting.
-       (setf (xtable-column--numerical column)
+       (setf (pgmacstbl-column--numerical column)
              (elt numerical index))
        column)
-     (xtable-columns table))))
+     (pgmacstbl-columns table))))
 
-(defun xtable--spacer (table)
-  (xtable--compute-width table (xtable-separator-width table)))
+(defun pgmacstbl--spacer (table)
+  (pgmacstbl--compute-width table (pgmacstbl-separator-width table)))
 
-(defun xtable--recompute-cache (table)
-  (let* ((data (xtable--compute-cache table))
-         (widths (xtable--compute-widths table data)))
-    (setf (gethash (xtable--cache-key) (slot-value table '-cache))
+(defun pgmacstbl--recompute-cache (table)
+  (let* ((data (pgmacstbl--compute-cache table))
+         (widths (pgmacstbl--compute-widths table data)))
+    (setf (gethash (pgmacstbl--cache-key) (slot-value table '-cache))
           (list data widths))))
 
-(defun xtable--ensure-cache (table)
-  (or (xtable--cache table)
-      (xtable--recompute-cache table)))
+(defun pgmacstbl--ensure-cache (table)
+  (or (pgmacstbl--cache table)
+      (pgmacstbl--recompute-cache table)))
 
-(defun xtable-insert (table)
-  (let* ((spacer (xtable--spacer table))
+(defun pgmacstbl-insert (table)
+  (let* ((spacer (pgmacstbl--spacer table))
          (start (point))
-         (ellipsis (if (xtable-ellipsis table)
+         (ellipsis (if (pgmacstbl-ellipsis table)
                        (propertize (truncate-string-ellipsis)
-                                   'face (xtable-face table))
+                                   'face (pgmacstbl-face table))
                      ""))
          (ellipsis-width (string-pixel-width ellipsis))
          ;; We maintain a cache per screen/window width, so that we render
          ;; correctly if Emacs is open on two different screens (or the
          ;; user resizes the frame).
-         (widths (nth 1 (xtable--ensure-cache table))))
+         (widths (nth 1 (pgmacstbl--ensure-cache table))))
     ;; Don't insert any header or header line if the user hasn't
     ;; specified the columns.
     (when (slot-value table '-has-column-spec)
-      (if (xtable-use-header-line table)
-          (xtable--set-header-line table widths spacer)
+      (if (pgmacstbl-use-header-line table)
+          (pgmacstbl--set-header-line table widths spacer)
         ;; Insert the header line directly into the buffer, and put a
         ;; keymap to be able to sort the columns there (by clicking on
         ;; them).
-        (xtable--insert-header-line table widths spacer)
+        (pgmacstbl--insert-header-line table widths spacer)
         (add-text-properties start (point)
-                             (list 'keymap xtable-header-line-map
+                             (list 'keymap pgmacstbl-header-line-map
                                    'rear-nonsticky t
-                                   'xtable table))
+                                   'pgmacstbl table))
         (setq start (point))))
-    (xtable--sort table)
+    (pgmacstbl--sort table)
     ;; Insert the data.
     (let ((line-number 0))
-      (dolist (line (car (xtable--cache table)))
-        (xtable--insert-line table line line-number widths spacer
+      (dolist (line (car (pgmacstbl--cache table)))
+        (pgmacstbl--insert-line table line line-number widths spacer
                              ellipsis ellipsis-width)
         (setq line-number (1+ line-number))))
     (add-text-properties start (point)
                          (list 'rear-nonsticky t
-                               'xtable table))
+                               'pgmacstbl table))
     (goto-char start)))
 
-(defun xtable--insert-line (table line line-number widths spacer
+(defun pgmacstbl--insert-line (table line line-number widths spacer
                                   &optional ellipsis ellipsis-width)
   (let ((start (point))
-        (columns (xtable-columns table))
+        (columns (pgmacstbl-columns table))
         (column-colors
-         (and (xtable-column-colors table)
-              (if (xtable-row-colors table)
+         (and (pgmacstbl-column-colors table)
+              (if (pgmacstbl-row-colors table)
                   (elt (slot-value table '-cached-colors)
-                       (mod line-number (length (xtable-row-colors table))))
+                       (mod line-number (length (pgmacstbl-row-colors table))))
                 (slot-value table '-cached-colors))))
-        (divider (xtable-divider table))
+        (divider (pgmacstbl-divider table))
         (keymap (slot-value table '-cached-keymap)))
     (seq-do-indexed
      (lambda (elem index)
@@ -498,28 +500,28 @@ This also updates the displayed table."
              (pre-computed (nth 2 elem)))
          ;; See if we have any formatters here.
          (cond
-          ((xtable-column-formatter column)
-           (setq value (funcall (xtable-column-formatter column) value)
+          ((pgmacstbl-column-formatter column)
+           (setq value (funcall (pgmacstbl-column-formatter column) value)
                  pre-computed nil))
-          ((xtable-formatter table)
-           (setq value (funcall (xtable-formatter table)
+          ((pgmacstbl-formatter table)
+           (setq value (funcall (pgmacstbl-formatter table)
                                 value index table)
                  pre-computed nil)))
          (let ((displayed
                 ;; Allow any displayers to have their say.
                 (cond
-                 ((xtable-column-displayer column)
-                  (funcall (xtable-column-displayer column)
+                 ((pgmacstbl-column-displayer column)
+                  (funcall (pgmacstbl-column-displayer column)
                            value (elt widths index) table))
-                 ((xtable-displayer table)
-                  (funcall (xtable-displayer table)
+                 ((pgmacstbl-displayer table)
+                  (funcall (pgmacstbl-displayer table)
                            value index (elt widths index) table))
                  (pre-computed
                   ;; If we don't have a displayer, use the pre-made
                   ;; (cached) string value.
                   (if (> (nth 1 elem) (elt widths index))
                       (concat
-                       (xtable--limit-string
+                       (pgmacstbl--limit-string
                         pre-computed (- (elt widths index)
                                         (or ellipsis-width 0)))
                        ellipsis)
@@ -528,7 +530,7 @@ This also updates the displayed table."
                  (t
                   (if (> (string-pixel-width value) (elt widths index))
                       (concat
-                       (xtable--limit-string
+                       (pgmacstbl--limit-string
                         value (- (elt widths index)
                                  (or ellipsis-width 0)))
                        ellipsis)
@@ -536,7 +538,7 @@ This also updates the displayed table."
                (start (point))
                ;; Don't insert the separator after the final column.
                (last (= index (- (length line) 2))))
-           (if (eq (xtable-column-align column) 'left)
+           (if (eq (pgmacstbl-column-align column) 'left)
                (progn
                  (insert displayed)
                  (insert (propertize
@@ -557,7 +559,7 @@ This also updates the displayed table."
                (insert (propertize " " 'display
                                    (list 'space
                                          :width (list spacer))))))
-           (put-text-property start (point) 'xtable-column index)
+           (put-text-property start (point) 'pgmacstbl-column index)
            (put-text-property start (point) 'keymap keymap)
            (when column-colors
              (add-face-text-property
@@ -568,27 +570,27 @@ This also updates the displayed table."
              (setq start (point))))))
      (cdr line))
     (insert "\n")
-    (put-text-property start (point) 'xtable-object (car line))
+    (put-text-property start (point) 'pgmacstbl-object (car line))
     (unless column-colors
       (when-let ((row-colors (slot-value table '-cached-colors)))
         (add-face-text-property
          start (point)
          (elt row-colors (mod line-number (length row-colors))))))))
 
-(defun xtable--cache-key ()
+(defun pgmacstbl--cache-key ()
   (cons (frame-terminal) (window-width)))
 
-(defun xtable--cache (table)
-  (gethash (xtable--cache-key) (slot-value table '-cache)))
+(defun pgmacstbl--cache (table)
+  (gethash (pgmacstbl--cache-key) (slot-value table '-cache)))
 
-(defun xtable--clear-cache (table)
-  (setf (gethash (xtable--cache-key) (slot-value table '-cache)) nil))
+(defun pgmacstbl--clear-cache (table)
+  (setf (gethash (pgmacstbl--cache-key) (slot-value table '-cache)) nil))
 
-(defun xtable--sort (table)
-  (pcase-dolist (`(,index . ,direction) (xtable-sort-by table))
-    (let ((cache (xtable--cache table))
-          (numerical (xtable-column--numerical
-                      (elt (xtable-columns table) index)))
+(defun pgmacstbl--sort (table)
+  (pcase-dolist (`(,index . ,direction) (pgmacstbl-sort-by table))
+    (let ((cache (pgmacstbl--cache table))
+          (numerical (pgmacstbl-column--numerical
+                      (elt (pgmacstbl-columns table) index)))
           (numcomp (if (eq direction 'descend)
                        #'> #'<))
           (stringcomp (if (eq direction 'descend)
@@ -609,8 +611,8 @@ This also updates the displayed table."
                                (car c2)
                              (format "%s" (car c2))))))))))))
 
-(defun xtable--indicator (table index)
-  (let ((order (car (last (xtable-sort-by table)))))
+(defun pgmacstbl--indicator (table index)
+  (let ((order (car (last (pgmacstbl-sort-by table)))))
     (if (eq index (car order))
         ;; We're sorting by this column last, so return an indicator.
         (catch 'found
@@ -623,52 +625,52 @@ This also updates the displayed table."
               (throw 'found (string candidate)))))
       "")))
 
-(defun xtable--insert-header-line (table widths spacer)
+(defun pgmacstbl--insert-header-line (table widths spacer)
   (cl-flet ((space-for (width)
               (propertize " " 'display (list 'space :width (list width)))))
     (let ((start (point))
-          (divider (xtable-divider table))
+          (divider (pgmacstbl-divider table))
           (cmap (define-keymap
-                  "<header-line> <drag-mouse-1>" #'xtable--drag-resize-column
+                  "<header-line> <drag-mouse-1>" #'pgmacstbl--drag-resize-column
                   "<header-line> <down-mouse-1>" #'ignore))
           (dmap (define-keymap
                   "<header-line> <drag-mouse-1>"
                   (lambda (e)
                     (interactive "e")
-                    (xtable--drag-resize-column e t))
+                    (pgmacstbl--drag-resize-column e t))
                   "<header-line> <down-mouse-1>" #'ignore)))
       (seq-do-indexed
        (lambda (column index)
          (let* ((name (propertize
-                       (xtable-column-name column)
+                       (pgmacstbl-column-name column)
                        'face (list 'pgmacs-table-header)
                        'mouse-face 'header-line-highlight
                        'keymap cmap))
                 (start (point))
-                (indicator (xtable--indicator table index))
+                (indicator (pgmacstbl--indicator table index))
                 (indicator-width (string-pixel-width indicator))
-                (last (= index (1- (length (xtable-columns table)))))
+                (last (= index (1- (length (pgmacstbl-columns table)))))
                 (displayed (if (> (string-pixel-width name)
                                   (- (elt widths index) indicator-width))
-                               (xtable--limit-string
+                               (pgmacstbl--limit-string
                                 name (- (elt widths index) indicator-width))
                              name)))
            (let ((fill-width (- (elt widths index)
                                 (string-pixel-width displayed)
                                 indicator-width)))
-             (if (eq (xtable-column-align column) 'left)
+             (if (eq (pgmacstbl-column-align column) 'left)
                  (insert displayed (space-for fill-width) indicator)
                (insert (space-for fill-width) displayed indicator)))
            (unless last
              (insert (space-for spacer)))
            (when (and divider (not last))
              (insert (propertize divider 'keymap dmap)))
-           (put-text-property start (point) 'xtable-column index)))
-       (xtable-columns table))
+           (put-text-property start (point) 'pgmacstbl-column index)))
+       (pgmacstbl-columns table))
       (insert "\n")
       (add-face-text-property start (point) 'header-line))))
 
-(defun xtable--drag-resize-column (e &optional next)
+(defun pgmacstbl--drag-resize-column (e &optional next)
   "Resize the column by dragging.
 If NEXT, do the next column."
   (interactive "e")
@@ -680,7 +682,7 @@ If NEXT, do the next column."
              ;; divider.
              (or (get-text-property (if obj (cdr obj)
                                       (posn-point pos-start))
-			            'xtable-column
+			            'pgmacstbl-column
 			            (car obj))
                  ;; For reasons of efficiency, we don't have that in
                  ;; the buffer itself, so find the column.
@@ -689,59 +691,59 @@ If NEXT, do the next column."
                    (1+
                     (get-text-property
                      (prop-match-beginning
-                      (text-property-search-backward 'xtable-column))
-                     'xtable-column)))))
+                      (text-property-search-backward 'pgmacstbl-column))
+                     'pgmacstbl-column)))))
             (start-x (car (posn-x-y pos-start)))
             (end-x (car (posn-x-y (event-end e)))))
         (when (or (> column 0) next)
-          (xtable--alter-column-width (xtable-current-table)
+          (pgmacstbl--alter-column-width (pgmacstbl-current-table)
                                       (if next
                                           column
                                         (1- column))
                                       (- end-x start-x)))))))
 
-(defun xtable--recompute-numerical (table line)
+(defun pgmacstbl--recompute-numerical (table line)
   "Recompute numericalness of columns if necessary."
-  (let ((columns (xtable-columns table))
+  (let ((columns (pgmacstbl-columns table))
         (recompute nil))
     (seq-do-indexed
      (lambda (elem index)
-       (when (and (xtable-column--numerical (elt columns index))
+       (when (and (pgmacstbl-column--numerical (elt columns index))
                   (not (numberp elem)))
          (setq recompute t)))
      line)
     (when recompute
-      (xtable--compute-columns table))))
+      (pgmacstbl--compute-columns table))))
 
-(defun xtable--set-header-line (table widths spacer)
+(defun pgmacstbl--set-header-line (table widths spacer)
   (setq header-line-format
         (string-replace
          "%" "%%"
          (with-temp-buffer
            (insert " ")
-           (xtable--insert-header-line table widths spacer)
+           (pgmacstbl--insert-header-line table widths spacer)
            ;; Align the header with the (possibly) fringed buffer text.
            (put-text-property
             (point-min) (1+ (point-min))
             'display '(space :align-to 0))
            (buffer-substring (point-min) (1- (point-max))))))
-  (xtable-header-mode 1))
+  (pgmacstbl-header-mode 1))
 
-(defun xtable--limit-string (string pixels)
+(defun pgmacstbl--limit-string (string pixels)
   (while (and (length> string 0)
               (> (string-pixel-width string) pixels))
     (setq string (substring string 0 (1- (length string)))))
   string)
 
-(defun xtable--char-width (table)
-  (string-pixel-width (propertize "x" 'face (xtable-face table))))
+(defun pgmacstbl--char-width (table)
+  (string-pixel-width (propertize "x" 'face (pgmacstbl-face table))))
 
-(defun xtable--compute-width (table spec)
+(defun pgmacstbl--compute-width (table spec)
   (cond
    ((numberp spec)
-    (* spec (xtable--char-width table)))
+    (* spec (pgmacstbl--char-width table)))
    ((string-match "\\([0-9.]+\\)ex" spec)
-    (* (string-to-number (match-string 1 spec)) (xtable--char-width table)))
+    (* (string-to-number (match-string 1 spec)) (pgmacstbl--char-width table)))
    ((string-match "\\([0-9.]+\\)px" spec)
     (string-to-number (match-string 1 spec)))
    ((string-match "\\([0-9.]+\\)%" spec)
@@ -750,7 +752,7 @@ If NEXT, do the next column."
    (t
     (error "Invalid spec: %s" spec))))
 
-(defun xtable--compute-widths (table cache)
+(defun pgmacstbl--compute-widths (table cache)
   "Compute the display widths for TABLE."
   (seq-into
    (seq-map-indexed
@@ -758,195 +760,193 @@ If NEXT, do the next column."
       (let ((width
              (or
               ;; Explicit widths.
-              (and (xtable-column-width column)
-                   (xtable--compute-width table (xtable-column-width column)))
+              (and (pgmacstbl-column-width column)
+                   (pgmacstbl--compute-width table (pgmacstbl-column-width column)))
               ;; Compute based on the displayed widths of
               ;; the data.
               (seq-max (seq-map (lambda (elem)
                                   (nth 1 (elt (cdr elem) index)))
                                 cache)))))
         ;; Let min-width/max-width specs have their say.
-        (when-let ((min-width (and (xtable-column-min-width column)
-                                   (xtable--compute-width
-                                    table (xtable-column-min-width column)))))
+        (when-let ((min-width (and (pgmacstbl-column-min-width column)
+                                   (pgmacstbl--compute-width
+                                    table (pgmacstbl-column-min-width column)))))
           (setq width (max width min-width)))
-        (when-let ((max-width (and (xtable-column-max-width column)
-                                   (xtable--compute-width
-                                    table (xtable-column-max-width column)))))
+        (when-let ((max-width (and (pgmacstbl-column-max-width column)
+                                   (pgmacstbl--compute-width
+                                    table (pgmacstbl-column-max-width column)))))
           (setq width (min width max-width)))
         width))
-    (xtable-columns table))
+    (pgmacstbl-columns table))
    'vector))
 
-(defun xtable--compute-cache (table)
+(defun pgmacstbl--compute-cache (table)
   (seq-map
    (lambda (object)
-     (cons object (xtable--compute-cached-line table object)))
-   (xtable-objects table)))
+     (cons object (pgmacstbl--compute-cached-line table object)))
+   (pgmacstbl-objects table)))
 
-(defun xtable--compute-cached-line (table object)
+(defun pgmacstbl--compute-cached-line (table object)
   (seq-map-indexed
    (lambda (column index)
-     (let* ((value (xtable--get-value object index column table))
+     (let* ((value (pgmacstbl--get-value object index column table))
             (string (if (stringp value)
                         (copy-sequence value)
                       (format "%s" value))))
        (add-face-text-property 0 (length string)
-                               (xtable-face table)
+                               (pgmacstbl-face table)
                                t string)
        ;; We stash the computed width and string here -- if there are
        ;; no formatters/displayers, we'll be using the string, and
        ;; then won't have to recreate it.
        (list value (string-pixel-width string) string)))
-   (xtable-columns table)))
+   (pgmacstbl-columns table)))
 
-(defun xtable--make-keymap (table)
-  (let ((map (if (or (xtable-actions table)
-                     (xtable-keymap table))
-                 (copy-keymap xtable-map)
-               xtable-map)))
-    (when-let ((actions (xtable-actions table)))
+(defun pgmacstbl--make-keymap (table)
+  (let ((map (if (or (pgmacstbl-actions table)
+                     (pgmacstbl-keymap table))
+                 (copy-keymap pgmacstbl-map)
+               pgmacstbl-map)))
+    (when-let ((actions (pgmacstbl-actions table)))
       (while actions
         (funcall (lambda (key binding)
                    (keymap-set map key
                                (lambda (object)
-                                 (interactive (list (xtable-current-object)))
+                                 (interactive (list (pgmacstbl-current-object)))
                                  (funcall binding object))))
                  (car actions) (cadr actions))
         (setq actions (cddr actions))))
-    (if (xtable-keymap table)
+    (if (pgmacstbl-keymap table)
         (progn
-          (setf (xtable-keymap table)
-                (copy-keymap (xtable-keymap table)))
+          (setf (pgmacstbl-keymap table)
+                (copy-keymap (pgmacstbl-keymap table)))
           ;; Respect any previously set parent keymaps.
-          (set-keymap-parent (xtable-keymap table)
-                             (if (keymap-parent (xtable-keymap table))
+          (set-keymap-parent (pgmacstbl-keymap table)
+                             (if (keymap-parent (pgmacstbl-keymap table))
                                  (append (ensure-list
-                                          (xtable-keymap table))
+                                          (pgmacstbl-keymap table))
                                          (list map))
                                map))
-          (xtable-keymap table))
+          (pgmacstbl-keymap table))
       map)))
 
-(defun xtable-revert ()
+(defun pgmacstbl-revert ()
   "Regenerate the table under point."
-  (let ((table (xtable-current-table))
-        (object (xtable-current-object))
-        (column (xtable-current-column))
+  (let ((table (pgmacstbl-current-table))
+        (object (pgmacstbl-current-object))
+        (column (pgmacstbl-current-column))
         (inhibit-read-only t))
     (unless table
       (user-error "No table under point"))
-    (delete-region (xtable-beginning-of-table) (xtable-end-of-table))
-    (xtable-insert table)
+    (delete-region (pgmacstbl-beginning-of-table) (pgmacstbl-end-of-table))
+    (pgmacstbl-insert table)
     (when object
-      (xtable-goto-object object))
+      (pgmacstbl-goto-object object))
     (when column
-      (xtable-goto-column column))))
+      (pgmacstbl-goto-column column))))
 
-(defun xtable--widths (table)
-  (nth 1 (xtable--ensure-cache table)))
+(defun pgmacstbl--widths (table)
+  (nth 1 (pgmacstbl--ensure-cache table)))
 
 ;;; Commands.
 
-(defvar-keymap xtable-header-mode-map
-  "<header-line> <mouse-1>" 'xtable-header-line-sort
-  "<header-line> <mouse-2>" 'xtable-header-line-sort)
+(defvar-keymap pgmacstbl-header-mode-map
+  "<header-line> <mouse-1>" 'pgmacstbl-header-line-sort
+  "<header-line> <mouse-2>" 'pgmacstbl-header-line-sort)
 
-(define-minor-mode xtable-header-mode
-  "Minor mode for buffers with xtables with headers."
-  :keymap xtable-header-mode-map)
+(define-minor-mode pgmacstbl-header-mode
+  "Minor mode for buffers with pgmacstbls with headers."
+  :keymap pgmacstbl-header-mode-map)
 
-(defun xtable-narrow-current-column (&optional n)
+(defun pgmacstbl-narrow-current-column (&optional n)
   "Narrow the current column by N characters.
 If N isn't given, N defaults to 1.
 
 Interactively, N is the prefix argument."
   (interactive "p")
-  (let* ((table (xtable-current-table))
-         (column (xtable-current-column)))
+  (let* ((table (pgmacstbl-current-table))
+         (column (pgmacstbl-current-column)))
     (unless column
       (user-error "No column under point"))
-    (xtable--alter-column-width table column
-                                (- (* (xtable--char-width table) (or n 1))))))
+    (pgmacstbl--alter-column-width table column
+                                (- (* (pgmacstbl--char-width table) (or n 1))))))
 
-(defun xtable--alter-column-width (table column delta)
-  (let ((widths (xtable--widths table)))
+(defun pgmacstbl--alter-column-width (table column delta)
+  (let ((widths (pgmacstbl--widths table)))
     (setf (aref widths column)
-          (max (* (xtable--char-width table) 2)
+          (max (* (pgmacstbl--char-width table) 2)
                (+ (aref widths column) delta)))
     ;; Store the width so it'll be respected on a revert.
-    (setf (xtable-column-width (elt (xtable-columns table) column))
+    (setf (pgmacstbl-column-width (elt (pgmacstbl-columns table) column))
           (format "%dpx" (aref widths column)))
-    (xtable-revert)))
+    (pgmacstbl-revert)))
 
-(defun xtable-widen-current-column (&optional n)
+(defun pgmacstbl-widen-current-column (&optional n)
   "Widen the current column by N characters.
 If N isn't given, N defaults to 1.
 
 Interactively, N is the prefix argument."
   (interactive "p")
-  (xtable-narrow-current-column (- n)))
+  (pgmacstbl-narrow-current-column (- n)))
 
-(defun xtable-previous-column ()
+(defun pgmacstbl-previous-column ()
   "Go to the previous column."
   (interactive)
-  (xtable-goto-column
-   (max 0 (1- (or (xtable-current-column)
-                  (length (xtable--widths (xtable-current-table))))))))
+  (pgmacstbl-goto-column
+   (max 0 (1- (or (pgmacstbl-current-column)
+                  (length (pgmacstbl--widths (pgmacstbl-current-table))))))))
 
-(defun xtable-next-column ()
+(defun pgmacstbl-next-column ()
   "Go to the next column."
   (interactive)
-  (when (xtable-current-column)
-    (xtable-goto-column
-     (min (1- (length (xtable--widths (xtable-current-table))))
-          (1+ (xtable-current-column))))))
+  (when (pgmacstbl-current-column)
+    (pgmacstbl-goto-column
+     (min (1- (length (pgmacstbl--widths (pgmacstbl-current-table))))
+          (1+ (pgmacstbl-current-column))))))
 
-(defun xtable-revert-command ()
+(defun pgmacstbl-revert-command ()
   "Re-query data and regenerate the table under point."
   (interactive)
-  (let ((table (xtable-current-table)))
-    (when (xtable-objects-function table)
-      (setf (xtable-objects table) (funcall (xtable-objects-function table))))
-    (xtable--clear-cache table))
-  (xtable-revert))
+  (let ((table (pgmacstbl-current-table)))
+    (when (pgmacstbl-objects-function table)
+      (setf (pgmacstbl-objects table) (funcall (pgmacstbl-objects-function table))))
+    (pgmacstbl--clear-cache table))
+  (pgmacstbl-revert))
 
-(defun xtable-sort-by-current-column ()
+(defun pgmacstbl-sort-by-current-column ()
   "Sort the table under point by the column under point."
   (interactive)
-  (unless (xtable-current-column)
+  (unless (pgmacstbl-current-column)
     (user-error "No current column"))
-  (let* ((table (xtable-current-table))
-         (last (car (last (xtable-sort-by table))))
-         (index (xtable-current-column)))
+  (let* ((table (pgmacstbl-current-table))
+         (last (car (last (pgmacstbl-sort-by table))))
+         (index (pgmacstbl-current-column)))
     ;; First prune any previous appearance of this column.
-    (setf (xtable-sort-by table)
-          (delq (assq index (xtable-sort-by table))
-                (xtable-sort-by table)))
+    (setf (pgmacstbl-sort-by table)
+          (delq (assq index (pgmacstbl-sort-by table))
+                (pgmacstbl-sort-by table)))
     ;; Then insert this as the last sort key.
-    (setf (xtable-sort-by table)
-          (append (xtable-sort-by table)
+    (setf (pgmacstbl-sort-by table)
+          (append (pgmacstbl-sort-by table)
                   (list (cons index
                               (if (eq (car last) index)
                                   (if (eq (cdr last) 'ascend)
                                       'descend
                                     'ascend)
                                 'ascend))))))
-  (xtable-revert))
+  (pgmacstbl-revert))
 
-(defun xtable-header-line-sort (e)
-  "Sort a xtable from the header line."
+(defun pgmacstbl-header-line-sort (e)
+  "Sort a pgmacstbl from the header line."
   (interactive "e")
   (let* ((pos (event-start e))
 	 (obj (posn-object pos)))
     (with-current-buffer (window-buffer (posn-window pos))
       (goto-char (point-min))
-      (xtable-goto-column
+      (pgmacstbl-goto-column
        (get-text-property (if obj (cdr obj) (posn-point pos))
-			  'xtable-column
+			  'pgmacstbl-column
 			  (car obj)))
-      (xtable-sort-by-current-column))))
+      (pgmacstbl-sort-by-current-column))))
 
-(provide 'xtable)
-
-;;; xtable.el ends here
+;;; pgmacstbl.el ends here
