@@ -2,7 +2,6 @@
 
 ;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
 ;; Copyright (C) 2024 Eric Marsden
-;; Package-Requires: ((emacs "29.1"))
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This library is distributed under the terms of the GNU General Public License
@@ -948,5 +947,7 @@ Interactively, N is the prefix argument."
 			  'pgmacstbl-column
 			  (car obj)))
       (pgmacstbl-sort-by-current-column))))
+
+(provide 'pgmacstbl)
 
 ;;; pgmacstbl.el ends here

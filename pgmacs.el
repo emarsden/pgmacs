@@ -20,6 +20,7 @@
 (require 'widget)
 (require 'wid-edit)
 (require 'pg)
+(require 'pgmacstbl)
 
 (defgroup pgmacs nil
   "Edit a PostgreSQL database from Emacs."
