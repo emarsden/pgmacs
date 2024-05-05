@@ -1,6 +1,11 @@
 # Changelog
 
 
+## [0.6] - Unreleased
+
+- New keybinding in the table-list buffer: `r` allows you to rename the table at point.
+
+
 ## [0.5] - 2024-04-27
 
 - Information on available and installed PostgreSQL extensions is included in the buffer generated

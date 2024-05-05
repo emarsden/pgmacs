@@ -50,7 +50,7 @@
 (defcustom pgmacs-row-limit 1000
   "The maximum number of rows to retrieve per database query.
 If more rows are present in the PostgreSQL query result, the display of results
-will be paginated. You may wish to set this to a low value if accessing
+will be paginated.  You may wish to set this to a low value if accessing
 PostgreSQL over a slow network link."
   :type 'number
   :group 'pgmacs)
@@ -332,7 +332,7 @@ PRIMARY-KEYS."
 
 (defun pgmacs--edit-value-widget (row primary-keys)
   "Edit and update in PostgreSQL the value at point in ROW.
-Uses a dedicated widget buffer. Editing is only possible if the current table
+Uses a dedicated widget buffer.  Editing is only possible if the current table
 has primary keys, named in the list PRIMARY-KEYS."
   (when (null primary-keys)
       (error "Can't edit content of a table that has no PRIMARY KEY"))
@@ -468,7 +468,7 @@ Uses the minibuffer to prompt for new values."
 
 (defun pgmacs--insert-row-widget (current-row)
   "Insert a new row of data into the current table after CURRENT-ROW.
-Uses a widget-based buffer to prompt for new values. Updates the
+Uses a widget-based buffer to prompt for new values.  Updates the
 PostgreSQL database."
   (let* ((con pgmacs--con)
          (table pgmacs--table)
@@ -627,7 +627,7 @@ Uses PostgreSQL connection CON."
 (defun pgmacs--column-info (con table column)
   "Return a string containing metainformation on COLUMN in TABLE.
 The metainformation includes the type name, whether the column is a PRIMARY KEY,
-whether it is affected by constraints such as UNIQUE. Information is retrieved
+whether it is affected by constraints such as UNIQUE.  Information is retrieved
 over the PostgreSQL connection CON."
   (let* ((schema (if (pg-qualified-name-p table)
                      (pg-qualified-name-schema table)
@@ -1084,13 +1084,13 @@ Uses PostgreSQL connection CON."
     (pgmacs--stop-progress-reporter)))
 
 
-;; If the cursor is on the Comment column,
-;; allow the user to set the table comment. Otherwise, display the table in a separate buffer.
-(defun pgmacs--dbbuf-handle-RET (table-row)
+;; If the cursor is on the Comment column, allow the user to set the table comment. Otherwise,
+;; display the table in a separate buffer.
+(defun pgmacs--table-list-RET (table-row)
   "Called on RET on a line in the list-of-tables buffer TABLE-ROW."
-  (let* ((pgmacstbl (pgmacstbl-current-table))
+  (let* ((tbl (pgmacstbl-current-table))
          (col-id (pgmacstbl-current-column))
-         (col (nth col-id (pgmacstbl-columns pgmacstbl)))
+         (col (nth col-id (pgmacstbl-columns tbl)))
          (col-name (pgmacstbl-column-name col)))
     (cond ((string= "Comment" col-name)
            (let ((comment (read-from-minibuffer "New table comment: "))
@@ -1098,16 +1098,16 @@ Uses PostgreSQL connection CON."
              (setf (pg-table-comment pgmacs--con (car table-row)) comment)
              (setf (nth col-id new-row) comment)
              ;; pgmacstbl-update-object doesn't work, so insert then delete old row
-             (pgmacstbl-insert-object pgmacstbl new-row table-row)
-             (pgmacstbl-remove-object pgmacstbl table-row)
+             (pgmacstbl-insert-object tbl new-row table-row)
+             (pgmacstbl-remove-object tbl table-row)
              (pgmacs--redraw-pgmacstbl)))
           ;; TODO perhaps change owner (if we are superuser)
           (t
            (pgmacs--display-table (car table-row))))))
 
-(defun pgmacs--delete-table (table-row)
+(defun pgmacs--table-list-delete (table-row)
   "Delete (drop) the PostgreSQL table specified by TABLE-ROW."
-  (let* ((pgmacstbl (pgmacstbl-current-table))
+  (let* ((tbl (pgmacstbl-current-table))
          (table (car table-row))
          (t-id (pg-escape-identifier table)))
     (when (yes-or-no-p (format "Really drop PostgreSQL table %s? " t-id))
@@ -1115,8 +1115,23 @@ Uses PostgreSQL connection CON."
       (let* ((sql (format "DROP TABLE %s" t-id))
              (res (pg-exec pgmacs--con sql)))
         (pgmacs--notify "%s" (pg-result res :status))
-        (pgmacstbl-remove-object pgmacstbl table-row)
+        (pgmacstbl-remove-object tbl table-row)
         (pgmacs--redraw-pgmacstbl)))))
+
+(defun pgmacs--table-list-rename (table-row)
+  "Rename the PostgreSQL table specified by TABLE-ROW."
+  (let* ((tbl (pgmacstbl-current-table))
+         (table (car table-row))
+         (t-id (pg-escape-identifier table))
+         (new (read-string (format "Rename table %s to: " t-id)))
+         (new-id (pg-escape-identifier new)))
+    (let* ((sql (format "ALTER TABLE %s RENAME TO %s" t-id new-id))
+           (res (pg-exec pgmacs--con sql)))
+      (pgmacs--notify "%s" (pg-result res :status))
+      ;; Redraw in the table-list buffer.
+      (setf (cl-first table-row) new)
+      (pgmacs--redraw-pgmacstbl))))
+
 
 (defun pgmacs--table-list-help (&rest _ignore)
   "Show keybindings active in a table-list buffer."
@@ -1130,6 +1145,7 @@ Uses PostgreSQL connection CON."
     (let ((inhibit-read-only t))
       (shw "RET" "New buffer to edit this table")
       (shw "<deletechar>" "Delete the table at point")
+      (shw "r" "Rename the table at point")
       (shw "e" "New buffer with output from SQL query")
       (shw "<" "Go to the first table in the table list")
       (shw ">" "Go to the last table in the table list")
@@ -1184,8 +1200,9 @@ Uses PostgreSQL connection CON."
                   ;; :column-colors '("#202020" "#404040")
                   :objects (pgmacs--list-tables)
                   :actions '("h" pgmacs--table-list-help
-                             "RET" pgmacs--dbbuf-handle-RET
-                             "<deletechar>" pgmacs--delete-table
+                             "RET" pgmacs--table-list-RET
+                             "<deletechar>" pgmacs--table-list-delete
+                             "r" pgmacs--table-list-rename
                              "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                              ;; the functions pgmacstbl-beginning-of-table and pgmacstbl-end-of-table don't work when
                              ;; we have inserted text before the pgmacstbl.
