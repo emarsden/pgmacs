@@ -137,8 +137,8 @@ PostgreSQL over a slow network link."
 Applies format string FMT to ARGS."
   (message (concat "PostgreSQL> " (apply #'format (cons fmt args)))))
 
-(defun pgmacs--value-formatter (type-name)
-  "Return a function that formats a value of type TYPE-NAME."
+(defun pgmacs--value-formatter-not-null (type-name)
+  "Return a function that formats a non-NULL value of type TYPE-NAME."
   (cond ((string= type-name "date")
          (lambda (val) (format-time-string "%Y-%m-%d" val)))
         ((or (string= type-name "timestamp")
@@ -161,6 +161,11 @@ Applies format string FMT to ARGS."
          #'json-serialize)
         (t
          (lambda (val) (format "%s" val)))))
+
+(defun pgmacs--value-formatter (type-name)
+  "Return a function that formats a value of type TYPE-NAME."
+  (let ((fmt (pgmacs--value-formatter-not-null type-name)))
+    (lambda (val) (if val (funcall fmt val) ""))))
 
 (defun pgmacs--value-width (type-name)
   "Width for a column containing elements of type TYPE-NAME."
@@ -897,6 +902,7 @@ object."
       (let ((colinfo (list)))
         (dolist (col column-names)
           (push (format "%s: %s" col (pgmacs--column-info con table col)) colinfo))
+        (setq colinfo (reverse colinfo))
         (let ((last (pop colinfo)))
           (dolist (c colinfo)
             (insert "├ ")
@@ -1120,8 +1126,7 @@ Uses PostgreSQL connection CON."
 
 (defun pgmacs--table-list-rename (table-row)
   "Rename the PostgreSQL table specified by TABLE-ROW."
-  (let* ((tbl (pgmacstbl-current-table))
-         (table (car table-row))
+  (let* ((table (car table-row))
          (t-id (pg-escape-identifier table))
          (new (read-string (format "Rename table %s to: " t-id)))
          (new-id (pg-escape-identifier new)))
