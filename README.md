@@ -30,17 +30,19 @@ It allows you to:
 
 ## Getting started
 
-You will need the [pg-el library](https://github.com/emarsden/pg-el/) installed, available in
-[MELPA](https://melpa.org/):
-
-    M-x package-install RET pg
-
 In your Emacs initialization file, include the following to check out the latest version of the code
-from the git repository:
+from the git repository, as well as the [pg-el dependency](https://github.com/emarsden/pg-el/):
 
-    (require 'pg)
-    (package-vc-install
-       '(pgmacs :url "https://github.com/emarsden/pgmacs.git"))
+    ;; this not necessary if using an Emacs 30 pre-release
+    (unless (package-installed-p 'vc-use-package)
+      (package-vc-install "https://github.com/slotThe/vc-use-package"))
+    (require 'vc-use-package)
+
+    (use-package pg
+      :vc (:fetcher github :repo emarsden/pg-el))
+    (use-package pgmacs
+      :vc (:fetcher github :repo emarsden/pgmacs))
+
 
 To load PGmacs, say 
 
