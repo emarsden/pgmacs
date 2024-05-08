@@ -63,6 +63,8 @@ PostgreSQL over a slow network link."
 (defvar pgmacs-mode-map (make-sparse-keymap))
 
 (keymap-set pgmacs-mode-map (kbd "q") 'bury-buffer)
+(keymap-set pgmacs-mode-map (kbd "h") 'pgmacs--table-list-help)
+(keymap-set pgmacs-mode-map (kbd "r") 'pgmacs--table-list-redraw)
 (keymap-set pgmacs-mode-map (kbd "e") (lambda (&rest _ignored) (pgmacs-run-sql)))
 
 (defun pgmacs-mode ()
@@ -762,6 +764,7 @@ Table names are schema-qualified if the schema is non-default."
 
 (defun pgmacs--row-list-help (&rest _ignore)
   "Open a buffer describing keybindings in a row-list buffer."
+  (interactive)
   (pop-to-buffer "*PGmacs row-list help*")
   (erase-buffer)
   (help-mode)
@@ -1038,6 +1041,7 @@ object."
 ;; TODO: allow input from a buffer which is set to sql-mode.
 (defun pgmacs-run-sql ()
   "Prompt for an SQL query and display the output in a dedicated buffer."
+  (interactive)
   (let ((sql (read-from-minibuffer "SQL query: ")))
     (pgmacs-show-result pgmacs--con sql)))
 
@@ -1139,8 +1143,9 @@ Uses PostgreSQL connection CON."
       (setf (cl-first table-row) new)
       (pgmacs--redraw-pgmacstbl))))
 
-(defun pgmacs--table-list-redraw (table-row)
+(defun pgmacs--table-list-redraw (&rest _ignore)
   "Refresh the PostgreSQL table-list buffer."
+  (interactive)
   (let ((con pgmacs--con))
     (kill-buffer)
     (pgmacs-open con)))
@@ -1148,6 +1153,7 @@ Uses PostgreSQL connection CON."
 
 (defun pgmacs--table-list-help (&rest _ignore)
   "Show keybindings active in a table-list buffer."
+  (interactive)
   (pop-to-buffer "*PGmacs table-list help*")
   (erase-buffer)
   (help-mode)
@@ -1156,7 +1162,7 @@ Uses PostgreSQL connection CON."
               (insert (propertize " → " 'face '(:foreground "gray")))
               (insert msg "\n")))
     (let ((inhibit-read-only t))
-      (shw "RET" "New buffer to edit this table")
+      (shw "RET" "Open a new buffer to browse/edit the table at point")
       (shw "<deletechar>" "Delete the table at point")
       (shw "r" "Rename the table at point")
       (shw "e" "New buffer with output from SQL query")
