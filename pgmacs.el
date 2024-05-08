@@ -551,7 +551,9 @@ PostgreSQL database."
 ;; Insert new row at current position based on content of our "kill ring".
 (defun pgmacs--yank-row (_current-row)
   "Insert a new row into the current table after the current row.
-The new row contents are based on the last copied row."
+The new row contents are based on the last copied row. Columns for which
+a default SQL value is defined (such as a SERIAL type) will take the
+default value instead of the last copied value."
   (unless pgmacs--kill-ring
     (error "PGmacs kill ring is empty"))
   (unless (eq (car pgmacs--kill-ring) pgmacs--table)
@@ -1137,6 +1139,12 @@ Uses PostgreSQL connection CON."
       (setf (cl-first table-row) new)
       (pgmacs--redraw-pgmacstbl))))
 
+(defun pgmacs--table-list-redraw (table-row)
+  "Refresh the PostgreSQL table-list buffer."
+  (let ((con pgmacs--con))
+    (kill-buffer)
+    (pgmacs-open con)))
+
 
 (defun pgmacs--table-list-help (&rest _ignore)
   "Show keybindings active in a table-list buffer."
@@ -1208,6 +1216,7 @@ Uses PostgreSQL connection CON."
                              "RET" pgmacs--table-list-RET
                              "<deletechar>" pgmacs--table-list-delete
                              "r" pgmacs--table-list-rename
+                             "g" pgmacs--table-list-redraw
                              "e" (lambda (&rest _ignored) (pgmacs-run-sql))
                              ;; the functions pgmacstbl-beginning-of-table and pgmacstbl-end-of-table don't work when
                              ;; we have inserted text before the pgmacstbl.

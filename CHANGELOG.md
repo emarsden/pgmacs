@@ -5,6 +5,11 @@
 
 - New keybinding in the table-list buffer: `r` allows you to rename the table at point.
 
+- New keybinding in the table-list buffer: `g` refreshes the table list display by retrieving all
+  the table metainformation again.
+
+- Improve the display of NULL column values.
+
 
 ## [0.5] - 2024-04-27
 
