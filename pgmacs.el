@@ -247,7 +247,7 @@ Applies format string FMT to ARGS."
      for col in cols
      for v in current-row
      do (puthash (pgmacstbl-column-name col) v ht))
-    (kill-new (json-encode ht))
+    (kill-new (json-serialize ht))
     (message "JSON copied to kill ring")))
 
 (defun pgmacs--read-value-minibuffer (name type prompt current-value)
