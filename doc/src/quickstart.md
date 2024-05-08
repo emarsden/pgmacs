@@ -1,16 +1,17 @@
 # Quickstart
 
-You will need the [pg-el library](https://github.com/emarsden/pg-el/) installed, available in
-the [MELPA](https://melpa.org/) package archive:
+In your Emacs initialization file, include the following to check out the latest version of the code
+from the git repository, as well as the [pg-el dependency](https://github.com/emarsden/pg-el/):
 
-    M-x package-install RET pg
+    ;; this not necessary if using an Emacs 30 pre-release
+    (unless (package-installed-p 'vc-use-package)
+      (package-vc-install "https://github.com/slotThe/vc-use-package"))
+    (require 'vc-use-package)
 
-PGmacs is not currently distributed in MELPA. In the meantime, include the following in your Emacs
-initialization file to check out the latest version of the code from the git repository:
-
-    (require 'pg)
-    (package-vc-install
-       '(pgmacs :url "https://github.com/emarsden/pgmacs.git"))
+    (use-package pg
+      :vc (:fetcher github :repo emarsden/pg-el))
+    (use-package pgmacs
+      :vc (:fetcher github :repo emarsden/pgmacs))
 
 
 ## Connecting to a PostgreSQL database
@@ -42,81 +43,22 @@ You can also open PGmacs with:
 
 
 
-## Browsing a table
+## The table list buffer
 
-From the buffer that displays a list of the tables in the database you are connected to, type `RET` on
-the name of a table to enter a table buffer. This presents some metainformation on the table and its
-columns, then the rows in the table.
+The table list buffer is the main PGmacs buffer. It shows some metainformation concerning the
+PostgreSQL backend that you are connected to (version, database size, etc.), followed by a table
+which includes one row per table in the database. 
 
-![Screenshot table](img/screenshot-table.png)
-
-If the table contains a large number of rows, the contents will be **paginated**, with `Next` and
-`Previous` buttons to move page by page. The number of rows in each page is determined by the
-variable `pgmacs-row-limit`.
-
-The following keys are bound when the point is located in the table: 
-
+The following keys are bound when the point is located in the table list buffer: 
 
 | Key       | Binding                                                                              |
 |-----------|--------------------------------------------------------------------------------------|
-| RET       | Edit the value at point in the minibuffer.                                           |
-| w         | Edit the value at point in a widget-based buffer.                                    |
-| DEL       | Delete the row at point.                                                             |
-| S         | Sort the table by the current column.                                                |
+| RET       | Open a new buffer to browse/edit the table at point.                                 |
+| DEL       | Delete the table at point.                                                           |
+| r         | Renamee the table at point.                                                          |
+| e         | Open a new buffer to display the result of an SQL query.                             |
+| <         | Move to the beginning of the table list.                                             |
+| >         | Move to the end of the table list.                                                   |
 | {         | Make the current column narrower.                                                    |
 | }         | Make the current column wider.                                                       |
-| M-<left>  | Move to the previous column.                                                         |
-| M-<right> | Move to the next column.                                                             |
-| +         | Insert a new row into the current table, prompting for new values in the minibuffer. |
-| i         | Insert a new row, prompting for new values in a dedicated buffer.                    |
-| d         | Delete the current row.                                                              |
-| k         | Copy the current row.                                                                |
-| y         | Paste (yank) the copied row.                                                         |
-| j         | Copy the current row to the kill ring in JSON format.                                |
-| <         | Move to the beginning of the table.                                                  |
-| >         | Move to the end of the table.                                                        |
-| e         | Open a new buffer to display the result of an SQL query.                             |
-| q         | Kill the current buffer.                                                             |
-
-
-## Editing a column value
-
-If your table has a primary key, you can edit the contents of the table. To modify a value, move the
-cursor to the relevant column and type `RET`. This will prompt you for the new value, and update the
-row to the value you specified (it sends PostgreSQL an SQL command similar to `UPDATE table_name SET
-column_name to X WHERE pk_col = the_value`).
-
-Note that PGmacs tells you the column type when prompting for the new value. You must specify a
-value in the format accepted by PostgreSQL for that type.
-
-
-
-## Viewing output from an SQL query
-
-You can also view (but not edit!) the output from an SQL query you enter. Type `e` in a PGmacs
-buffer, which will prompt you for an SQL query, then display the output in a dedicated temporary
-buffer. Type `q` to kill the temporary buffer.
-
-![Screenshot table](img/screenshot-sql-query.png)
-
-
-
-## Inserting, copying and deleting rows
-
-To insert a new row into a table, press `+` in the table buffer. You will be prompted for the values
-of each column for which a default value is not specified (in the minibuffer), then the new row will
-be inserted. You can also insert a new row by entering new values in a widget-based buffer by
-pressing `i` (this may be more convenient if the table contains many rows, or the values to enter
-are very long).
-
-To delete the row at point, press `<delete>` or `<backspace>` in a table buffer and confirm. Please
-note that this deletes the current row in the PostgreSQL database, as well as in the Emacs buffer.
-
-To copy/paste rows, press `k` to copy the row to the PGmacs kill buffer (this only copies, without
-deleting the row), then `y` to insert a new row with the same values. Any columns that have a
-default value specified (for example, primary key rows that pull a value from an integer sequence,
-or are specified as `SERIAL`, or timestap values that default to `now`) will be inserted with a new
-generated value, rather than the value in the copied row.
-
-All updates, insertions and deletions are immediately made on the PostgreSQL server by sending it
-the appropriate SQL `UPDATE TABLE`, `DELETE FROM` or `INSERT INTO` commands. 
+| q         | Bury the current buffer.                                                             |

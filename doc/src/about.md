@@ -46,8 +46,3 @@ Copyright 2023-2024 Eric Marsden.
 
 
 
-The **latest version** of this package should be available from
-
-    https://github.com/emarsden/pgmacs/
-
-
