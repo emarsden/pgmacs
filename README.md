@@ -57,6 +57,8 @@ or with a PostgreSQL connection string such as `user=myself port=5432 dbname=myd
 `pgmacs-open-string`) or with a PostgreSQL connection URI such as
 `postgresql://%2Fvar%2Flib%2Fpostgresql/dbname` (function `pgmacs-open-uri`). 
 
+Check the [user manual](https://emarsden.github.io/pgmacs/) for more.
+
 
 ## Status
 
