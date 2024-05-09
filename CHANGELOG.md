@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.6] - Unreleased
+## [0.6] - 2024-05-09
 
 - New keybinding in the table-list buffer: `r` allows you to rename the table at point.
 
