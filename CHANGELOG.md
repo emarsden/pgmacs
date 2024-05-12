@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.7] - Unreleased
+
+- Fix bug in `e` keybinding (`pgmacs-run-sql`) when outside a table.
+
+- `pgmacs-run-sql`: allow for SQL commands that produce no output rows.
+
+
 ## [0.6] - 2024-05-09
 
 - New keybinding in the table-list buffer: `r` allows you to rename the table at point.

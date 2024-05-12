@@ -1063,35 +1063,36 @@ Uses PostgreSQL connection CON."
     (insert (propertize "SQL" 'face 'bold))
     (insert (format ": %s\n\n" sql)))
   (let* ((res (pg-exec con sql))
-         (rows (pg-result res :tuples))
-         (column-names (mapcar #'cl-first (pg-result res :attributes)))
-         (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
-         (column-type-names (mapcar #'pg--lookup-type-name column-type-oids))
-         (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
-         (value-widths (mapcar #'pgmacs--value-width column-type-names))
-         (column-widths (cl-loop for w in value-widths
-                                 for name in column-names
-                                 collect (1+ (max w (length name)))))
-         (columns (cl-loop for name in column-names
-                           for fmt in column-formatters
-                           for w in column-widths
-                           collect (make-pgmacstbl-column
-                                    :name (propertize name 'face 'pgmacs-table-header)
-                                    :min-width (1+ (max w (length name)))
-                                    :formatter fmt)))
-         (inhibit-read-only t)
-         (pgmacstbl (make-pgmacstbl
-                  :insert nil
-                  :use-header-line nil
-                  :face 'pgmacs-table-data
-                  :columns columns
-                  :row-colors pgmacs-row-colors
-                  :objects rows
-                  :actions '("e" pgmacs-run-sql
-                             "q" (lambda (&rest _ignore) (kill-buffer))))))
-    (if (null rows)
-        (insert "(no rows)")
-      (pgmacstbl-insert pgmacstbl))
+         (rows (pg-result res :tuples)))
+    (cond ((null rows)
+           (insert "(no rows)"))
+          (t
+           (let* ((column-names (mapcar #'cl-first (pg-result res :attributes)))
+                  (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
+                  (column-type-names (mapcar #'pg--lookup-type-name column-type-oids))
+                  (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
+                  (value-widths (mapcar #'pgmacs--value-width column-type-names))
+                  (column-widths (cl-loop for w in value-widths
+                                          for name in column-names
+                                          collect (1+ (max w (length name)))))
+                  (columns (cl-loop for name in column-names
+                                    for fmt in column-formatters
+                                    for w in column-widths
+                                    collect (make-pgmacstbl-column
+                                             :name (propertize name 'face 'pgmacs-table-header)
+                                             :min-width (1+ (max w (length name)))
+                                             :formatter fmt)))
+                  (inhibit-read-only t)
+                  (pgmacstbl (make-pgmacstbl
+                              :insert nil
+                              :use-header-line nil
+                              :face 'pgmacs-table-data
+                              :columns columns
+                              :row-colors pgmacs-row-colors
+                              :objects rows
+                              :actions '("e" pgmacs-run-sql
+                                         "q" (lambda (&rest _ignore) (kill-buffer))))))
+             (pgmacstbl-insert pgmacstbl))))
     (shrink-window-if-larger-than-buffer)
     (pgmacs--stop-progress-reporter)))
 
