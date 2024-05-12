@@ -65,7 +65,7 @@ PostgreSQL over a slow network link."
 (keymap-set pgmacs-mode-map (kbd "q") 'bury-buffer)
 (keymap-set pgmacs-mode-map (kbd "h") 'pgmacs--table-list-help)
 (keymap-set pgmacs-mode-map (kbd "r") 'pgmacs--table-list-redraw)
-(keymap-set pgmacs-mode-map (kbd "e") (lambda (&rest _ignored) (pgmacs-run-sql)))
+(keymap-set pgmacs-mode-map (kbd "e") 'pgmacs-run-sql)
 
 (defun pgmacs-mode ()
   "Major mode for editing PostgreSQL database."
@@ -875,7 +875,7 @@ object."
                                "i" pgmacs--insert-row-widget
                                "k" pgmacs--copy-row
                                "y" pgmacs--yank-row
-                               "e" (lambda (&rest _ignored) (pgmacs-run-sql))
+                               "e" pgmacs-run-sql
                                "r" pgmacs--redraw-pgmacstbl
                                "j" pgmacs--row-as-json
                                ;; "n" and "p" are bound when table is paginated to next/prev page
@@ -1039,7 +1039,7 @@ object."
 ;; receive unnecessary arguments related to the current cursor position.
 ;;
 ;; TODO: allow input from a buffer which is set to sql-mode.
-(defun pgmacs-run-sql ()
+(defun pgmacs-run-sql (&rest _ignore)
   "Prompt for an SQL query and display the output in a dedicated buffer."
   (interactive)
   (let ((sql (read-from-minibuffer "SQL query: ")))
@@ -1087,7 +1087,7 @@ Uses PostgreSQL connection CON."
                   :columns columns
                   :row-colors pgmacs-row-colors
                   :objects rows
-                  :actions `("e" (lambda (&rest _ignored) (pgmacs-run-sql))
+                  :actions '("e" pgmacs-run-sql
                              "q" (lambda (&rest _ignore) (kill-buffer))))))
     (if (null rows)
         (insert "(no rows)")
@@ -1223,7 +1223,7 @@ Uses PostgreSQL connection CON."
                              "<deletechar>" pgmacs--table-list-delete
                              "r" pgmacs--table-list-rename
                              "g" pgmacs--table-list-redraw
-                             "e" (lambda (&rest _ignored) (pgmacs-run-sql))
+                             "e" pgmacs-run-sql
                              ;; the functions pgmacstbl-beginning-of-table and pgmacstbl-end-of-table don't work when
                              ;; we have inserted text before the pgmacstbl.
                              "<" (lambda (&rest _ignored)
