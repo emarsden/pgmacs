@@ -7,6 +7,9 @@
 
 - `pgmacs-run-sql`: allow for SQL commands that produce no output rows.
 
+- In a row-list, new keybindings for digits that move point to the nth column of the table, counting
+  from zero. For example, pressing `2` moves point to the third column.
+
 
 ## [0.6] - 2024-05-09
 

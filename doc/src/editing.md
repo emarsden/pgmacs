@@ -22,8 +22,9 @@ The following keys are bound when the point is located in the table:
 | k         | Copy the current row.                                                                |
 | y         | Paste (yank) the copied row.                                                         |
 | j         | Copy the current row to the kill ring in JSON format.                                |
-| <         | Move to the beginning of the table list.                                             |
-| >         | Move to the end of the table list.                                                   |
+| <         | Move point to the first row of data.                                                 |
+| >         | Move point to the last row of data.                                                  |
+| <number>  | Move point to the nth column (numbering is zero-based).                              |
 | e         | Open a new buffer to display the result of an SQL query.                             |
 | r         | Redraw the table (does not refetch data from PostgreSQL).                            |
 | n         | Next page of output (if table contents are paginated).                               |

@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
-;; Version: 0.5
+;; Version: 0.6
 ;; Package-Requires: ((emacs "29.1") (pg "0.32"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
@@ -161,6 +161,9 @@ Applies format string FMT to ARGS."
              (string-join items ","))))
         ((string= type-name "json")
          #'json-serialize)
+        ((string= type-name "vector")
+         (lambda (val)
+           (concat "[" (string-join (mapcar #'prin1-to-string val) ",") "]")))
         (t
          (lambda (val) (format "%s" val)))))
 
@@ -332,6 +335,9 @@ PRIMARY-KEYS."
         ((or (string= type "char")
              (string= type "bpchar"))
          (widget-create 'character current-value))
+        ;; represented as "[44,33,5,78]" on the wire. Parsed to an elisp vector of integers.
+        ((string= "vector" type)
+         (widget-create '(vector integer) current-value))
         (t
          (widget-create 'editable-field
                         :size (min 200 (+ 5 (length current-value)))
@@ -785,8 +791,9 @@ Table names are schema-qualified if the schema is non-default."
       (shw "n" "Next page of output (if table contents are paginated)")
       (shw "p" "Previous page of output (if table contents are paginated)")
       (shw "e" "New buffer with output from SQL query")
-      (shw "<" "Go to the first table in the table list")
-      (shw ">" "Go to the last table in the table list")
+      (shw "<number>" "Move point to nth column")
+      (shw "<" "Move point to the first row in the table")
+      (shw ">" "Move point to the last row in the table")
       (shw "{" "Shrink the horizontal space used by the current column")
       (shw "}" "Grow the horizontal space used by the current column")
       (shw "r" "Redraw the table (does not refetch data from PostgreSQL)")
@@ -885,6 +892,16 @@ object."
                                ">" (lambda (&rest _ignored)
                                      (text-property-search-forward 'pgmacstbl)
                                      (previous-line))
+                               "0" (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
+                               "1" (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
+                               "2" (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
+                               "3" (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
+                               "4" (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
+                               "5" (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
+                               "6" (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
+                               "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
+                               "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
+                               "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (setq-local pgmacs--con con
                   pgmacs--table table
@@ -1180,6 +1197,7 @@ Uses PostgreSQL connection CON."
   "Browse the contents of PostgreSQL database to which we are connected over CON."
   ;; (pg-enable-query-log con)
   (pg-hstore-setup con)
+  (pg-vector-setup con)
   (pop-to-buffer-same-window (format "*PostgreSQL %s*" (pgcon-dbname con)))
   (pgmacs-mode)
   (setq-local pgmacs--con con
