@@ -274,11 +274,15 @@ If it can't be found, return nil and don't move point."
       (goto-char start)
       nil)))
 
-(defun pgmacstbl-goto-column (column)
-  "Go to COLUMN on the current line."
+(defun pgmacstbl-goto-column (column-number)
+  "Go to COLUMN-NUMBER on the current line."
   (beginning-of-line)
-  (if-let ((match (text-property-search-forward 'pgmacstbl-column column t)))
-      (goto-char (prop-match-beginning match))
+  (if-let ((match (text-property-search-forward 'pgmacstbl-column column-number t)))
+      (let* ((tbl (pgmacstbl-current-table))
+             (column (nth column-number (pgmacstbl-columns tbl))))
+        (if (pgmacstbl-column--numerical column)
+            (goto-char (- (prop-match-end match) 2))
+          (goto-char (prop-match-beginning match))))
     (end-of-line)))
 
 (defun pgmacstbl-update-object (table object old-object)
@@ -327,7 +331,8 @@ This will also remove the displayed line."
   ;; Then adjust the cache and display.
   (let ((cache (pgmacstbl--cache table))
         (inhibit-read-only t))
-    (setcar cache (delq (assq object (car cache)) (car cache)))
+    (when cache
+      (setcar cache (delq (assq object (car cache)) (car cache))))
     (save-excursion
       (pgmacstbl-goto-table table)
       (when (pgmacstbl-goto-object object)
