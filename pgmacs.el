@@ -55,6 +55,11 @@ PostgreSQL over a slow network link."
   :type 'number
   :group 'pgmacs)
 
+(defcustom pgmacs-max-column-width 60
+  "The maximal width in characters of a table column."
+  :type 'number
+  :group 'pgmacs)
+
 (defcustom pgmacs-mode-hook nil
   "Mode hook for `pgmacs-mode'."
   :type 'hook
@@ -414,6 +419,23 @@ has primary keys, named in the list PRIMARY-KEYS."
         (widget-setup)
         (goto-char (point-min))
         (widget-forward 1)))))
+
+(defun pgmacs--view-value (current-row)
+  "Insert column value at point into a dedicated buffer.
+Point is located in CURRENT-ROW."
+  (let* ((col-id (pgmacstbl-current-column))
+         (cols (pgmacstbl-columns (pgmacstbl-current-table)))
+         (col (nth col-id cols))
+         (buf (get-buffer-create (format "*PostgreSQL column value %s*" (pgmacstbl-column-name col))))
+         (value (funcall (pgmacstbl-column-formatter col)
+                         (nth col-id current-row))))
+    (pop-to-buffer buf)
+    (pgmacs-transient-mode)
+    (insert value)
+    (shrink-window-if-larger-than-buffer)
+    (setq buffer-read-only t)
+    (goto-char (point-min))))
+
 
 (defun pgmacs--delete-row (row primary-keys)
   "Delete ROW from the current table.
@@ -779,6 +801,7 @@ Table names are schema-qualified if the schema is non-default."
               (insert (propertize " → " 'face '(:foreground "gray")))
               (insert msg "\n")))
     (let ((inhibit-read-only t))
+      (shw "v" "Display the value at point in a dedicated buffer")
       (shw "RET" "Edit the value at point in the minibuffer")
       (shw "w" "Edit the value at point in a widget-based buffer")
       (shw "<backspace>" "Delete the row at point")
@@ -861,6 +884,7 @@ object."
                                                 'help-echo meta)
                               :align align
                               :min-width (1+ (max w (length name)))
+                              :max-width pgmacs-max-column-width
                               :formatter fmt
                               :displayer (pgmacs--make-column-displayer meta))))
            (inhibit-read-only t)
@@ -873,6 +897,7 @@ object."
                     ;; same syntax for keys as keymap-set
                     :actions `("RET" (lambda (row) (pgmacs--edit-value-minibuffer row ',primary-keys))
                                "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
+                               "v" pgmacs--view-value
                                "<delete>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))

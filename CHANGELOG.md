@@ -10,6 +10,9 @@
 - In a row-list, new keybindings for digits that move point to the nth column of the table, counting
   from zero. For example, pressing `2` moves point to the third column.
 
+- In a row-list, new `v` keybinding displays the column value at point (which may be truncated) in a
+  dedicated (readonly) buffer.
+
 
 ## [0.6] - 2024-05-09
 

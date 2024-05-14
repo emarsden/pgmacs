@@ -12,6 +12,7 @@ The following keys are bound when the point is located in the table:
 
 | Key       | Binding                                                                              |
 |-----------|--------------------------------------------------------------------------------------|
+| v         | Display the value at point in a dedicated buffer.                                    |
 | RET       | Edit the value at point in the minibuffer.                                           |
 | w         | Edit the value at point in a widget-based buffer.                                    |
 | DEL       | Delete the row at point.                                                             |
