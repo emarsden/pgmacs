@@ -13,6 +13,8 @@
 - In a row-list, new `v` keybinding displays the column value at point (which may be truncated) in a
   dedicated (readonly) buffer.
 
+- Fix bug in the the widget-based editing functionality, which was discarding edits.
+
 
 ## [0.6] - 2024-05-09
 

@@ -321,6 +321,7 @@ PRIMARY-KEYS."
         (pgmacstbl-remove-object pgmacstbl current-row)
         ;; redrawing is necessary to ensure that all keybindings are present for the newly inserted
         ;; row.
+        (previous-line)
         (pgmacs--redraw-pgmacstbl)))))
 
 (defun pgmacs--widget-for (type current-value)
@@ -392,6 +393,7 @@ has primary keys, named in the list PRIMARY-KEYS."
                           ;; pgmacstbl-update-object doesn't work, so insert then delete old row
                           (pgmacstbl-insert-object pgmacstbl new-row current-row)
                           (pgmacstbl-remove-object pgmacstbl current-row)
+                          (previous-line)
                           (pgmacs--redraw-pgmacstbl))))))
       (switch-to-buffer "*PGmacs update widget*")
       (erase-buffer)
@@ -411,8 +413,9 @@ has primary keys, named in the list PRIMARY-KEYS."
         (widget-insert "\n\n")
         (widget-create 'push-button
                        :notify (lambda (&rest _ignore)
-                                 (kill-buffer (current-buffer))
-                                 (funcall updater (widget-value w-updated)))
+                                 (let ((updated (widget-value w-updated)))
+                                   (kill-buffer (current-buffer))
+                                   (funcall updater updated)))
                        "Update")
         (widget-insert "\n\n\nTo abort editing the column, simply kill this buffer.\n")
         (use-local-map widget-keymap)
