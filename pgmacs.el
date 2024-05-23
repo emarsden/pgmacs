@@ -19,6 +19,7 @@
 (require 'button)
 (require 'widget)
 (require 'wid-edit)
+(require 'cus-edit)
 (require 'pg)
 (require 'pgmacstbl)
 
@@ -65,6 +66,18 @@ PostgreSQL over a slow network link."
   :type 'hook
   :group 'pgmacs)
 
+(defun pgmacs--widget-setup ()
+  "Set up the appearance of widgets used in PGmacs.
+Uses customizations implemented in Emacs' customize support."
+  (setq-local widget-button-face custom-button)
+  (setq-local widget-button-pressed-face custom-button-pressed)
+  (setq-local widget-mouse-face custom-button-mouse)
+  (when custom-raised-buttons
+    (setq-local widget-push-button-prefix "")
+    (setq-local widget-push-button-suffix "")
+    (setq-local widget-link-prefix "")
+    (setq-local widget-link-suffix "")))
+
 (defvar pgmacs-mode-map (make-sparse-keymap))
 
 (keymap-set pgmacs-mode-map (kbd "q") 'bury-buffer)
@@ -79,6 +92,7 @@ PostgreSQL over a slow network link."
   ;; Not appropriate for user to type stuff into our buffers.
   (put 'pgmacs-mode 'mode-class 'special)
   (use-local-map pgmacs-mode-map)
+  (pgmacs--widget-setup)
   (run-mode-hooks 'pgmacs-mode-hook))
 
 (defvar pgmacs-transient-map (make-sparse-keymap))
@@ -430,9 +444,9 @@ has primary keys, named in the list PRIMARY-KEYS."
       (pgmacs-mode)
       (setq-local pgmacs--con con
                   pgmacs--table table)
-      (widget-insert (propertize (format "Update column %s" col-name) 'face 'bold))
+      (widget-insert (propertize (format "Update PostgreSQL column %s" col-name) 'face 'bold))
       (widget-insert "\n\n")
-      (widget-insert (format "Change %s (type %s) to:" col-name col-type))
+      (widget-insert (format "Change %s (type %s) for current row to:" col-name col-type))
       (widget-insert "\n\n")
       (let* ((w-updated
               (progn
@@ -445,7 +459,7 @@ has primary keys, named in the list PRIMARY-KEYS."
                                    (kill-buffer (current-buffer))
                                    (funcall updater updated)))
                        "Update")
-        (widget-insert "\n\n\nTo abort editing the column, simply kill this buffer.\n")
+        (widget-insert "\n\n\nTo abort editing the column value, simply kill this buffer.\n")
         (use-local-map widget-keymap)
         (widget-setup)
         (goto-char (point-min))
@@ -582,6 +596,7 @@ PostgreSQL database."
       (erase-buffer)
       (remove-overlays)
       (kill-all-local-variables)
+      (pgmacs-mode)
       (setq-local pgmacs--con con
                   pgmacs--table table)
       (widget-insert (propertize (format "Insert row into table %s" table) 'face 'bold))
@@ -595,8 +610,9 @@ PostgreSQL database."
       (widget-insert "\n\n")
       (widget-create 'push-button
                      :notify (lambda (&rest _ignore)
-                               (funcall updater (mapcar #'widget-value widgets))
-                               (kill-buffer (current-buffer)))
+                               (let ((updates (mapcar #'widget-value widgets)))
+                                 (kill-buffer (current-buffer))
+                                 (funcall updater updates)))
                      "Insert row")
       (widget-insert "\n")
       (use-local-map widget-keymap)
@@ -1376,6 +1392,7 @@ CONNECTION-URI is a PostgreSQL connection URI of the form
   (switch-to-buffer "*PGmacs connection widget*")
   (kill-all-local-variables)
   (remove-overlays)
+  (pgmacs--widget-setup)
   (widget-insert (propertize "Connect to PostgreSQL database" 'face 'bold))
   (widget-insert "\n\n")
   (let* ((w-dbname

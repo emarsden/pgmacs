@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.8] - Unreleased
+
+- Look and feel: adopt the button faces used by Emacs' customization support.
+
+
+
 ## [0.7] - 2024-05-23
 
 - Fix bug in `e` keybinding (`pgmacs-run-sql`) when outside a table.
