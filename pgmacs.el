@@ -339,7 +339,7 @@ PRIMARY-KEYS."
         (pgmacs--redraw-pgmacstbl)))))
 
 
-(define-widget 'pgmacs-hstore 'list
+(define-widget 'pgmacs-hstore-widget 'list
   "Widget to edit a PostgreSQL HSTORE key-value map."
   :tag "HSTORE key-value mapping"
   :format "%v"
@@ -364,6 +364,16 @@ PRIMARY-KEYS."
                                (editable-field :size 25 :tag "Key" :format "%v ⟶ ")
                                (editable-field :size 40 :tag "Value")))))
 
+(define-widget 'pgmacs-json-widget 'text
+  "Widget to edit PostgreSQL JSON/JSONB values."
+  :tag "JSON/JSONB value"
+  :format "%v"
+  ;; The pg-el library deserializes JSON and JSONB values to hashtables. It would be nice to pretty
+  ;; print this in the buffer, but json-serialize doesn't support this.
+  :value-to-internal (lambda (_widget ht) (json-serialize ht))
+  :value-to-external (lambda (_widget str) (json-parse-string str))
+  :args '((string :inline t :size 500)))
+
 (defun pgmacs--widget-for (type current-value)
   "Create a widget for TYPE and CURRENT-VALUE in the current buffer."
   (cond ((string= "bool" type)
@@ -381,12 +391,20 @@ PRIMARY-KEYS."
         ((or (string= type "char")
              (string= type "bpchar"))
          (widget-create 'character current-value))
+        ((or (string= "text" type)
+             (string= "varchar" type))
+         (widget-create 'string
+                        :size (max 80 (min (200 (+ 5 (length current-value)))))
+                        :value current-value))
         ;; represented as "[44,33,5,78]" on the wire. Parsed to an elisp vector of integers.
         ((string= "vector" type)
          (widget-create '(vector integer) current-value))
         ((string= "hstore" type)
-         (widget-create 'pgmacs-hstore :value current-value))
-        ;; TODO: json, jsonb types
+         (widget-create 'pgmacs-hstore-widget :value current-value))
+        ((or (string= "json" type)
+             (string= "jsonb" type))
+         (widget-create 'pgmacs-json-widget :value current-value))
+        ;; TODO: timestamp, timestamptz and date
         (t
          (widget-create 'editable-field
                         :size (min 200 (+ 5 (length current-value)))

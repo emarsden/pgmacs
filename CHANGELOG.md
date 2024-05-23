@@ -5,6 +5,8 @@
 
 - Look and feel: adopt the button faces used by Emacs' customization support.
 
+- New widget to allow widget-based editing of a PostgreSQL JSON or JSONB value, which is represented
+  in Emacs Lisp as a hashtable.
 
 
 ## [0.7] - 2024-05-23
