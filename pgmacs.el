@@ -692,7 +692,7 @@ default value instead of the last copied value."
       (pgmacs--display-table pgmacs--table))))
 
 
-;; We can also SELECT c.column_name, c.data_type
+;; This SQL query adapted from https://stackoverflow.com/a/20537829
 (defun pgmacs--table-primary-keys (con table)
   "Return the columns active as PRIMARY KEY in TABLE.
 Uses PostgreSQL connection CON."
@@ -702,13 +702,13 @@ Uses PostgreSQL connection CON."
          (tname (if (pg-qualified-name-p table)
                     (pg-qualified-name-name table)
                   table))
-         (sql "SELECT c.column_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
-      JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
-      AND tc.table_name = c.table_name AND ccu.column_name = c.column_name
-      WHERE constraint_type = 'PRIMARY KEY' AND tc.table_schema=$1 AND tc.table_name = $2")
-         (res (pg-exec-prepared con sql `((,schema . "text") (,tname . "text")))))
+         (sql "SELECT a.attname
+               FROM pg_catalog.pg_index idx
+               JOIN pg_catalog.pg_class c ON c.oid = idx.indrelid
+               JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(idx.indkey)
+               JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+               WHERE relname = $1 AND nspname = $2 AND indisprimary")
+         (res (pg-exec-prepared con sql `((,tname . "text") (,schema . "text")))))
     (mapcar #'cl-first (pg-result res :tuples))))
 
 (defun pgmacs--column-nullable-p (con table column)
