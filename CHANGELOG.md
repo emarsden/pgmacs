@@ -15,6 +15,9 @@
 
 - Fix bug in the the widget-based editing functionality, which was discarding edits.
 
+- New widget to allow widget-based editing of a PostgreSQL HSTORE value, which is represented in
+  Emacs Lisp as a hashtable.
+
 
 ## [0.6] - 2024-05-09
 

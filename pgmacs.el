@@ -324,6 +324,32 @@ PRIMARY-KEYS."
         (previous-line)
         (pgmacs--redraw-pgmacstbl)))))
 
+
+(define-widget 'pgmacs-hstore 'list
+  "Widget to edit a PostgreSQL HSTORE key-value map."
+  :tag "HSTORE key-value mapping"
+  :format "%v"
+  ;; Convert from the hashtable format used to represent an hstore column in Emacs Lisp to an alist
+  ;; that is suitable for display using our widget.
+  :value-to-internal (lambda (_widget ht)
+                       (let* ((entries (list)))
+                         (maphash (lambda (k v) (push (cons k v) entries)) ht)
+                         entries))
+  ;; Convert from the alist display format back to a hashtable.
+  :value-to-external (lambda (_widget alist)
+                       (let ((ht (make-hash-table :test #'equal)))
+                         (dolist (kv alist)
+                           (puthash (car kv) (cdr kv) ht))
+                         ht))
+  :args '((editable-list :inline t
+                         ;; don't display the [INS] button on each line (which would be inserted if
+                         ;; the %i escape were present here), because the order of entries in the
+                         ;; HSTORE is not relevant.
+                         :entry-format "%d %v\n"
+                         (cons :format "%v"
+                               (editable-field :size 25 :tag "Key" :format "%v ⟶ ")
+                               (editable-field :size 40 :tag "Value")))))
+
 (defun pgmacs--widget-for (type current-value)
   "Create a widget for TYPE and CURRENT-VALUE in the current buffer."
   (cond ((string= "bool" type)
@@ -344,6 +370,9 @@ PRIMARY-KEYS."
         ;; represented as "[44,33,5,78]" on the wire. Parsed to an elisp vector of integers.
         ((string= "vector" type)
          (widget-create '(vector integer) current-value))
+        ((string= "hstore" type)
+         (widget-create 'pgmacs-hstore :value current-value))
+        ;; TODO: json, jsonb types
         (t
          (widget-create 'editable-field
                         :size (min 200 (+ 5 (length current-value)))
@@ -370,8 +399,7 @@ has primary keys, named in the list PRIMARY-KEYS."
          (pk-value (and pk-col-id (nth pk-col-id row))))
     (unless pk-value
       (error "Can't find value for primary key %s" pk))
-    (let* ((current (funcall (pgmacstbl-column-formatter col)
-                             (nth col-id current-row)))
+    (let* ((current (nth col-id current-row))
            (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
                         (pg-escape-identifier pgmacs--table)
                         (pg-escape-identifier col-name)
