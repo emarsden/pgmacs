@@ -398,7 +398,7 @@ PRIMARY-KEYS."
         ((or (string= "text" type)
              (string= "varchar" type))
          (widget-create 'string
-                        :size (max 80 (min (200 (+ 5 (length current-value)))))
+                        :size (max 80 (min 200 (+ 5 (length current-value))))
                         :value current-value))
         ;; represented as "[44,33,5,78]" on the wire. Parsed to an elisp vector of integers.
         ((string= "vector" type)
@@ -466,13 +466,13 @@ has primary keys, named in the list PRIMARY-KEYS."
       (pgmacs-mode)
       (setq-local pgmacs--con con
                   pgmacs--table table)
-      (widget-insert (propertize (format "Update PostgreSQL column %s" col-name) 'face 'bold))
+      (setq-local header-line-format (format "🐘 Update PostgreSQL column %s" col-name))
       (widget-insert "\n\n")
-      (widget-insert (format "Change %s (type %s) for current row to:" col-name col-type))
+      (widget-insert (format "Column type: %s\n\n" (pgmacs--column-info con table col-name)))
+      (widget-insert (format "Change %s for current row to:" col-name col-type))
       (widget-insert "\n\n")
       (let* ((w-updated
               (progn
-                ;; (widget-insert (format "%12s: " "New value"))
                 (pgmacs--widget-for col-type current))))
         (widget-insert "\n\n")
         (widget-create 'push-button
@@ -480,8 +480,11 @@ has primary keys, named in the list PRIMARY-KEYS."
                                  (let ((updated (widget-value w-updated)))
                                    (kill-buffer (current-buffer))
                                    (funcall updater updated)))
-                       "Update")
-        (widget-insert "\n\n\nTo abort editing the column value, simply kill this buffer.\n")
+                       "Update database")
+        (widget-insert "\n\n\n")
+        (widget-insert (propertize "To abort editing the column value, simply kill this buffer."
+                                   'face 'font-lock-comment-face))
+        (widget-insert "\n")
         (use-local-map widget-keymap)
         (widget-setup)
         (goto-char (point-min))
