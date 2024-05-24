@@ -368,9 +368,13 @@ PRIMARY-KEYS."
   "Widget to edit PostgreSQL JSON/JSONB values."
   :tag "JSON/JSONB value"
   :format "%v"
-  ;; The pg-el library deserializes JSON and JSONB values to hashtables. It would be nice to pretty
-  ;; print this in the buffer, but json-serialize doesn't support this.
-  :value-to-internal (lambda (_widget ht) (json-serialize ht))
+  ;; The pg-el library deserializes JSON and JSONB values to hashtables using Emacs' native JSON
+  ;; support. Here we use the native JSON support plus pretty-printing support from json.el.
+  :value-to-internal (lambda (_widget ht)
+                       (with-temp-buffer
+                         (insert (json-serialize ht))
+                         (json-pretty-print-buffer)
+                         (buffer-string)))
   :value-to-external (lambda (_widget str) (json-parse-string str))
   :args '((string :inline t :size 500)))
 
@@ -770,6 +774,18 @@ over the PostgreSQL connection CON."
       (push (format "DEFAULT %s" defaults) column-info))
     (string-join (reverse column-info) ", ")))
 
+;; We could first check whether the row_security_function() is implemented in this PostgresQL
+;; version by querying the pg_proc table for a function with proname='row_security_active', but it's
+;; easier to ignore errors.
+(defun pgmacs--row-security-active (con table)
+  "Is row-level security active for PostgreSQL TABLE?
+Uses PostgreSQL connection CON."
+  (let* ((sql "SELECT row_security_active($1)")
+         (res (ignore-errors
+                (pg-exec-prepared con sql `((,(pg-escape-identifier pgmacs--table) . "text"))))))
+    (when res (cl-first (pg-result res :tuple 0)))))
+
+
 ;; TODO also include VIEWs
 ;;   SELECT * FROM information_schema.views
 ;;
@@ -1023,7 +1039,11 @@ object."
           (insert "└ ")
           (insert last)
           (insert "\n")))
-      (insert "\n")
+      (insert "Row-level security: ")
+      (if (pgmacs--row-security-active con table)
+          (insert "enabled")
+        (insert "not enabled"))
+      (insert "\n\n")
       (insert-text-button "Export table to CSV buffer"
                           'action #'pgmacs--table-to-csv
                           'help-echo "Export this table to a CSV buffer")
