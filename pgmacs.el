@@ -95,6 +95,10 @@ Uses customizations implemented in Emacs' customize support."
   (pgmacs--widget-setup)
   (run-mode-hooks 'pgmacs-mode-hook))
 
+;; For use in a row-list buffer that is presenting data from a table.
+(defvar pgmacs-row-list-map (make-sparse-keymap))
+(keymap-set pgmacs-row-list-map (kbd "i") 'pgmacs--insert-row-empty)
+
 (defvar pgmacs-transient-map (make-sparse-keymap))
 (keymap-set pgmacs-transient-map (kbd "q") 'kill-buffer)
 
@@ -278,7 +282,7 @@ Applies format string FMT to ARGS."
   "Read a value for column NAME in the minibuffer using PROMPT.
 The column has SQL type TYPE and has current value CURRENT-VALUE."
   (let* ((prompt (format prompt name type)))
-    (read-string prompt (format "%s" current-value))))
+    (read-string prompt (and current-value (format "%s" current-value)))))
 
 ;; TODO: perhaps if the field value is very long or of BYTEA type, prompt "really want to edit in
 ;; minibuffer" and suggest using the widget editing mode instead.
@@ -471,7 +475,7 @@ has primary keys, named in the list PRIMARY-KEYS."
                   header-line-format (format "🐘 Update PostgreSQL column %s" col-name))
       (widget-insert "\n")
       (widget-insert (format "  Column type: %s\n\n" (pgmacs--column-info con table col-name)))
-      (widget-insert (format "  Change %s for current row to:" col-name))
+      (widget-insert (format "  Change %s for current row to:" (substring-no-properties col-name)))
       (widget-insert "\n\n")
       (let* ((w-updated (pgmacs--widget-for col-type current)))
         (widget-insert "\n\n")
@@ -549,6 +553,39 @@ primary keys, whose names are given by the list PRIMARY-KEYS."
                 (t
                  (warn "Deletion affected more than 1 row; rolling back")
                  (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))))
+
+(defun pgmacs--insert-row-empty ()
+  (interactive)
+  (let* ((col-names (pg-columns pgmacs--con pgmacs--table))
+         (nodefault-columns (list))
+         (values (list))
+         (value-types (list)))
+    (cl-loop
+     for col-name in col-names
+     for col-id from 0
+     for col-type = (aref pgmacs--column-type-names col-id)
+     unless (pg-column-default pgmacs--con pgmacs--table col-name)
+     do (let* ((val (pgmacs--read-value col-name col-type "Value for column %s (%s): " nil)))
+          (push col-name nodefault-columns)
+          (push val values)
+          (push col-type value-types)))
+    (let* ((placeholders (cl-loop for i from 1 to (length values)
+                                  collect (format "$%d" i)))
+           (target-cols (mapcar #'pg-escape-identifier nodefault-columns))
+           (res (pg-exec-prepared
+                 pgmacs--con
+                 (format "INSERT INTO %s(%s) VALUES(%s)"
+                         (pg-escape-identifier pgmacs--table)
+                         (string-join target-cols ",")
+                         (string-join placeholders ","))
+                 (cl-loop for v in values
+                          for vt in value-types
+                          collect (cons v vt)))))
+      (pgmacs--notify "%s" (pg-result res :status))
+      ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
+      ;; However, we don't know what values were chosen for any columns that have a default, so we
+      ;; need to refetch the data from PostgreSQL.
+      (pgmacs--display-table pgmacs--table))))
 
 (defun pgmacs--insert-row (current-row)
   "Insert a new row of data into the current table after CURRENT-ROW.
@@ -952,6 +989,7 @@ object."
     (pop-to-buffer-same-window (format "*PostgreSQL %s %s*" (pgcon-dbname con) t-pretty))
     (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
     (pgmacs-mode)
+    (use-local-map pgmacs-row-list-map)
     ;; Place some initial content in the buffer early up.
     (let ((inhibit-read-only t)
           (owner (pg-table-owner con table)))
