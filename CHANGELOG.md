@@ -9,6 +9,9 @@
 
 - When displaying a table, show whether row-level security is enabled for this table.
 
+- Row deletion is now executed in an SQL transaction. If the number of affected rows is not equal to
+  1 (indicating a logic error in our code), then the transaction is rolled back.
+
 
 ## [0.7] - 2024-05-23
 

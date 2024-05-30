@@ -526,13 +526,28 @@ primary keys, whose names are given by the list PRIMARY-KEYS."
             (error "Can't find value for primary key %s" pk))
           (push (format "%s = $%d" (pg-escape-identifier pk) (cl-incf counter)) where-clauses)
           (push (cons value col-type) where-values)))
-      (let* ((sql (format "DELETE FROM %s WHERE %s AND 0=1"
+      (setq where-clauses (nreverse where-clauses)
+            where-values (nreverse where-values))
+      (let* ((sql (format "DELETE FROM %s WHERE %s"
                           (pg-escape-identifier pgmacs--table)
                           (string-join where-clauses " AND ")))
-             (res (pg-exec-prepared pgmacs--con sql where-values)))
-        (pgmacs--notify "%s" (pg-result res :status)))
-      (pgmacstbl-remove-object pgmacstbl row)
-      (pgmacs--redraw-pgmacstbl))))
+             (_ (pg-exec pgmacs--con "START TRANSACTION"))
+             (res (pg-exec-prepared pgmacs--con sql where-values))
+             (status (pg-result res :status)))
+        (pgmacs--notify "%s" status)
+        (unless (string= "DELETE " (substring status 0 7))
+          (error "Unexpected status %s for PostgreSQL DELETE command" status))
+        (let ((rows (cl-parse-integer (substring status 7))))
+          (cond ((eql 0 rows)
+                 (warn "Could not delete PostgreSQL row")
+                 (pg-exec pgmacs--con "COMMIT TRANSACTION"))
+                ((eql 1 rows)
+                 (pg-exec pgmacs--con "COMMIT TRANSACTION")
+                 (pgmacstbl-remove-object pgmacstbl row)
+                 (pgmacs--redraw-pgmacstbl))
+                (t
+                 (warn "Deletion affected more than 1 row; rolling back")
+                 (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))))
 
 (defun pgmacs--insert-row (current-row)
   "Insert a new row of data into the current table after CURRENT-ROW.
