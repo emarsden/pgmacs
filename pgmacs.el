@@ -335,7 +335,7 @@ PRIMARY-KEYS."
         (pgmacstbl-remove-object pgmacstbl current-row)
         ;; redrawing is necessary to ensure that all keybindings are present for the newly inserted
         ;; row.
-        (previous-line)
+        (forward-line -1)
         (pgmacs--redraw-pgmacstbl)))))
 
 
@@ -457,7 +457,7 @@ has primary keys, named in the list PRIMARY-KEYS."
                           ;; pgmacstbl-update-object doesn't work, so insert then delete old row
                           (pgmacstbl-insert-object pgmacstbl new-row current-row)
                           (pgmacstbl-remove-object pgmacstbl current-row)
-                          (previous-line)
+                          (forward-line -1)
                           (pgmacs--redraw-pgmacstbl))))))
       (switch-to-buffer "*PGmacs update widget*")
       (erase-buffer)
@@ -469,7 +469,7 @@ has primary keys, named in the list PRIMARY-KEYS."
       (setq-local header-line-format (format "🐘 Update PostgreSQL column %s" col-name))
       (widget-insert "\n\n")
       (widget-insert (format "Column type: %s\n\n" (pgmacs--column-info con table col-name)))
-      (widget-insert (format "Change %s for current row to:" col-name col-type))
+      (widget-insert (format "Change %s for current row to:" col-name))
       (widget-insert "\n\n")
       (let* ((w-updated
               (progn
@@ -787,7 +787,7 @@ over the PostgreSQL connection CON."
 Uses PostgreSQL connection CON."
   (let* ((sql "SELECT row_security_active($1)")
          (res (ignore-errors
-                (pg-exec-prepared con sql `((,(pg-escape-identifier pgmacs--table) . "text"))))))
+                (pg-exec-prepared con sql `((,(pg-escape-identifier table) . "text"))))))
     (when res (cl-first (pg-result res :tuple 0)))))
 
 
