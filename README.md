@@ -1,7 +1,7 @@
-<# pgmacs.el -- Emacs editing PostgreSQL databases
+pgmacs.el -- Emacs editing PostgreSQL databases
 
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
-![Alpha status](https://img.shields.io/badge/status-alpha-blue)
+![Beta status](https://img.shields.io/badge/status-beta-blue)
 
 
 PGmacs provides an editing interface for the PostgreSQL 🐘 object-relational DBMS from Emacs.
@@ -57,12 +57,12 @@ Check the [user manual](https://emarsden.github.io/pgmacs/) for more.
 
 ## Status
 
-PGmacs is in **alpha status**. Please only use it on test databases that do not contain important
+PGmacs is in **beta status**. Please only use it on test databases that do not contain important
 data. 
 
-The library has been tested with PostgreSQL version 16.2, but should work with any PostgreSQL
+The library has been tested with PostgreSQL version 16.3, but should work with any PostgreSQL
 version supported by the `pg-el` library that it uses to communicate with PostgreSQL. The code has
-mostly been tested with Emacs 29.2 on Linux, but should work as expected on Microsoft Windows and
+mostly been tested with Emacs 29.3 on Linux, but should work as expected on Microsoft Windows and
 MacOS. It works both in graphical mode and in the terminal.
 
 
