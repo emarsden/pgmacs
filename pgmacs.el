@@ -506,7 +506,6 @@ Point is located in CURRENT-ROW."
     (setq buffer-read-only t)
     (goto-char (point-min))))
 
-
 (defun pgmacs--delete-row (row primary-keys)
   "Delete ROW from the current table.
 Modifying the PostgreSQL database is only possible when the current table has
@@ -516,18 +515,21 @@ primary keys, whose names are given by the list PRIMARY-KEYS."
   (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
     (let* ((pgmacstbl (pgmacstbl-current-table))
            (cols (pgmacstbl-columns pgmacstbl))
-           (pk (cl-first primary-keys))
-           (pk-col-id (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=))
-           (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
-           (pk-value (and pk-col-id (nth pk-col-id row))))
-      (unless pk-value
-        (error "Can't find value for primary key %s" pk))
-      (let* ((res (pg-exec-prepared
-                   pgmacs--con
-                   (format "DELETE FROM %s WHERE %s = $1"
-                           (pg-escape-identifier pgmacs--table)
-                           (pg-escape-identifier pk))
-                   `((,pk-value . ,pk-col-type)))))
+           (where-clauses (list))
+           (where-values (list))
+           (counter 0))
+      (dolist (pk primary-keys)
+        (let* ((col-name (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=))
+               (col-type (and col-name (aref pgmacs--column-type-names col-name)))
+               (value (and col-name (nth col-name row))))
+          (unless value
+            (error "Can't find value for primary key %s" pk))
+          (push (format "%s = $%d" (pg-escape-identifier pk) (cl-incf counter)) where-clauses)
+          (push (cons value col-type) where-values)))
+      (let* ((sql (format "DELETE FROM %s WHERE %s AND 0=1"
+                          (pg-escape-identifier pgmacs--table)
+                          (string-join where-clauses " AND ")))
+             (res (pg-exec-prepared pgmacs--con sql where-values)))
         (pgmacs--notify "%s" (pg-result res :status)))
       (pgmacstbl-remove-object pgmacstbl row)
       (pgmacs--redraw-pgmacstbl))))
