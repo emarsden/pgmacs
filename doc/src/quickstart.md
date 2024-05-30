@@ -1,11 +1,15 @@
 # Quickstart
 
 In your Emacs initialization file, include the following to check out the latest version of the code
-from the git repository, as well as the [pg-el dependency](https://github.com/emarsden/pg-el/):
+from the git repository, as well as the dependency [pg-el](https://github.com/emarsden/pg-el/):
 
     ;; Requires Emacs 29 and git
-    (package-vc-install "https://github.com/emarsden/pg-el")
-    (package-vc-install "https://github.com/emarsden/pgmacs")
+    (unless (package-installed-p 'pg)
+       (package-vc-install "https://github.com/emarsden/pg-el" nil nil 'pg))
+    (unless (package-installed-p 'pgmacs)
+       (package-vc-install "https://github.com/emarsden/pgmacs"))
+
+    (require 'pgmacs)
 
 You can later upgrade PGmacs to the latest version with `M-x package-vc-upgrade RET pgmacs RET`.
 
@@ -42,19 +46,19 @@ You can also open PGmacs with:
 ## The table list buffer
 
 The table list buffer is the main PGmacs buffer. It shows some metainformation concerning the
-PostgreSQL backend that you are connected to (version, database size, etc.), followed by a table
-which includes one row per table in the database. 
+PostgreSQL backend that you are connected to (version, database size on disk, etc.), followed by a
+table which includes one row per table in the database.
 
 The following keys are bound when the point is located in the table list buffer: 
 
-| Key       | Binding                                                                              |
-|-----------|--------------------------------------------------------------------------------------|
-| RET       | Open a new buffer to browse/edit the table at point.                                 |
-| DEL       | Delete the table at point.                                                           |
-| r         | Renamee the table at point.                                                          |
-| e         | Open a new buffer to display the result of an SQL query.                             |
-| <         | Move to the beginning of the table list.                                             |
-| >         | Move to the end of the table list.                                                   |
-| {         | Make the current column narrower.                                                    |
-| }         | Make the current column wider.                                                       |
-| q         | Bury the current buffer.                                                             |
+| Key   | Binding                                                  |
+|-------|----------------------------------------------------------|
+| `RET` | Open a new buffer to browse/edit the table at point.     |
+| `DEL` | Delete the table at point.                               |
+| `r`   | Rename the table at point.                               |
+| `e`   | Open a new buffer to display the result of an SQL query. |
+| `<`   | Move to the beginning of the table list.                 |
+| `>`   | Move to the end of the table list.                       |
+| `{`   | Make the current column narrower.                        |
+| `}`   | Make the current column wider.                           |
+| `q`   | Bury the current buffer.                                 |

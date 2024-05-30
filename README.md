@@ -1,4 +1,4 @@
-pgmacs.el -- Emacs editing PostgreSQL databases
+# pgmacs.el -- Emacs editing PostgreSQL databases
 
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 ![Beta status](https://img.shields.io/badge/status-beta-blue)
@@ -34,8 +34,13 @@ In your Emacs initialization file, include the following to check out the latest
 from the git repository, as well as the [pg-el dependency](https://github.com/emarsden/pg-el/):
 
     ;; Requires Emacs 29 and git
-    (package-vc-install "https://github.com/emarsden/pg-el")
-    (package-vc-install "https://github.com/emarsden/pgmacs")
+    (unless (package-installed-p 'pg)
+       (package-vc-install "https://github.com/emarsden/pg-el" nil nil 'pg))
+    (unless (package-installed-p 'pgmacs)
+       (package-vc-install "https://github.com/emarsden/pgmacs"))
+
+    (require 'pgmacs)
+
 
 You can later upgrade these to the latest version with `M-x package-vc-upgrade RET pgmacs RET`.
 

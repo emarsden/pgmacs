@@ -10,30 +10,30 @@ variable `pgmacs-row-limit`.
 
 The following keys are bound when the point is located in the table: 
 
-| Key       | Binding                                                                              |
-|-----------|--------------------------------------------------------------------------------------|
-| v         | Display the value at point in a dedicated buffer.                                    |
-| RET       | Edit the value at point in the minibuffer.                                           |
-| w         | Edit the value at point in a widget-based buffer.                                    |
-| DEL       | Delete the row at point.                                                             |
-| M-`left`  | Move to the previous column.                                                         |
-| M-`right` | Move to the next column.                                                             |
-| +         | Insert a new row into the current table, prompting for new values in the minibuffer. |
-| i         | Insert a new row, prompting for new values in a dedicated buffer.                    |
-| k         | Copy the current row.                                                                |
-| y         | Paste (yank) the copied row.                                                         |
-| j         | Copy the current row to the kill ring in JSON format.                                |
-| <         | Move point to the first row of data.                                                 |
-| >         | Move point to the last row of data.                                                  |
-| <number>  | Move point to the nth column (numbering is zero-based).                              |
-| e         | Open a new buffer to display the result of an SQL query.                             |
-| r         | Redraw the table (does not refetch data from PostgreSQL).                            |
-| n         | Next page of output (if table contents are paginated).                               |
-| p         | Previous page of output (if table contents are paginated).                           |
-| S         | Sort the table by the current column.                                                |
-| {         | Make the current column narrower.                                                    |
-| }         | Make the current column wider.                                                       |
-| q         | Kill the current buffer.                                                             |
+| Key         | Binding                                                                              |
+|-------------|--------------------------------------------------------------------------------------|
+| `v`         | Display the value at point in a dedicated buffer.                                    |
+| `RET`       | Edit the value at point in the minibuffer.                                           |
+| `w`         | Edit the value at point in a widget-based buffer.                                    |
+| `DEL`       | Delete the row at point.                                                             |
+| `M-left`    | Move to the previous column.                                                         |
+| `M-right`   | Move to the next column.                                                             |
+| `+`         | Insert a new row into the current table, prompting for new values in the minibuffer. |
+| `i`         | Insert a new row, prompting for new values in a dedicated buffer.                    |
+| `k`         | Copy the current row.                                                                |
+| `y`         | Paste (yank) the copied row.                                                         |
+| `j`         | Copy the current row to the kill ring in JSON format.                                |
+| `<`         | Move point to the first row of data.                                                 |
+| `>`         | Move point to the last row of data.                                                  |
+| number      | Move point to the nth column (numbering is zero-based).                              |
+| `e`         | Open a new buffer to display the result of an SQL query.                             |
+| `r`         | Redraw the table (does not refetch data from PostgreSQL).                            |
+| `n`         | Next page of output (if table contents are paginated).                               |
+| `p`         | Previous page of output (if table contents are paginated).                           |
+| `S`         | Sort the table by the current column.                                                |
+| `{`         | Make the current column narrower.                                                    |
+| `}`         | Make the current column wider.                                                       |
+| `q`         | Kill the current buffer.                                                             |
 
 
 ## Editing a column value
@@ -48,7 +48,7 @@ Note that PGmacs tells you the column type when prompting for the new value. You
 value in the format accepted by PostgreSQL for that type (check the current value as displayed in the
 minibuffer if you’re unsure of the exepcted format).
 
-For certain column types and very long column values, it may be more convenient to the the
+For certain column types and very long column values, it may be more convenient to use the
 **widget-based editing interface** to edit a column value. Move the cursor to the relevant column value
 and type `w`. This will open a dedicated buffer with an editing widget suitable for that column’s
 type, as illustrated below for an HSTORE key->value map.
