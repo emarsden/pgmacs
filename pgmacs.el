@@ -343,6 +343,7 @@ PRIMARY-KEYS."
   "Widget to edit a PostgreSQL HSTORE key-value map."
   :tag "HSTORE key-value mapping"
   :format "%v"
+  :offset 2
   ;; Convert from the hashtable format used to represent an hstore column in Emacs Lisp to an alist
   ;; that is suitable for display using our widget.
   :value-to-internal (lambda (_widget ht)
@@ -368,6 +369,7 @@ PRIMARY-KEYS."
   "Widget to edit PostgreSQL JSON/JSONB values."
   :tag "JSON/JSONB value"
   :format "%v"
+  :offset 2
   ;; The pg-el library deserializes JSON and JSONB values to hashtables using Emacs' native JSON
   ;; support. Here we use the native JSON support plus pretty-printing support from json.el.
   :value-to-internal (lambda (_widget ht)
@@ -465,24 +467,23 @@ has primary keys, named in the list PRIMARY-KEYS."
       (kill-all-local-variables)
       (pgmacs-mode)
       (setq-local pgmacs--con con
-                  pgmacs--table table)
-      (setq-local header-line-format (format "🐘 Update PostgreSQL column %s" col-name))
+                  pgmacs--table table
+                  header-line-format (format "🐘 Update PostgreSQL column %s" col-name))
+      (widget-insert "\n")
+      (widget-insert (format "  Column type: %s\n\n" (pgmacs--column-info con table col-name)))
+      (widget-insert (format "  Change %s for current row to:" col-name))
       (widget-insert "\n\n")
-      (widget-insert (format "Column type: %s\n\n" (pgmacs--column-info con table col-name)))
-      (widget-insert (format "Change %s for current row to:" col-name))
-      (widget-insert "\n\n")
-      (let* ((w-updated
-              (progn
-                (pgmacs--widget-for col-type current))))
+      (let* ((w-updated (pgmacs--widget-for col-type current)))
         (widget-insert "\n\n")
         (widget-create 'push-button
+                       :offset 2
                        :notify (lambda (&rest _ignore)
                                  (let ((updated (widget-value w-updated)))
                                    (kill-buffer (current-buffer))
                                    (funcall updater updated)))
                        "Update database")
         (widget-insert "\n\n\n")
-        (widget-insert (propertize "To abort editing the column value, simply kill this buffer."
+        (widget-insert (propertize "(To abort editing the column value, simply kill this buffer.)"
                                    'face 'font-lock-comment-face))
         (widget-insert "\n")
         (use-local-map widget-keymap)
