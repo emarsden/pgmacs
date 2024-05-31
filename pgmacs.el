@@ -82,6 +82,7 @@ Uses customizations implemented in Emacs' customize support."
 
 (keymap-set pgmacs-mode-map (kbd "q") 'bury-buffer)
 (keymap-set pgmacs-mode-map (kbd "h") 'pgmacs--table-list-help)
+(keymap-set pgmacs-mode-map (kbd "?") 'pgmacs--table-list-help)
 (keymap-set pgmacs-mode-map (kbd "r") 'pgmacs--table-list-redraw)
 (keymap-set pgmacs-mode-map (kbd "e") 'pgmacs-run-sql)
 
@@ -1043,6 +1044,7 @@ object."
                                "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                "h" pgmacs--row-list-help
+                               "?" pgmacs--row-list-help
                                "+" pgmacs--insert-row
                                "i" pgmacs--insert-row-widget
                                "k" pgmacs--copy-row
@@ -1407,6 +1409,7 @@ Uses PostgreSQL connection CON."
                   ;; :column-colors '("#202020" "#404040")
                   :objects (pgmacs--list-tables)
                   :actions '("h" pgmacs--table-list-help
+                             "?" pgmacs--table-list-help
                              "RET" pgmacs--table-list-RET
                              "<deletechar>" pgmacs--table-list-delete
                              "r" pgmacs--table-list-rename

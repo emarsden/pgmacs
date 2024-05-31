@@ -3,7 +3,7 @@
 
 ## [0.8] - Unreleased
 
-- Look and feel: adopt the button faces used by Emacs' customization support.
+- Look and feel: adopt the button faces used by Emacs’ customization support.
 
 - New widget to allow widget-based editing of a PostgreSQL JSON or JSONB value.
 
