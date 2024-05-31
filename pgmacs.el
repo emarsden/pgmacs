@@ -84,10 +84,11 @@ Uses customizations implemented in Emacs' customize support."
 (keymap-set pgmacs-mode-map (kbd "h") 'pgmacs--table-list-help)
 (keymap-set pgmacs-mode-map (kbd "?") 'pgmacs--table-list-help)
 (keymap-set pgmacs-mode-map (kbd "r") 'pgmacs--table-list-redraw)
+(keymap-set pgmacs-mode-map (kbd "o") 'pgmacs-display-table)
 (keymap-set pgmacs-mode-map (kbd "e") 'pgmacs-run-sql)
 
 (defun pgmacs-mode ()
-  "Major mode for editing PostgreSQL database."
+  "Major mode for browsing and editing data in a PostgreSQL database."
   (setq major-mode 'pgmacs-mode
         mode-name "PGmacs")
   ;; Not appropriate for user to type stuff into our buffers.
@@ -800,7 +801,7 @@ over the PostgreSQL connection CON."
          (tname (if (pg-qualified-name-p table)
                     (pg-qualified-name-name table)
                   table))
-         (sql "SELECT tc.constraint_type FROM information_schema.table_constraints tc
+         (sql "SELECT tc.constraint_type, tc.constraint_name FROM information_schema.table_constraints tc
                JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
                JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
                AND tc.table_name = c.table_name
@@ -824,7 +825,9 @@ over the PostgreSQL connection CON."
          (type-name (pg--lookup-type-name oid))
          (column-info (list type-name)))
     (dolist (c constraints)
-      (push (cl-first c) column-info))
+      (if (cl-second c)
+          (push (format "%s %s" (cl-first c) (cl-second c)) column-info)
+        (push (cl-first c) column-info)))
     (when (pgmacs--column-nullable-p con table column)
       (push "NOT NULL" column-info))
     (when (cl-first maxlen)
@@ -1134,6 +1137,13 @@ object."
         (pgmacstbl-insert pgmacstbl))
       (pgmacs--stop-progress-reporter))))
 
+;; bound to "o"
+(defun pgmacs-display-table (table)
+  (interactive (list (completing-read
+                       "PostgreSQL table: "
+                       (pg-tables pgmacs--con)
+                       nil t)))
+  (pgmacs--display-table table))
 
 ;; This is similar to pgmacstbl-revert, but works correctly with a buffer than contains content other
 ;; than the pgmacstbl.
@@ -1354,6 +1364,7 @@ Uses PostgreSQL connection CON."
       (shw "RET" "Open a new buffer to browse/edit the table at point")
       (shw "<deletechar>" "Delete the table at point")
       (shw "r" "Rename the table at point")
+      (shw "o" "Prompt for a table to browse/edit in a new buffer")
       (shw "e" "New buffer with output from SQL query")
       (shw "<" "Go to the first table in the table list")
       (shw ">" "Go to the last table in the table list")
@@ -1414,6 +1425,7 @@ Uses PostgreSQL connection CON."
                              "<deletechar>" pgmacs--table-list-delete
                              "r" pgmacs--table-list-rename
                              "g" pgmacs--table-list-redraw
+                             "o" pgmacs-display-table
                              "e" pgmacs-run-sql
                              ;; the functions pgmacstbl-beginning-of-table and pgmacstbl-end-of-table don't work when
                              ;; we have inserted text before the pgmacstbl.
