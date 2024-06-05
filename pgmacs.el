@@ -386,6 +386,19 @@ PRIMARY-KEYS."
   :value-to-external (lambda (_widget str) (json-parse-string str))
   :args '((string :inline t :size 500)))
 
+;; function org-read-date provides a convenient interface
+;; and see complicated widget lib https://github.com/aki2o/emacs-date-field/blob/master/date-field.el
+(define-widget 'pgmacs-date-widget 'text
+  "Widget to edit a PostgreSQL date column."
+  :tag "Date"
+  :format "%v"
+  :offset 2
+  :value-to-internal (lambda (_widget val)
+                       (format-time-string "%Y-%m-%d" val))
+  :value-to-external (lambda (_widget str)
+                       (pg-date-parser str nil))
+  :args '((string :inline t :size 20)))
+
 (defun pgmacs--widget-for (type current-value)
   "Create a widget for TYPE and CURRENT-VALUE in the current buffer."
   (cond ((string= "bool" type)
@@ -416,7 +429,9 @@ PRIMARY-KEYS."
         ((or (string= "json" type)
              (string= "jsonb" type))
          (widget-create 'pgmacs-json-widget :value current-value))
-        ;; TODO: timestamp, timestamptz and date
+        ((string= "date" type)
+         (widget-create 'pgmacs-date-widget current-value))
+        ;; TODO: timestamp, timestamptz
         (t
          (widget-create 'editable-field
                         :size (min 200 (+ 5 (length current-value)))

@@ -7,6 +7,8 @@
 
 - New widget to allow widget-based editing of a PostgreSQL JSON or JSONB value.
 
+- New widget to allow widget-based editing of a PostgreSQL DATE value.
+
 - When displaying a table, show whether row-level security is enabled for this table.
 
 - Row deletion is now executed in an SQL transaction. If the number of affected rows is not equal to
