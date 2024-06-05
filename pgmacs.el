@@ -1301,6 +1301,25 @@ Uses PostgreSQL connection CON."
                               :row-colors pgmacs-row-colors
                               :objects rows
                               :actions '("e" pgmacs-run-sql
+                                         "r" pgmacs--redraw-pgmacstbl
+                                         "j" pgmacs--row-as-json
+                                         ;; "n" and "p" are bound when table is paginated to next/prev page
+                                         "<" (lambda (&rest _ignored)
+                                               (text-property-search-backward 'pgmacstbl)
+                                               (next-line))
+                                         ">" (lambda (&rest _ignored)
+                                               (text-property-search-forward 'pgmacstbl)
+                                               (previous-line))
+                                         "0" (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
+                                         "1" (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
+                                         "2" (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
+                                         "3" (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
+                                         "4" (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
+                                         "5" (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
+                                         "6" (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
+                                         "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
+                                         "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
+                                         "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
                                          "q" (lambda (&rest _ignore) (kill-buffer))))))
              (pgmacstbl-insert pgmacstbl))))
     (shrink-window-if-larger-than-buffer)
