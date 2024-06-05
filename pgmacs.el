@@ -1184,6 +1184,9 @@ object."
       (if addr
           (insert (format " at %s:%s\n" addr port))
         (insert " over Unix-domain socket\n")))
+    (let* ((res (pg-exec con "SELECT current_setting('ssl_library')"))
+           (row (pg-result res :tuple 0)))
+      (insert (format "Backend compiled with SSL library %s\n" (cl-first row))))
     (let* ((res (pg-exec con "SELECT current_user, current_setting('is_superuser')"))
            (row (pg-result res :tuple 0)))
       (insert (format "Connected as user %s (%ssuperuser)\n"
@@ -1205,6 +1208,9 @@ object."
     (let* ((res (pg-exec con "SELECT current_setting('TimeZone')"))
            (row (pg-result res :tuple 0)))
       (insert (apply #'format "Server timezone: %s\n" row)))
+    (let* ((res (pg-exec con "SELECT current_setting('shared_memory_size')"))
+           (row (pg-result res :tuple 0)))
+      (insert (format "Server shared memory size: %s\n" (cl-first row))))
     (let* ((res (pg-exec con "SELECT pg_listening_channels()"))
            (channels (pg-result res :tuples)))
       (when channels
@@ -1244,12 +1250,18 @@ object."
     (pgmacs-show-result pgmacs--con sql)))
 
 
+;; TODO: should limit this function to returning the pgmacstbl and let the caller pop to buffer, set
+;; pgmacs-mode, insert the information text.
 (defun pgmacs-show-result (con sql)
   "Create a buffer to show the results of PostgreSQL query SQL.
 Uses PostgreSQL connection CON."
   (pop-to-buffer (get-buffer-create "*PostgreSQL TMP*"))
+  (erase-buffer)
+  (remove-overlays)
+  (kill-all-local-variables)
   (pgmacs-mode)
   (setq-local pgmacs--con con
+              buffer-read-only t
               truncate-lines t)
   (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   ;; Insert initial content into buffer early.
@@ -1460,6 +1472,10 @@ Uses PostgreSQL connection CON."
     (insert "\n")
     (insert-text-button "More backend information"
                         'action #'pgmacs--display-backend-information)
+    (insert "   ")
+    (insert-text-button "PostgreSQL settings"
+                        'action (lambda (&rest _ignore)
+                                  (pgmacs-show-result con "SELECT * FROM pg_settings")))
     (insert "   ")
     (insert-text-button "Stat activity"
                         'action #'pgmacs--display-stat-activity
