@@ -816,6 +816,7 @@ over the PostgreSQL connection CON."
          (tname (if (pg-qualified-name-p table)
                     (pg-qualified-name-name table)
                   table))
+         ;; TODO: information_schema.check_constraints column check_clause holds the content of a CHECK constraint
          (sql "SELECT tc.constraint_type, tc.constraint_name FROM information_schema.table_constraints tc
                JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
                JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
@@ -937,8 +938,12 @@ Table names are schema-qualified if the schema is non-default."
 (defun pgmacs--run-count (&rest _ignore)
   "Count the number of rows in the current PostgreSQL table."
   (let* ((sql (format "SELECT COUNT(*) FROM %s" (pg-escape-identifier pgmacs--table)))
-         (res (pg-exec pgmacs--con sql)))
-    (pgmacs--notify "Table %s has %s rows" pgmacs--table (cl-first (pg-result res :tuple 0)))))
+         (res (pg-exec pgmacs--con sql))
+         (count (cl-first (pg-result res :tuple 0))))
+    (pgmacs--notify "Table %s has %s row%s"
+                    pgmacs--table
+                    count
+                    (if (> count 1) "s" ""))))
 
 (defun pgmacs--paginated-next (&rest _ignore)
   "Move to the next page of the paginated PostgreSQL table."
