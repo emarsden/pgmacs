@@ -934,6 +934,11 @@ Table names are schema-qualified if the schema is non-default."
          (res (pg-exec pgmacs--con sql)))
     (pgmacs--notify "%s" (pg-result res :status))))
 
+(defun pgmacs--run-count (&rest _ignore)
+  "Count the number of rows in the current PostgreSQL table."
+  (let* ((sql (format "SELECT COUNT(*) FROM %s" (pg-escape-identifier pgmacs--table)))
+         (res (pg-exec pgmacs--con sql)))
+    (pgmacs--notify "Table %s has %s rows" pgmacs--table (cl-first (pg-result res :tuple 0)))))
 
 (defun pgmacs--paginated-next (&rest _ignore)
   "Move to the next page of the paginated PostgreSQL table."
@@ -1131,6 +1136,10 @@ object."
         (insert-text-button "Add primary key to table"
                             'action #'pgmacs--add-primary-key
                             'help-echo "Add a PRIMARY KEY to enable editing"))
+      (insert "  ")
+      (insert-text-button "Count rows"
+                          'action #'pgmacs--run-count
+                          'help-echo "Count rows in this table")
       (insert "  ")
       (insert-text-button "ANALYZE this table"
                           'action #'pgmacs--run-analyze
