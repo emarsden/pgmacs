@@ -86,6 +86,7 @@ Uses customizations implemented in Emacs' customize support."
 (keymap-set pgmacs-mode-map (kbd "r") 'pgmacs--table-list-redraw)
 (keymap-set pgmacs-mode-map (kbd "o") 'pgmacs-display-table)
 (keymap-set pgmacs-mode-map (kbd "e") 'pgmacs-run-sql)
+(keymap-set pgmacs-mode-map (kbd "T") 'pgmacs--switch-to-database-buffer)
 
 (defun pgmacs-mode ()
   "Major mode for browsing and editing data in a PostgreSQL database."
@@ -103,6 +104,7 @@ Uses customizations implemented in Emacs' customize support."
 
 (defvar pgmacs-transient-map (make-sparse-keymap))
 (keymap-set pgmacs-transient-map (kbd "q") 'kill-buffer)
+(keymap-set pgmacs-transient-map (kbd "T") 'pgmacs--switch-to-database-buffer)
 
 (define-minor-mode pgmacs-transient-mode
   "Minor mode for transient PGmacs buffers."
@@ -157,7 +159,15 @@ Uses customizations implemented in Emacs' customize support."
 (defvar-local pgmacs--table nil)
 (defvar-local pgmacs--column-type-names nil)
 (defvar-local pgmacs--offset nil)
+(defvar-local pgmacs--db-buffer nil)
 
+;; We can have several table-list buffers open, corresponding to different PostgreSQL databases. The
+;; buffer-local pgmacs--db-buffer is kept up to date in all PGmacs buffers to point to the main
+;; table-list buffer.
+(defun pgmacs--switch-to-database-buffer (&rest _ignore)
+  "Switch to the main table-list buffer for the current PostgreSQL database."
+  (interactive)
+  (switch-to-buffer pgmacs--db-buffer))
 
 (defun pgmacs--notify (fmt &rest args)
   "Display a notification regarding PGmacs activity.
@@ -444,6 +454,7 @@ has primary keys, named in the list PRIMARY-KEYS."
   (when (null primary-keys)
       (error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((con pgmacs--con)
+         (db-buffer pgmacs--db-buffer)
          (table pgmacs--table)
          (pgmacstbl (pgmacstbl-current-table))
          (current-row (pgmacstbl-current-object))
@@ -488,6 +499,7 @@ has primary keys, named in the list PRIMARY-KEYS."
       (kill-all-local-variables)
       (pgmacs-mode)
       (setq-local pgmacs--con con
+                  pgmacs--db-buffer db-buffer
                   pgmacs--table table
                   header-line-format (format "🐘 Update PostgreSQL column %s" col-name))
       (widget-insert "\n")
@@ -515,13 +527,15 @@ has primary keys, named in the list PRIMARY-KEYS."
 (defun pgmacs--view-value (current-row)
   "Insert column value at point into a dedicated buffer.
 Point is located in CURRENT-ROW."
-  (let* ((col-id (pgmacstbl-current-column))
+  (let* ((db-buffer pgmacs--db-buffer)
+         (col-id (pgmacstbl-current-column))
          (cols (pgmacstbl-columns (pgmacstbl-current-table)))
          (col (nth col-id cols))
          (buf (get-buffer-create (format "*PostgreSQL column value %s*" (pgmacstbl-column-name col))))
          (value (funcall (pgmacstbl-column-formatter col)
                          (nth col-id current-row))))
     (pop-to-buffer buf)
+    (setq-local pgmacs--db-buffer db-buffer)
     (pgmacs-transient-mode)
     (insert value)
     (shrink-window-if-larger-than-buffer)
@@ -648,6 +662,7 @@ Uses the minibuffer to prompt for new values."
 Uses a widget-based buffer to prompt for new values.  Updates the
 PostgreSQL database."
   (let* ((con pgmacs--con)
+         (db-buffer pgmacs--db-buffer)
          (table pgmacs--table)
          (ce (pgcon-client-encoding pgmacs--con))
          (pgmacstbl (pgmacstbl-current-table))
@@ -695,6 +710,7 @@ PostgreSQL database."
       (kill-all-local-variables)
       (pgmacs-mode)
       (setq-local pgmacs--con con
+                  pgmacs--db-buffer db-buffer
                   pgmacs--table table)
       (widget-insert (propertize (format "Insert row into table %s" table) 'face 'bold))
       (widget-insert "\n\n")
@@ -904,12 +920,14 @@ Table names are schema-qualified if the schema is non-default."
 (defun pgmacs--table-to-csv (&rest _ignore)
   "Dump the current PostgreSQL table in CSV format into an Emacs buffer."
   (let* ((con pgmacs--con)
+         (db-buffer pgmacs--db-buffer)
          (table pgmacs--table)
          (t-id (pg-escape-identifier table))
          (t-pretty (pgmacs--display-identifier table))
          (buf (get-buffer-create (format "*PostgreSQL CSV for %s*" t-pretty)))
          (sql (format "COPY %s TO STDOUT WITH (FORMAT CSV)" t-id)))
     (pop-to-buffer buf)
+    (setq-local pgmacs--db-buffer db-buffer)
     (pgmacs-transient-mode)
     (pg-copy-to-buffer con sql buf)
     (goto-char (point-min))))
@@ -988,6 +1006,7 @@ Table names are schema-qualified if the schema is non-default."
       (shw "{" "Shrink the horizontal space used by the current column")
       (shw "}" "Grow the horizontal space used by the current column")
       (shw "r" "Redraw the table (does not refetch data from PostgreSQL)")
+      (shw "T" "Switch to the main table-list buffer for this database")
       (shw "q" "Bury this buffer")
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min)))))
@@ -1013,9 +1032,11 @@ Table names are schema-qualified if the schema is non-default."
 Table may be specified as a string or as a schema-qualified pg-qualified-name
 object."
   (let* ((con pgmacs--con)
+         (db-buffer pgmacs--db-buffer)
          (t-id (pg-escape-identifier table))
          (t-pretty (pgmacs--display-identifier table)))
     (pop-to-buffer-same-window (format "*PostgreSQL %s %s*" (pgcon-dbname con) t-pretty))
+    (setq-local pgmacs--db-buffer db-buffer)
     (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
     (pgmacs-mode)
     (use-local-map pgmacs-row-list-map)
@@ -1097,6 +1118,7 @@ object."
                                "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
                                "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
                                "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
+                               "T" pgmacs--switch-to-database-buffer
                                "q" (lambda (&rest ignore) (kill-buffer))))))
       (setq-local pgmacs--con con
                   pgmacs--table table
@@ -1201,9 +1223,10 @@ object."
 
 (defun pgmacs--display-backend-information (&rest _ignore)
   "Create a buffer with information concerning the current PostgreSQL backend."
-  (let ((con pgmacs--con))
+  (let ((con pgmacs--con)
+        (db-buffer pgmacs--db-buffer))
     (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
-    (pgmacs-transient-mode)
+    (setq-local pgmacs--db-buffer db-buffer)
     (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
            (row (pg-result res :tuple 0))
            (addr (cl-first row))
@@ -1256,7 +1279,9 @@ object."
       (dolist (ext exts)
         (insert (apply #'format "%20s %17s %18s\n" ext))))
     (shrink-window-if-larger-than-buffer)
-    (goto-char (point-min))))
+    (goto-char (point-min))
+    (help-mode)
+    (pgmacs-transient-mode)))
 
 
 (defvar pgmacs--stat-activity-columns
@@ -1284,14 +1309,16 @@ object."
 (defun pgmacs-show-result (con sql)
   "Create a buffer to show the results of PostgreSQL query SQL.
 Uses PostgreSQL connection CON."
-  (pop-to-buffer (get-buffer-create "*PostgreSQL TMP*"))
-  (erase-buffer)
-  (remove-overlays)
-  (kill-all-local-variables)
-  (pgmacs-mode)
-  (setq-local pgmacs--con con
-              buffer-read-only t
-              truncate-lines t)
+  (let ((db-buffer pgmacs--db-buffer))
+    (pop-to-buffer (get-buffer-create "*PostgreSQL TMP*"))
+    (erase-buffer)
+    (remove-overlays)
+    (kill-all-local-variables)
+    (pgmacs-mode)
+    (setq-local pgmacs--con con
+                pgmacs--db-buffer db-buffer
+                buffer-read-only t
+                truncate-lines t))
   (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   ;; Insert initial content into buffer early.
   (let ((inhibit-read-only t))
@@ -1443,6 +1470,7 @@ Uses PostgreSQL connection CON."
   (pop-to-buffer-same-window (format "*PostgreSQL %s*" (pgcon-dbname con)))
   (pgmacs-mode)
   (setq-local pgmacs--con con
+              pgmacs--db-buffer (current-buffer)
               buffer-read-only t
               truncate-lines t)
   (pgmacs--start-progress-reporter "Retrieving PostgreSQL table list")
