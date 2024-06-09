@@ -21,7 +21,12 @@ With the pgmacs.el library loaded, say
     M-x pgmacs
     
 This will open a widget-based buffer to collect connection information (database name, hostname,
-port, etc.). 
+port, etc.). It reads initial values for these variables from the environment variables
+`POSTGRES_DATABASE`, `POSTGRES_HOSTNAME`, `POSTGRES_PORT_NUMBER`, `PGPORT`, `POSTGRES_USER`,
+`POSTGRESQL_USERNAME`, `POSTGRES_PASSWORD` and `POSTGRESQL_PASSWORD`, if they are defined (these
+semi-standardized variable names are used by the [official Docker image for
+PostgreSQL](https://hub.docker.com/_/postgres/) and the more sophisticated [Bitnami PostgreSQL
+image](https://registry.hub.docker.com/r/bitnami/postgresql)).
 
 ![Screenshot connection widget](img/connect-widget-table-list.gif)
 

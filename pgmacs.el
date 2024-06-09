@@ -218,17 +218,18 @@ Applies format string FMT to ARGS."
         ((string= type-name "bit") 4)
         ((string= type-name "varbit") 10)
         ((string= type-name "char") 4)
-        ((string= type-name "bpchar") 4)
         ((string= type-name "char2") 4)
         ((string= type-name "char4") 6)
         ((string= type-name "char8") 10)
         ((string= type-name "char16") 20)
         ((string= type-name "text") 25)
         ((string= type-name "varchar") 25)
+        ((string= type-name "bpchar") 25)
         ((string= type-name "name") 25)
         ((string= type-name "bytea") 10)
         ((string= type-name "json") 20)
         ((string= type-name "jsonb") 20)
+        ((string= type-name "uuid") 36)
         ((string= type-name "hstore") 20)
         ((string= type-name "numeric") 10)
         ((string= type-name "float4") 10)
@@ -423,11 +424,12 @@ PRIMARY-KEYS."
              (string= type "float4")
              (string= type "float8"))
          (widget-create 'float current-value))
-        ((or (string= type "char")
-             (string= type "bpchar"))
+        ((string= type "char")
          (widget-create 'character current-value))
         ((or (string= "text" type)
-             (string= "varchar" type))
+             (string= "varchar" type)
+             ;; blank-trimmed text of unlimited length
+             (string= type "bpchar"))
          (widget-create 'string
                         :size (max 80 (min 200 (+ 5 (length current-value))))
                         :value current-value))
@@ -506,21 +508,28 @@ has primary keys, named in the list PRIMARY-KEYS."
       (widget-insert (format "  Column type: %s\n\n" (pgmacs--column-info con table col-name)))
       (widget-insert (format "  Change %s for current row to:" (substring-no-properties col-name)))
       (widget-insert "\n\n")
-      (let* ((w-updated (pgmacs--widget-for col-type current)))
+      (let* ((w-updated (pgmacs--widget-for col-type current))
+             (validate-action (lambda (&rest _ignore)
+                                (interactive)
+                                (let ((updated (widget-value w-updated)))
+                                  (kill-buffer (current-buffer))
+                                  (funcall updater updated)))))
         (widget-insert "\n\n")
         (widget-create 'push-button
                        :offset 2
-                       :notify (lambda (&rest _ignore)
-                                 (let ((updated (widget-value w-updated)))
-                                   (kill-buffer (current-buffer))
-                                   (funcall updater updated)))
+                       :notify validate-action
                        "Update database")
         (widget-insert "\n\n\n")
         (widget-insert (propertize "(To abort editing the column value, simply kill this buffer.)"
                                    'face 'font-lock-comment-face))
         (widget-insert "\n")
-        (use-local-map widget-keymap)
         (widget-setup)
+        (let ((map (make-sparse-keymap)))
+          (set-keymap-parent map widget-keymap)
+          (define-key map (kbd "C-c C-c") validate-action)
+          (use-local-map map)
+          ;; FIXME this does not work
+          (widget-put w-updated :keymap map))
         (goto-char (point-min))
         (widget-forward 1)))))
 
@@ -1589,6 +1598,14 @@ CONNECTION-URI is a PostgreSQL connection URI of the form
   (pgmacs--start-progress-reporter "Connecting to PostgreSQL")
   (pgmacs-open (pg-connect/uri connection-uri)))
 
+;; The environment variables that we look for to pre-populate the login widget are
+;; semi-standardized, used for example in the official Docker image for PostgreSQL.
+;;
+;;    https://hub.docker.com/_/postgres/
+;;
+;; and the more sophisticated Bitnami PostgreSQL image
+;;
+;;    https://registry.hub.docker.com/r/bitnami/postgresql#!
 ;;;###autoload
 (defun pgmacs ()
   "Open a widget-based login buffer for PostgreSQL."
@@ -1600,36 +1617,51 @@ CONNECTION-URI is a PostgreSQL connection URI of the form
   (widget-insert (propertize "Connect to PostgreSQL database" 'face 'bold))
   (widget-insert "\n\n")
   (let* ((w-dbname
-         (progn
-           (widget-insert (format "%18s: " "Database name"))
-           (widget-create 'editable-field
-                          :size 20)))
-        (w-hostname
-         (progn
-           (widget-insert (format "\n%18s: " "Hostname"))
-           (widget-create 'editable-field
-                          :help-echo "The host where PostgreSQL is running"
-                          :default ""
-                          :size 20)))
+          (progn
+            (widget-insert (format "%18s: " "Database name"))
+            (widget-create 'editable-field
+                           :size 20
+                           (or (getenv "POSTGRES_DATABASE")
+                               (getenv "POSTGRESQL_DATABASE")
+                               (getenv "POSTGRES_DB")
+                               ""))))
+         (w-hostname
+          (progn
+            (widget-insert (format "\n%18s: " "Hostname"))
+            (widget-create 'editable-field
+                           :help-echo "The host where PostgreSQL is running"
+                           :default ""
+                           :size 20
+                           (or (getenv "POSTGRES_HOSTNAME")
+                               "localhost"))))
         (w-port
          (progn
            (widget-insert (format "\n%18s: " "Port"))
            (widget-create 'natnum
                           :format "%v"
                           :size 20
-                          "5432")))
+                          (or (getenv "POSTGRES_PORT_NUMBER")
+                              (getenv "POSTGRESQL_PORT_NUMBER")
+                              (getenv "PGPORT")
+                              5432))))
         (w-username
          (progn
            (widget-insert (format "\n%18s: " "Username"))
            (widget-create 'editable-field
                           :help-echo "Authenticate as this user"
-                          :size 20)))
+                          :size 20
+                          (or (getenv "POSTGRES_USER")
+                              (getenv "POSTGRESQL_USERNAME")
+                              ""))))
         (w-password
          (progn
            (widget-insert (format "\n%18s: " "Password"))
            (widget-create 'editable-field
                           :secret ?*
-                          :size 20)))
+                          :size 20
+                          (or (getenv "POSTGRES_PASSWORD")
+                              (getenv "POSTGRESQL_PASSWORD")
+                              ""))))
         (w-tls
          (progn
            (widget-insert (format "\n%18s: " "TLS encryption"))
