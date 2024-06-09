@@ -1,0 +1,53 @@
+#        -*- Dockerfile -*-
+#
+# Recipe to build a container image including a terminal-only Emacs, PGmacs and its dependencies.
+# Container size is 149MB on AMD64.
+#
+# To build the container locally (not needed for an end user):
+#
+#    podman build -f etc/Containerfile --tag pgmacs .
+#
+# To run the container:
+#
+#    podman run --net host -ti localhost/pgmacs
+
+
+FROM docker.io/alpine:latest as builder
+LABEL stage=builder
+WORKDIR /src
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache git && \
+    git clone --depth 1 https://github.com/emacsmirror/peg.git && \
+    git clone --depth 1 https://github.com/emarsden/pg-el.git && \
+    git clone --depth 1 https://github.com/emarsden/pgmacs.git
+
+
+FROM docker.io/alpine:latest
+LABEL org.opencontainers.image.description "The Emacs-based browser/editor for PostgreSQL."
+LABEL org.opencontainers.image.title "PGmacs"
+LABEL org.opencontainers.image.url "https://github.com/emarsden/pgmacs"
+LABEL org.opencontainers.image.source "https://github.com/emarsden/pgmacs"
+LABEL org.opencontainers.image.version "0.7"
+LABEL org.opencontainers.image.authors "eric.marsden@risk-engineering.org"
+LABEL org.opencontainers.image.licenses "GPLv2"
+
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache emacs-nox && \
+    mkdir /elisp && \
+    chown root.root /elisp && \
+    chmod a=rwx,o+t /elisp && \
+    ls -l /usr/share/emacs/site-lisp && \
+    echo "(push \"/elisp\" load-path)" > /usr/share/emacs/site-lisp/site-start.el && \
+    echo "(require 'pgmacs)" >> /usr/share/emacs/site-lisp/site-start.el 
+
+COPY --from=builder --chown=root:root /src/peg/peg.el /elisp
+COPY --from=builder --chown=root:root /src/pg-el/pg.el /elisp
+COPY --from=builder --chown=root:root /src/pgmacs/pgmacstbl.el /elisp
+COPY --from=builder --chown=root:root /src/pgmacs/pgmacs.el /elisp
+
+WORKDIR /app
+ENTRYPOINT ["/usr/bin/emacs", "-f", "pgmacs"]
+
+
