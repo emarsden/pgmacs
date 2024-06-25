@@ -5,9 +5,8 @@
 
 - Look and feel: adopt the button faces used by Emacs’ customization support.
 
-- New widget to allow widget-based editing of a PostgreSQL JSON or JSONB value.
-
-- New widget to allow widget-based editing of a PostgreSQL DATE value.
+- New widgets to allow widget-based editing of a PostgreSQL JSON or JSONB value, a DATE values and
+  UUID values.
 
 - When displaying a table, show whether row-level security is enabled for this table.
 

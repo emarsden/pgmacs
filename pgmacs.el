@@ -36,9 +36,14 @@
   :group 'pgmacs)
 
 (defface pgmacs-table-header
-  '((t (:inherit bold
-        :weight bold
-        :foreground "black")))
+  '((((class color) (background light))
+     :bold t
+     :background "lightgray"
+     :foreground "darkolivegreen")
+    (((class color) (background dark))
+     :bold t
+     :background "darkolivegreen"
+     :foreground "lightgreen"))
   "Face used to display a PGmacs database table header."
   :group 'pgmacs)
 
@@ -69,6 +74,9 @@ PostgreSQL over a slow network link."
 (defun pgmacs--widget-setup ()
   "Set up the appearance of widgets used in PGmacs.
 Uses customizations implemented in Emacs' customize support."
+  ;; cus-edit.el has this rather rude keymap binding which adds to widget-field-keymap
+  ;; bindings that are not relevant to us. So we revert it back to widget-field-keymap.
+  (widget-put (get 'editable-field 'widget-type) :keymap widget-field-keymap)
   (setq-local widget-button-face custom-button)
   (setq-local widget-button-pressed-face custom-button-pressed)
   (setq-local widget-mouse-face custom-button-mouse)
@@ -410,6 +418,27 @@ PRIMARY-KEYS."
                        (pg-date-parser str nil))
   :args '((string :inline t :size 20)))
 
+;; https://www.postgresql.org/docs/current/datatype-uuid.html
+(define-widget 'pgmacs-uuid-widget 'list
+  "Widget to edit a PostgreSQL UUID column."
+  :tag "UUID"
+  :format "%v"
+  :offset 2
+  :value-to-internal (lambda (_widget uuid-string)
+                       (split-string uuid-string "-"))
+  :value-to-external (lambda (_widget uuid-elements)
+                       (apply #'format (cons "%s-%s-%s-%s-%s" uuid-elements)))
+  :error "Invalid format for a UUID."
+  :args '((list :inline t :format "%v"
+                (editable-field :size 8
+                                :valid-regexp "[:xdigit:]\{8\}"
+                                :error "Invalid format for UUID component"
+                                :format "%v-")
+                (editable-field :size 4 :valid-regexp "[:xdigit:]\{4\}" :format "%v-")
+                (editable-field :size 4 :valid-regexp "[:xdigit:]\{4\}" :format "%v-")
+                (editable-field :size 4 :valid-regexp "[:xdigit:]\{4\}" :format "%v-")
+                (editable-field :size 12 :valid-regexp "[:xdigit:]\{12\}" :format "%v"))))
+
 (defun pgmacs--widget-for (type current-value)
   "Create a widget for TYPE and CURRENT-VALUE in the current buffer."
   (cond ((string= "bool" type)
@@ -444,6 +473,12 @@ PRIMARY-KEYS."
         ((string= "date" type)
          (widget-create 'pgmacs-date-widget current-value))
         ;; TODO: timestamp, timestamptz
+        ((string= "uuid" type)
+         (widget-create 'pgmacs-uuid-widget :value current-value
+                        :action (lambda (wid &rest _ignore)
+                                  (if (widget-apply wid :validate)
+                                      (error "The UUID is not valid: %s!" (widget-get wid :error))
+                                    (message "%s is ok!" (widget-value wid))))))
         (t
          (widget-create 'editable-field
                         :size (min 200 (+ 5 (length current-value)))
@@ -509,15 +544,20 @@ has primary keys, named in the list PRIMARY-KEYS."
       (widget-insert (format "  Change %s for current row to:" (substring-no-properties col-name)))
       (widget-insert "\n\n")
       (let* ((w-updated (pgmacs--widget-for col-type current))
-             (validate-action (lambda (&rest _ignore)
+             (update-action (lambda (&rest _ignore)
                                 (interactive)
+                                ;; FIXME this :validate is always returning t
+;;                                 (when (widget-apply w-updated :validate)
+;;                                   (message "Widget %s failed verification: %s"
+;;                                            (widget-get w-updated :tag)
+;;                                            (widget-get w-updated :error)))
                                 (let ((updated (widget-value w-updated)))
                                   (kill-buffer (current-buffer))
                                   (funcall updater updated)))))
         (widget-insert "\n\n")
         (widget-create 'push-button
                        :offset 2
-                       :notify validate-action
+                       :notify update-action
                        "Update database")
         (widget-insert "\n\n\n")
         (widget-insert (propertize "(To abort editing the column value, simply kill this buffer.)"
@@ -526,10 +566,10 @@ has primary keys, named in the list PRIMARY-KEYS."
         (widget-setup)
         (let ((map (make-sparse-keymap)))
           (set-keymap-parent map widget-keymap)
-          (define-key map (kbd "C-c C-c") validate-action)
-          (use-local-map map)
-          ;; FIXME this does not work
-          (widget-put w-updated :keymap map))
+          (define-key map (kbd "C-c C-c") update-action)
+          (use-local-map map))
+        ;; map over all widget children/fields and add binding for C-c C-c to their existing keymap
+        ;; (widget-put w-updated :keymap map))
         (goto-char (point-min))
         (widget-forward 1)))))
 
@@ -863,7 +903,7 @@ over the PostgreSQL connection CON."
                       (pg-escape-identifier table)))
          (res (pg-exec con sql))
          (oid (cadar (pg-result res :attributes)))
-         (type-name (pg--lookup-type-name oid))
+         (type-name (pg--lookup-type-name con oid))
          (column-info (list type-name)))
     (dolist (c constraints)
       (if (cl-second c)
@@ -1063,7 +1103,7 @@ object."
            (rows (pg-result res :tuples))
            (column-names (mapcar #'cl-first (pg-result res :attributes)))
            (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
-           (column-type-names (mapcar #'pg--lookup-type-name column-type-oids))
+           (column-type-names (mapcar (lambda (tn) (pg--lookup-type-name con tn)) column-type-oids))
            (column-alignment (mapcar #'pgmacs--alignment-for column-type-names))
            (column-meta (mapcar (lambda (col) (pgmacs--column-info con table col)) column-names))
            (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
@@ -1090,6 +1130,7 @@ object."
            (pgmacstbl (make-pgmacstbl
                     :insert nil
                     :use-header-line nil
+                    :face 'pgmacs-table-data
                     :columns columns
                     :row-colors pgmacs-row-colors
                     :objects rows
@@ -1344,7 +1385,7 @@ Uses PostgreSQL connection CON."
           (t
            (let* ((column-names (mapcar #'cl-first (pg-result res :attributes)))
                   (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
-                  (column-type-names (mapcar #'pg--lookup-type-name column-type-oids))
+                  (column-type-names (mapcar (lambda (tn) (pg--lookup-type-name con tn)) column-type-oids))
                   (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
                   (value-widths (mapcar #'pgmacs--value-width column-type-names))
                   (column-widths (cl-loop for w in value-widths
