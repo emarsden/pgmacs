@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 ;; Version: 0.7
-;; Package-Requires: ((emacs "29.1") (pg "0.32"))
+;; Package-Requires: ((emacs "29.1") (pg "0.36"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
 ;; SPDX-License-Identifier: GPL-2.0-or-later
@@ -131,7 +131,7 @@ table owner), you can:
  - export the contents of a table to CSV using a dedicated button
  - type `h' to show buffer-specific help
 
-See the 'pgmacs' customization group for a list of user options.
+See the `pgmacs' customization group for a list of user options.
 
 Entering this mode runs the functions on `pgmacs-mode-hook'.
 "
@@ -272,8 +272,8 @@ Applies format string FMT to ARGS."
         ((string= type-name "bpchar") 25)
         ((string= type-name "name") 25)
         ((string= type-name "bytea") 10)
-        ((string= type-name "json") 20)
-        ((string= type-name "jsonb") 20)
+        ((string= type-name "json") 40)
+        ((string= type-name "jsonb") 40)
         ((string= type-name "uuid") 36)
         ((string= type-name "hstore") 20)
         ((string= type-name "numeric") 10)
@@ -820,7 +820,7 @@ PostgreSQL database."
       (widget-forward 1))))
 
 (defun pgmacs--copy-row (current-row)
-  "Copy CURRENT-ROW to the PGMacs internal kill ring."
+  "Copy CURRENT-ROW to the PGmacs internal kill ring."
   (setq pgmacs--kill-ring (cons pgmacs--table current-row))
   (message "Row copied to PGmacs kill ring"))
 
