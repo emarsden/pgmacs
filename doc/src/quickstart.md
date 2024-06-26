@@ -13,6 +13,12 @@ from the git repository, as well as the dependency [pg-el](https://github.com/em
 
 You can later upgrade PGmacs to the latest version with `M-x package-vc-upgrade RET pgmacs RET`.
 
+**With `use-package`**: if you prefer the `use-package` macro (which is integrated with Emacs 29),
+you can instead say
+
+    (use-package pg :vc (:url "https://github.com/emarsden/pg-el"))
+    (use-package pgmacs :vc (:url "https://github.com/emarsden/pgmacs"))
+
 
 ## Connecting to a PostgreSQL database
 
@@ -33,15 +39,15 @@ image](https://registry.hub.docker.com/r/bitnami/postgresql)).
 It will then open the PGmacs main buffer, which will show you a list of the tables available in the
 database.
 
-You can also open PGmacs with:
+You can also open PGmacs with a PostgreSQL connection string
 
-- a PostgreSQL connection object from the pg.el library, using function `pgmacs-open`
+    M-x pgmacs-open-string RET user=myself port=5432 dbname=mydb
 
-- a PostgreSQL connection string such as `user=myself port=5432 dbname=mydb`, using function
-  `pgmacs-open-string`
+or with a PostgreSQL connection URI
 
-- a PostgreSQL connection URI such as `postgresql://%2Fvar%2Flib%2Fpostgresql/dbname`, using
-  function `pgmacs-open-uri`.
+    M-x pgmacs-open-uri RET postgresql://%2Fvar%2Flib%2Fpostgresql/dbname
+
+or with a PostgreSQL connection object from the pg.el library, using function `pgmacs-open`.
 
 
 ![Screenshot table list](img/screenshot-overview.png)
