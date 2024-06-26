@@ -55,9 +55,13 @@ port, etc.). It will then open the PGmacs main buffer, which will show you a lis
 available in the database.
 
 You can also open PGmacs with a connection object from the pg.el library (function `pgmacs-open`),
-or with a PostgreSQL connection string such as `user=myself port=5432 dbname=mydb` (function
-`pgmacs-open-string`) or with a PostgreSQL connection URI such as
-`postgresql://%2Fvar%2Flib%2Fpostgresql/dbname` (function `pgmacs-open-uri`). 
+or with a PostgreSQL connection string
+
+    M-x pgmacs-open-string RET user=myself port=5432 dbname=mydb
+
+or with a PostgreSQL connection URI
+
+    M-x pgmacs-open-uri RET postgresql://%2Fvar%2Flib%2Fpostgresql/dbname
 
 Check the [user manual](https://emarsden.github.io/pgmacs/) for more.
 
@@ -67,13 +71,13 @@ Check the [user manual](https://emarsden.github.io/pgmacs/) for more.
 PGmacs is in **beta status**. Please only use it on test databases that do not contain important
 data. 
 
-**Emacs version**: PGmacs requires Emacs version 29. It has also be tested on the
+**Emacs version**: PGmacs requires Emacs version 29. It has also been tested on the
 pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
 Windows and MacOS. It works both in graphical mode and in the terminal.
 
-**PostgreSQL version**: PGmacs has been tested with PostgreSQL version 16.3, but should work with
-any PostgreSQL version supported by the `pg-el` library that it uses to communicate with PostgreSQL.
-For example, it works fine with PostgreSQL version 14 which was released in 2021.
+**PostgreSQL version**: PGmacs has been tested with PostgreSQL version 16.3 and 17beta1, but should
+work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate with
+PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
 PGmacs also works with some databases that implement the PostgreSQL frontend-backend protocol, but
 not with all of them. PGmacs queries various internal PostgreSQL tables for metainformation on the
@@ -89,6 +93,9 @@ on-disk size of tables, and these functions are not always implemented. What we 
   
 - CrateDB v5.7 does not currently work; it does not implement PostgreSQL functions that we use to
   query table metainformation.
+
+- ClickHouse v24.5 does not work: its implementation of the wire protocol is very limited, with no
+  support for the `pg_type` metadata.
 
 
 ## License
