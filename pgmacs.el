@@ -97,7 +97,44 @@ Uses customizations implemented in Emacs' customize support."
 (keymap-set pgmacs-mode-map (kbd "T") 'pgmacs--switch-to-database-buffer)
 
 (defun pgmacs-mode ()
-  "Major mode for browsing and editing data in a PostgreSQL database."
+  "Mode for browsing and editing data in a PostgreSQL database.
+PGmacs provides an editing interface for PostgreSQL. The main PGmacs
+table-list buffer displayed on startup allows you to:
+ - browse the list of tables in the database
+ - browse/edit a table (type `RET' on the table name)
+ - delete a table (type `DEL' on the table name)
+ - rename a table (type `r' on the table name)
+ - modify the SQL comment on a table (type `RET' in the `comment' column)
+ - show the output from an SQL query in table mode (type `e' to enter the
+   SQL query in the minibuffer)
+ - type `h' to show buffer-specific help
+
+In a table buffer, which displays metainformation on the table (types of
+the different columns and their associated SQL constraints, on-disk size,
+table owner), you can:
+ - browse the table contents row by row, in paginated mode for large
+   tables. Type `n' and `p' to move to the next/previous page in a
+   paginated buffer.
+ - use `M-right' and `M-left' to move to the next/previous column,
+   type a number to move to that column (numbering is zero-based)
+ - edit the data value at point (type `RET' on the value you want to
+   modify to edit it in the minibuffer, or `w' to open a dedicated
+   widget-based editing buffer)
+ - insert a new row by typing `+' (you will be prompted in the minibuffer
+   for new values, unless an SQL default value is defined) or by typing
+   `i' (opens a dedicated widget-based buffer for you to enter the new
+   values).
+ - copy the current row to the kill ring in JSON format (type `j' on the
+   row you want to serialize to JSON)
+ - delete a row (type `DEL' on the row you wish to delete)
+ - copy/paste rows of a database table (type `k' to copy, `y' to paste)
+ - export the contents of a table to CSV using a dedicated button
+ - type `h' to show buffer-specific help
+
+See the 'pgmacs' customization group for a list of user options.
+
+Entering this mode runs the functions on `pgmacs-mode-hook'.
+"
   (setq major-mode 'pgmacs-mode
         mode-name "PGmacs")
   ;; Not appropriate for user to type stuff into our buffers.
