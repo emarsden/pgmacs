@@ -111,7 +111,7 @@ Uses customizations implemented in Emacs' customize support."
 (keymap-set pgmacs-row-list-map (kbd "i") 'pgmacs--insert-row-empty)
 
 (defvar pgmacs-transient-map (make-sparse-keymap))
-(keymap-set pgmacs-transient-map (kbd "q") 'kill-buffer)
+(keymap-set pgmacs-transient-map (kbd "q") 'bury-buffer)
 (keymap-set pgmacs-transient-map (kbd "T") 'pgmacs--switch-to-database-buffer)
 
 (define-minor-mode pgmacs-transient-mode
@@ -1169,7 +1169,7 @@ object."
                                "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
                                "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
                                "T" pgmacs--switch-to-database-buffer
-                               "q" (lambda (&rest ignore) (kill-buffer))))))
+                               "q" (lambda (&rest ignore) (bury-buffer))))))
       (setq-local pgmacs--con con
                   pgmacs--table table
                   pgmacs--offset offset
@@ -1426,7 +1426,7 @@ Uses PostgreSQL connection CON."
                                          "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
                                          "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
                                          "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
-                                         "q" (lambda (&rest _ignore) (kill-buffer))))))
+                                         "q" (lambda (&rest _ignore) (bury-buffer))))))
              (pgmacstbl-insert pgmacstbl))))
     (shrink-window-if-larger-than-buffer)
     (pgmacs--stop-progress-reporter)))
@@ -1573,7 +1573,7 @@ Uses PostgreSQL connection CON."
                              ">" (lambda (&rest _ignored)
                                    (text-property-search-forward 'pgmacstbl)
                                    (previous-line))
-                             "q"  (lambda (&rest _ignored) (kill-buffer)))
+                             "q"  (lambda (&rest _ignored) (bury-buffer)))
                   :getter (lambda (object column pgmacstbl)
                             (pcase (pgmacstbl-column pgmacstbl column)
                               ("Table" (pgmacs--display-identifier (cl-first object)))
