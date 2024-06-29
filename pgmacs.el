@@ -1655,6 +1655,8 @@ Uses PostgreSQL connection CON."
     (pgmacs--stop-progress-reporter)))
 
 
+(defvar pgmacs--open-history (list))
+
 ;;;###autoload
 (defun pgmacs-open-string (connection-string)
   "Open PGmacs on database specified by CONNECTION-STRING.
@@ -1663,7 +1665,8 @@ CONNECTION-STRING is a PostgreSQL connection string of the form
 The supported keywords in the connection string are host,
 hostaddr, port, dbname, user, password, sslmode (partial support)
 and application_name."
-  (interactive "sPostgreSQL connection string: ")
+  (interactive
+   (list (read-string "PostgreSQL connection string: " nil 'pgmacs--open-history)))
   (pgmacs--start-progress-reporter "Connecting to PostgreSQL")
   (pgmacs-open (pg-connect/string connection-string)))
 
@@ -1672,7 +1675,8 @@ and application_name."
   "Open PGmacs on database specified by CONNECTION-URI.
 CONNECTION-URI is a PostgreSQL connection URI of the form
 `postgresql://user:pass@host/dbname'."
-  (interactive "sPostgreSQL connection URI: ")
+  (interactive
+   (list (read-string "PostgreSQL connection URI: " nil 'pgmacs--open-history "postgresql://")))
   (pgmacs--start-progress-reporter "Connecting to PostgreSQL")
   (pgmacs-open (pg-connect/uri connection-uri)))
 

@@ -18,6 +18,8 @@
 - The connection widget uses initial values for database name, username, hostname and password taken
   from environment variables such as `POSTGRES_DATABASE` and `POSTGRES_USER`, if defined.
 
+- Add per-session history for `pgmacs-open-string` and `pgmacs-open-uri`.
+
 
 ## [0.7] - 2024-05-23
 
