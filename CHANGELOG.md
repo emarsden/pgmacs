@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.8] - Unreleased
+## [0.8] - 2024-06-29
 
 - Look and feel: adopt the button faces used by Emacs’ customization support.
 
