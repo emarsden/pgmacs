@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.9] - Unreleased
+
+- Columns that contain data that references another table (`REFERENCES parent(col)` or `FOREIGN
+  KEY(fkcols)`) are displayed using face `pgmacs-column-foreign-key` (defaults to a blue foreground
+  color).
+
+
 ## [0.8] - 2024-06-29
 
 - Look and feel: adopt the button faces used by Emacs’ customization support.

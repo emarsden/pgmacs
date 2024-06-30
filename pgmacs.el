@@ -35,6 +35,12 @@
   "Face used to display data in a PGmacs database table."
   :group 'pgmacs)
 
+(defface pgmacs-column-foreign-key
+  '((t (:inherit pgmacs-table-data
+        :foreground "blue")))
+  "Face used to display data in a column that references another table."
+  :group 'pgmacs)
+
 (defface pgmacs-table-header
   '((((class color) (background light))
      :bold t
@@ -577,7 +583,9 @@ has primary keys, named in the list PRIMARY-KEYS."
                   pgmacs--table table
                   header-line-format (format "🐘 Update PostgreSQL column %s" col-name))
       (widget-insert "\n")
-      (widget-insert (format "  Column type: %s\n\n" (pgmacs--column-info con table col-name)))
+      (let* ((column-info (pgmacs--column-info con table col-name))
+             (formatted-info (pgmacs--format-column-info column-info)))
+        (widget-insert (format "  Column type: %s\n\n" formatted-info)))
       (widget-insert (format "  Change %s for current row to:" (substring-no-properties col-name)))
       (widget-insert "\n\n")
       (let* ((w-updated (pgmacs--widget-for col-type current))
@@ -908,7 +916,7 @@ Uses PostgreSQL connection CON."
     (null (pg-result res :tuples))))
 
 (defun pgmacs--column-info (con table column)
-  "Return a string containing metainformation on COLUMN in TABLE.
+  "Return a hashtable containing metainformation on COLUMN in TABLE.
 The metainformation includes the type name, whether the column is a PRIMARY KEY,
 whether it is affected by constraints such as UNIQUE.  Information is retrieved
 over the PostgreSQL connection CON."
@@ -941,18 +949,30 @@ over the PostgreSQL connection CON."
          (res (pg-exec con sql))
          (oid (cadar (pg-result res :attributes)))
          (type-name (pg--lookup-type-name con oid))
-         (column-info (list type-name)))
+         (column-info (make-hash-table :test #'equal)))
+    (puthash "TYPE" type-name column-info)
     (dolist (c constraints)
-      (if (cl-second c)
-          (push (format "%s %s" (cl-first c) (cl-second c)) column-info)
-        (push (cl-first c) column-info)))
+      (puthash (cl-first c) (cl-second c) column-info))
     (when (pgmacs--column-nullable-p con table column)
-      (push "NOT NULL" column-info))
+      (puthash "NOT NULL" nil column-info))
     (when (cl-first maxlen)
-      (push (format "max-len %s" (cl-first maxlen)) column-info))
+      (puthash "maxlen" (cl-first maxlen) column-info))
     (when defaults
-      (push (format "DEFAULT %s" defaults) column-info))
-    (string-join (reverse column-info) ", ")))
+      (puthash "DEFAULT" defaults column-info))
+    column-info))
+
+;; Format the column-info hashtable as a string
+(defun pgmacs--format-column-info (column-info)
+  (let ((items (list)))
+    (maphash (lambda (k v)
+               (unless (string= "TYPE" k)
+                 (push (if v (format "%s %s" k v) k) items)))
+             column-info)
+    ;; We want the type to appear first in the column metainformation
+    (let ((type (gethash "TYPE" column-info)))
+      (when type
+        (push type items)))
+    (string-join items ", ")))
 
 ;; We could first check whether the row_security_function() is implemented in this PostgresQL
 ;; version by querying the pg_proc table for a function with proname='row_security_active', but it's
@@ -993,15 +1013,18 @@ Table names are schema-qualified if the schema is non-default."
         (push (list table rows size owner (or comment "")) entries)))
     entries))
 
-
-(defun pgmacs--make-column-displayer (metainfo)
+;; ref-p is non-nil if the column references a foreign key.
+(defun pgmacs--make-column-displayer (metainfo ref-p)
   "Return a display function which echos METAINFO in minibuffer."
   (lambda (fvalue max-width _table)
     (let ((truncated (if (> (string-pixel-width fvalue) max-width)
                          ;; TODO could include the ellipsis here
                          (pgmacstbl--limit-string fvalue max-width)
-                       fvalue)))
-      (propertize truncated 'face 'pgmacs-table-data 'help-echo metainfo))))
+                       fvalue))
+          (face (if ref-p 'pgmacs-column-foreign-key 'pgmacs-table-data)))
+      (propertize truncated
+                  'face face
+                  'help-echo metainfo))))
 
 (defun pgmacs--table-to-csv (&rest _ignore)
   "Dump the current PostgreSQL table in CSV format into an Emacs buffer."
@@ -1142,7 +1165,15 @@ object."
            (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
            (column-type-names (mapcar (lambda (tn) (pg--lookup-type-name con tn)) column-type-oids))
            (column-alignment (mapcar #'pgmacs--alignment-for column-type-names))
-           (column-meta (mapcar (lambda (col) (pgmacs--column-info con table col)) column-names))
+           (column-info
+            (let ((ht (make-hash-table :test #'equal)))
+              (dolist (c column-names)
+                (puthash c (pgmacs--column-info con table c) ht))
+              ht))
+           (column-meta (cl-loop
+                         for c in column-names
+                         for ci = (gethash c column-info)
+                         collect (pgmacs--format-column-info ci)))
            (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
            (value-widths (mapcar #'pgmacs--value-width column-type-names))
            (column-widths (cl-loop for w in value-widths
@@ -1154,6 +1185,7 @@ object."
                      for align in column-alignment
                      for fmt in column-formatters
                      for w in column-widths
+                     for ref-p = (gethash "FOREIGN KEY" (gethash name column-info))
                      collect (make-pgmacstbl-column
                               :name (propertize name
                                                 'face 'pgmacs-table-header
@@ -1162,7 +1194,7 @@ object."
                               :min-width (1+ (max w (length name)))
                               :max-width pgmacs-max-column-width
                               :formatter fmt
-                              :displayer (pgmacs--make-column-displayer meta))))
+                              :displayer (pgmacs--make-column-displayer meta ref-p))))
            (inhibit-read-only t)
            (pgmacstbl (make-pgmacstbl
                     :insert nil
@@ -1227,7 +1259,9 @@ object."
       (insert ":\n")
       (let ((colinfo (list)))
         (dolist (col column-names)
-          (push (format "%s: %s" col (pgmacs--column-info con table col)) colinfo))
+          (let* ((ci (gethash col column-info))
+                 (cif (pgmacs--format-column-info ci)))
+            (push (format "%s: %s" col cif) colinfo)))
         (setq colinfo (reverse colinfo))
         (let ((last (pop colinfo)))
           (dolist (c colinfo)
