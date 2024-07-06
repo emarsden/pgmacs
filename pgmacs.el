@@ -951,6 +951,8 @@ over the PostgreSQL connection CON."
          (type-name (pg--lookup-type-name con oid))
          (column-info (make-hash-table :test #'equal)))
     (puthash "TYPE" type-name column-info)
+    ;; FIXME: for a FOREIGN KEY constraints, the column_name is the target column, not the source
+    ;; column. We are interpreting this incorrectly.
     (dolist (c constraints)
       (puthash (cl-first c) (cl-second c) column-info))
     (when (pgmacs--column-nullable-p con table column)
@@ -1480,7 +1482,8 @@ Uses PostgreSQL connection CON."
                                     collect (make-pgmacstbl-column
                                              :name (propertize name 'face 'pgmacs-table-header)
                                              :min-width (1+ (max w (length name)))
-                                             :formatter fmt)))
+                                             :formatter fmt
+                                             :displayer (pgmacs-make-column-displayer "" nil))))
                   (inhibit-read-only t)
                   (pgmacstbl (make-pgmacstbl
                               :insert nil
