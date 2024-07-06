@@ -1,0 +1,56 @@
+# Build a Docker/Podman container with Emacs (terminal mode), PGmacs and its elisp dependencies.
+#
+# Make it easy to test PGmacs in a safely isolated software container.
+
+name: Build container image
+
+on: workflow_dispatch
+
+env:
+  REGISTRY_USER: ${{ github.actor }}
+  REGISTRY_PASSWORD: ${{ github.token }}
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  build-push-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 800
+
+    permissions:
+      contents: read
+      packages: write
+
+    name: Build and push container/Linux
+    steps:
+      - name: Install qemu
+        run: sudo apt-get update && sudo apt-get install qemu-user-static
+
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Log in to ghcr.io
+        uses: redhat-actions/podman-login@v1
+        with:
+          username: ${{ env.REGISTRY_USER }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+
+      # We use "buildah build" instead of "podman build", because we are seeing errors on the older
+      # version of podman installed on the runners.
+      - name: Build container images with podman
+        id: build-image
+        run: |
+          podman manifest create pgmacs
+          buildah build -f etc/Containerfile --platform linux/amd64 --tag pgmacs-linux-amd64 --manifest pgmacs .
+          buildah build -f etc/Containerfile --platform linux/arm64 --tag pgmacs-linux-aarch64 --manifest pgmacs .
+          buildah build -f etc/Containerfile --platform linux/arm/v7 --tag pgmacs-linux-armv7 --manifest pgmacs .
+          buildah build -f etc/Containerfile --platform linux/riscv64 --tag pgmacs-linux-riscv64 --manifest pgmacs .
+
+      - name: Push container image
+        id: push-to-registry
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: pgmacs
+          tags: latest
+          registry: ${{ env.IMAGE_REGISTRY }}
+
