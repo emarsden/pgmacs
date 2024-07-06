@@ -1040,6 +1040,9 @@ Table names are schema-qualified if the schema is non-default."
     (pop-to-buffer buf)
     (setq-local pgmacs--db-buffer db-buffer)
     (pgmacs-transient-mode)
+    (require 'csv-mode nil t)
+    (when (fboundp 'csv-mode)
+      (csv-mode))
     (pg-copy-to-buffer con sql buf)
     (goto-char (point-min))))
 

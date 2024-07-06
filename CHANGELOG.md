@@ -10,6 +10,8 @@
 - In the `*PostgreSQL backend information*` buffer, add a "Install extension" button for extensions
   that are available but not installed in the current database.
 
+- When a CSV dump of a table is inserted into a buffer, put the buffer in `csv-mode` if that package
+  is installed.
 
 
 ## [0.8] - 2024-06-29
