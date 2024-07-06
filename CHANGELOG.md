@@ -7,6 +7,10 @@
   KEY(fkcols)`) are displayed using face `pgmacs-column-foreign-key` (defaults to a blue foreground
   color).
 
+- In the `*PostgreSQL backend information*` buffer, add a "Install extension" button for extensions
+  that are available but not installed in the current database.
+
+
 
 ## [0.8] - 2024-06-29
 

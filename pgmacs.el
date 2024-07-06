@@ -1396,9 +1396,21 @@ object."
       (if exts (insert "\n") (insert " (none)\n"))
       (when exts
         (push (list "Name" "Default version" "Installed version") exts))
-      ;; TODO: could include a "Install" button for uninstalled extensions
       (dolist (ext exts)
-        (insert (apply #'format "%20s %17s %18s\n" ext))))
+        (insert (apply #'format "%20s %17s %18s" ext))
+        (unless (or (cl-third ext)
+                    (string= "Name" (cl-first ext)))
+          (insert "  ")
+          (insert-text-button
+           "Load extension"
+           'action (lambda (&rest _ignore)
+                     (message "Loading PostgreSQL extension %s" (car ext))
+                     (condition-case nil
+                         (pg-exec con (format "CREATE EXTENSION IF NOT EXISTS %s" (car ext)))
+                       (pg-error
+                        (lambda (err)
+                          (message "Loading extension %s failed: %s" (car ext) err)))))))
+        (insert "\n")))
     (shrink-window-if-larger-than-buffer)
     (goto-char (point-min))
     (help-mode)
