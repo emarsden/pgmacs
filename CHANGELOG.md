@@ -13,6 +13,8 @@
 - When a CSV dump of a table is inserted into a buffer, put the buffer in `csv-mode` if that package
   is installed.
 
+- Publish a prebuilt software container with Emacs + PGmacs + dependencies.
+
 
 ## [0.8] - 2024-06-29
 
