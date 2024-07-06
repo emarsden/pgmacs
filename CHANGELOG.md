@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.9] - Unreleased
+## [0.9] - 2024-07-06
 
 - Columns that contain data that references another table (`REFERENCES parent(col)` or `FOREIGN
   KEY(fkcols)`) are displayed using face `pgmacs-column-foreign-key` (defaults to a blue foreground
