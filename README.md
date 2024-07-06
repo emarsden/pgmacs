@@ -22,7 +22,7 @@ It allows you to:
 
 - copy/paste rows of a database table (type `k` to copy, `y` to paste in a table display buffer)
 
-- save the contents of a table in CSV or TSV format
+- save the contents of a table in CSV or TSV format, or the contents of a row in JSON format
 
 It works both in the **terminal** and in **GUI mode**.
 
@@ -31,6 +31,10 @@ It works both in the **terminal** and in **GUI mode**.
 
 
 ## Getting started
+
+If you want to get a quick feel for what PGmacs can do before installing it, you can try out our
+[prebuilt Podman/Docker container image](https://emarsden.github.io/pgmacs/container.html) which
+includes a terminal-only build of Emacs and the necessary dependencies.
 
 In your Emacs initialization file, include the following to check out the latest version of the code
 from the git repository, as well as the [pg-el dependency](https://github.com/emarsden/pg-el/):
@@ -44,7 +48,9 @@ from the git repository, as well as the [pg-el dependency](https://github.com/em
     (require 'pgmacs)
 
 
-You can later upgrade these to the latest version with `M-x package-vc-upgrade RET pgmacs RET`.
+You can later upgrade these to the latest version with `M-x package-vc-upgrade RET pgmacs RET`. See
+the [user manual](https://emarsden.github.io/pgmacs/quickstart.html) for more installation methods
+(for example using `use-package`).
 
 To load PGmacs, say 
 
@@ -54,8 +60,7 @@ which will open a widget-based buffer to collect connection information (databas
 port, etc.). It will then open the PGmacs main buffer, which will show you a list of the tables
 available in the database.
 
-You can also open PGmacs with a connection object from the pg.el library (function `pgmacs-open`),
-or with a PostgreSQL connection string
+You can also open PGmacs with a PostgreSQL connection string
 
     M-x pgmacs-open-string RET user=myself port=5432 dbname=mydb
 
@@ -63,7 +68,8 @@ or with a PostgreSQL connection URI
 
     M-x pgmacs-open-uri RET postgresql://%2Fvar%2Flib%2Fpostgresql/dbname
 
-Check the [user manual](https://emarsden.github.io/pgmacs/) for more.
+or with a connection object from the pg.el library (function `pgmacs-open`). Check the [user
+manual](https://emarsden.github.io/pgmacs/) for more. 
 
 
 ## Supported platforms
