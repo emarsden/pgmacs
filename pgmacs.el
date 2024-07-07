@@ -1277,7 +1277,7 @@ object."
             (insert "\n"))
           (if (char-displayable-p ?└)
               (insert "└ ")
-            (insert "`"))
+            (insert "` "))
           (insert last)
           (insert "\n")))
       (insert "Row-level security: ")
