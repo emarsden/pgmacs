@@ -332,15 +332,28 @@ Applies format string FMT to ARGS."
   "Copy the CURRENT-ROW as JSON to the kill ring."
   (unless (json-available-p)
     (error "Emacs is not compiled with JSON support"))
-  (let* ((pgmacstbl (pgmacstbl-current-table))
-         (cols (pgmacstbl-columns pgmacstbl))
-         (ht (make-hash-table :test #'equal)))
-    (cl-loop
-     for col in cols
-     for v in current-row
-     do (puthash (pgmacstbl-column-name col) v ht))
-    (kill-new (json-serialize ht))
-    (message "JSON copied to kill ring")))
+  (cl-labels ((jsonable-p (val)
+                (cl-typecase val
+                  (number t)
+                  (string t)
+                  (vector
+                   (cl-every #'jsonable-p val))
+                  (hash-table t)
+                  (t nil))))
+    (let* ((tbl (pgmacstbl-current-table))
+           (cols (pgmacstbl-columns tbl))
+           (ht (make-hash-table :test #'equal))
+           (ce (pgcon-client-encoding pgmacs--con)))
+      (cl-loop
+       for col-id from 0
+       for col in cols
+       for col-type = (aref pgmacs--column-type-names col-id)
+       for raw in current-row
+       for v = (if (jsonable-p raw) raw
+                 (pg-serialize raw col-type ce))
+       do (puthash (pgmacstbl-column-name col) v ht))
+      (kill-new (json-serialize ht))
+      (message "JSON copied to kill ring"))))
 
 (defun pgmacs--read-value-minibuffer (name type prompt current-value)
   "Read a value for column NAME in the minibuffer using PROMPT.
@@ -980,7 +993,7 @@ over the PostgreSQL connection CON."
 ;; version by querying the pg_proc table for a function with proname='row_security_active', but it's
 ;; easier to ignore errors.
 (defun pgmacs--row-security-active (con table)
-  "Is row-level security active for PostgreSQL TABLE?
+  "Is row-level access control active for PostgreSQL TABLE?
 Uses PostgreSQL connection CON."
   (let* ((sql "SELECT row_security_active($1)")
          (res (ignore-errors
@@ -1280,7 +1293,7 @@ object."
             (insert "` "))
           (insert last)
           (insert "\n")))
-      (insert "Row-level security: ")
+      (insert "Row-level access control: ")
       (if (pgmacs--row-security-active con table)
           (insert "enabled")
         (insert "not enabled"))
