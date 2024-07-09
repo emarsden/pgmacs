@@ -939,8 +939,8 @@ over the PostgreSQL connection CON."
          (tname (if (pg-qualified-name-p table)
                     (pg-qualified-name-name table)
                   table))
-         ;; TODO: information_schema.check_constraints column check_clause holds the content of a CHECK constraint
-         (sql "SELECT tc.constraint_type, tc.constraint_name FROM information_schema.table_constraints tc
+         (sql "SELECT tc.constraint_type, tc.constraint_name
+               FROM information_schema.table_constraints tc
                JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
                JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
                AND tc.table_name = c.table_name
@@ -967,7 +967,15 @@ over the PostgreSQL connection CON."
     ;; FIXME: for a FOREIGN KEY constraints, the column_name is the target column, not the source
     ;; column. We are interpreting this incorrectly.
     (dolist (c constraints)
-      (puthash (cl-first c) (cl-second c) column-info))
+      (cond ((string= "CHECK" (cl-first c))
+             ;; TODO: information_schema.check_constraints column check_clause holds the content of a CHECK constraint
+             (let* ((sql "SELECT check_clause FROM information_schema.check_constraints
+                          WHERE constraint_schema=$1 and constraint_name=$2")
+                    (res (pg-exec-prepared con sql `((,schema . "text") (,(cl-second c) . "text"))))
+                    (clauses (pg-result res :tuple 0)))
+               (puthash (cl-first c) (format "%s %s" (cl-second c) (cl-first clauses)) column-info)))
+            (t
+             (puthash (cl-first c) (cl-second c) column-info))))
     (when (pgmacs--column-nullable-p con table column)
       (puthash "NOT NULL" nil column-info))
     (when (cl-first maxlen)
