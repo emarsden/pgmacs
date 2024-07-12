@@ -18,6 +18,27 @@ container:
   buildah build -f etc/Containerfile --platform linux/riscv64 --tag pgmacs-linux-riscv64 --manifest pgmacs .
 
 
+export INSTALL_EL := '''
+    (message "Executing emacs-init")
+    (unless (package-installed-p 'pg)
+       (package-vc-install "https://github.com/emarsden/pg-el" nil nil 'pg))
+    (unless (package-installed-p 'pgmacs)
+       (package-vc-install "https://github.com/emarsden/pgmacs"))
+
+    (require 'pgmacs)
+'''
+tmpdir := `mktemp -d`
+init-el := tmpdir / "init.el"
+
+# Check whether our package-vc-install instructions work on a pristine install.
+installability:
+   printf '%s' "$INSTALL_EL" > {{ init-el }}
+   ls -l {{ init-el }}
+   cat {{ init-el }}
+   podman run --rm -ti -v {{ tmpdir }}:/tmp docker.io/silex/emacs:29.4-ci \
+      ${EMACS:-emacs} -l /tmp/init.el
+
+
 list-docker-platforms:
     podman run --rm docker.io/mplatform/mquery ghcr.io/emarsden/pgmacs:latest
 
