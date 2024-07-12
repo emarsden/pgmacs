@@ -1,6 +1,19 @@
 # Changelog
 
 
+## [0.10] - Unreleased
+
+- Include the content of CHECK constraints in the column metainformation shown for a table buffer.
+
+- Fix “kill row as JSON” for certain column types, which need serialization before being converted
+  to JSON.
+
+- Display: use ASCII alternatives when box-drawing characters are not displayable.
+
+- Display: encourage Emacs to use 256 colors when running in terminal mode in the prebuilt software
+  container.
+
+
 ## [0.9] - 2024-07-06
 
 - Columns that contain data that references another table (`REFERENCES parent(col)` or `FOREIGN

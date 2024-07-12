@@ -35,7 +35,7 @@ LABEL org.opencontainers.image.licenses "GPLv2"
 
 RUN apk update && \
     apk upgrade && \
-    apk add --no-cache emacs-nox && \
+    apk add --no-cache emacs-nox ncurses && \
     mkdir /elisp && \
     chown root.root /elisp && \
     chmod a=rwx,o+t /elisp && \
@@ -52,6 +52,7 @@ COPY --from=builder --chown=root:root /src/pgmacs/pgmacstbl.el /elisp
 COPY --from=builder --chown=root:root /src/pgmacs/pgmacs.el /elisp
 
 WORKDIR /app
+ENV TERM=xterm-256color
 ENTRYPOINT ["/usr/bin/emacs", "-f", "pgmacs"]
 
 
