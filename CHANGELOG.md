@@ -5,6 +5,9 @@
 
 - Include the content of CHECK constraints in the column metainformation shown for a table buffer.
 
+- Fix the SQL query used to identify a column that references a foreign key (displayed using
+  `pgmacs-column-foreign-key` face, which defaults to blue).
+
 - Fix “kill row as JSON” for certain column types, which need serialization before being converted
   to JSON.
 

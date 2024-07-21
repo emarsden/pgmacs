@@ -52,6 +52,7 @@ COPY --from=builder --chown=root:root /src/pgmacs/pgmacstbl.el /elisp
 COPY --from=builder --chown=root:root /src/pgmacs/pgmacs.el /elisp
 
 WORKDIR /app
+# For details: https://chadaustin.me/2024/01/truecolor-terminal-emacs/
 ENV TERM=xterm-256color
 ENTRYPOINT ["/usr/bin/emacs", "-f", "pgmacs"]
 

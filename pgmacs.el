@@ -939,16 +939,42 @@ over the PostgreSQL connection CON."
          (tname (if (pg-qualified-name-p table)
                     (pg-qualified-name-name table)
                   table))
+         ;; Query for CHECK constraints
          (sql "SELECT tc.constraint_type, tc.constraint_name
                FROM information_schema.table_constraints tc
                JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
                JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
                AND tc.table_name = c.table_name
                AND ccu.column_name = c.column_name
-               WHERE tc.constraint_schema = $1 AND tc.table_name = $2 AND c.column_name = $3")
+               WHERE tc.constraint_schema = $1
+                 AND tc.table_name = $2
+                 AND c.column_name = $3
+                 AND tc.constraint_type != 'FOREIGN KEY'")
          (params `((,schema . "text") (,tname . "text") (,column . "text")))
          (res (pg-exec-prepared con sql params))
-         (constraints (pg-result res :tuples))
+         (check-constraints (pg-result res :tuples))
+         ;; Query for FOREIGN KEY (REFERENCES) constraints.
+         (sql "SELECT
+                 ccu.table_schema AS foreign_table_schema,
+                 ccu.table_name AS foreign_table_name,
+                 ccu.column_name AS foreign_column_name
+               FROM information_schema.table_constraints tc
+               JOIN information_schema.constraint_column_usage AS ccu
+                 USING (constraint_schema, constraint_name)
+               JOIN information_schema.columns AS c
+                 ON c.table_schema = tc.constraint_schema
+                 AND c.table_name = tc.table_name
+                 AND c.column_name = ccu.column_name
+               JOIN information_schema.key_column_usage AS kcu
+                 ON kcu.constraint_name = tc.constraint_name
+                 AND kcu.table_schema = tc.table_schema
+               WHERE tc.constraint_type = 'FOREIGN KEY'
+                 AND tc.constraint_schema = $1
+                 AND tc.table_name = $2
+                 AND kcu.column_name = $3")
+         (params `((,schema . "text") (,tname . "text") (,column . "text")))
+         (res (pg-exec-prepared con sql params))
+         (references-constraints (pg-result res :tuples))
          (res (pg-exec-prepared
                con
                "SELECT character_maximum_length FROM information_schema.columns
@@ -961,14 +987,11 @@ over the PostgreSQL connection CON."
                       (pg-escape-identifier table)))
          (res (pg-exec con sql))
          (oid (cadar (pg-result res :attributes)))
-         (type-name (pg--lookup-type-name con oid))
+         (type-name (pg-lookup-type-name con oid))
          (column-info (make-hash-table :test #'equal)))
     (puthash "TYPE" type-name column-info)
-    ;; FIXME: for a FOREIGN KEY constraints, the column_name is the target column, not the source
-    ;; column. We are interpreting this incorrectly.
-    (dolist (c constraints)
+    (dolist (c check-constraints)
       (cond ((string= "CHECK" (cl-first c))
-             ;; TODO: information_schema.check_constraints column check_clause holds the content of a CHECK constraint
              (let* ((sql "SELECT check_clause FROM information_schema.check_constraints
                           WHERE constraint_schema=$1 and constraint_name=$2")
                     (res (pg-exec-prepared con sql `((,schema . "text") (,(cl-second c) . "text"))))
@@ -976,6 +999,10 @@ over the PostgreSQL connection CON."
                (puthash (cl-first c) (format "%s %s" (cl-second c) (cl-first clauses)) column-info)))
             (t
              (puthash (cl-first c) (cl-second c) column-info))))
+    (dolist (c references-constraints)
+      (let ((schema (if (string= "public" (cl-first c)) ""
+                      (format "%s." (cl-first c)))))
+        (puthash "REFERENCES" (format "%s%s(%s)" schema (cl-second c) (cl-third c)) column-info)))
     (when (pgmacs--column-nullable-p con table column)
       (puthash "NOT NULL" nil column-info))
     (when (cl-first maxlen)
@@ -1189,7 +1216,7 @@ object."
            (rows (pg-result res :tuples))
            (column-names (mapcar #'cl-first (pg-result res :attributes)))
            (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
-           (column-type-names (mapcar (lambda (tn) (pg--lookup-type-name con tn)) column-type-oids))
+           (column-type-names (mapcar (lambda (oid) (pg-lookup-type-name con oid)) column-type-oids))
            (column-alignment (mapcar #'pgmacs--alignment-for column-type-names))
            (column-info
             (let ((ht (make-hash-table :test #'equal)))
@@ -1211,7 +1238,7 @@ object."
                      for align in column-alignment
                      for fmt in column-formatters
                      for w in column-widths
-                     for ref-p = (gethash "FOREIGN KEY" (gethash name column-info))
+                     for ref-p = (gethash "REFERENCES" (gethash name column-info))
                      collect (make-pgmacstbl-column
                               :name (propertize name
                                                 'face 'pgmacs-table-header
@@ -1498,7 +1525,7 @@ Uses PostgreSQL connection CON."
           (t
            (let* ((column-names (mapcar #'cl-first (pg-result res :attributes)))
                   (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
-                  (column-type-names (mapcar (lambda (tn) (pg--lookup-type-name con tn)) column-type-oids))
+                  (column-type-names (mapcar (lambda (o) (pg-lookup-type-name con o)) column-type-oids))
                   (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
                   (value-widths (mapcar #'pgmacs--value-width column-type-names))
                   (column-widths (cl-loop for w in value-widths
@@ -1511,7 +1538,7 @@ Uses PostgreSQL connection CON."
                                              :name (propertize name 'face 'pgmacs-table-header)
                                              :min-width (1+ (max w (length name)))
                                              :formatter fmt
-                                             :displayer (pgmacs-make-column-displayer "" nil))))
+                                             :displayer (pgmacs--make-column-displayer "" nil))))
                   (inhibit-read-only t)
                   (pgmacstbl (make-pgmacstbl
                               :insert nil
