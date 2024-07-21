@@ -2,8 +2,8 @@
 
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
-;; Version: 0.9
-;; Package-Requires: ((emacs "29.1") (pg "0.36"))
+;; Version: 0.10
+;; Package-Requires: ((emacs "29.1") (pg "0.38"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
 ;; SPDX-License-Identifier: GPL-2.0-or-later

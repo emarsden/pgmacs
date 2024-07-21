@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.10] - Unreleased
+## [0.10] - 2024-07-21
 
 - Include the content of CHECK constraints in the column metainformation shown for a table buffer.
 
