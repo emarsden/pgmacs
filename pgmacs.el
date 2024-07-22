@@ -928,19 +928,33 @@ Uses PostgreSQL connection CON."
          (res (pg-exec-prepared con sql params)))
     (null (pg-result res :tuples))))
 
+;; Execute a previously prepared statement with argument values.
+(defun pgmacs--fetch-ps (con ps-name typed-arguments)
+  (let* ((portal-name (pg-bind con ps-name typed-arguments :portal "pgmacs"))
+         (result (make-pgresult :connection con :portal portal-name)))
+    (pg-describe-portal con portal-name)
+    (pg-fetch con result)))
+
+;; Function pgmacs--column-info uses some moderately complex SQL queries to determine the
+;; constraints of a column. These queries are called once per column for a row-list buffer. To avoid
+;; redundant processing by PostgreSQL in parsing and preparing a query plan for these queries, we
+;; use PostgreSQL prepared statements. The prepared statement names are saved in the variables below
+;; to be reused later.
+(defvar pgmacs--qry-check-constraints nil)
+
+(defvar pgmacs--qry-references-constraints nil)
+
+(defvar pgmacs--qry-maxlen nil)
+
 (defun pgmacs--column-info (con table column)
   "Return a hashtable containing metainformation on COLUMN in TABLE.
 The metainformation includes the type name, whether the column is a PRIMARY KEY,
 whether it is affected by constraints such as UNIQUE.  Information is retrieved
 over the PostgreSQL connection CON."
-  (let* ((schema (if (pg-qualified-name-p table)
-                     (pg-qualified-name-schema table)
-                   "public"))
-         (tname (if (pg-qualified-name-p table)
-                    (pg-qualified-name-name table)
-                  table))
-         ;; Query for CHECK constraints
-         (sql "SELECT tc.constraint_type, tc.constraint_name
+  ;; Save the SQL query to determine check constraints as a prepared query, because we use it once
+  ;; per column in a row-list buffer.
+  (unless pgmacs--qry-check-constraints
+    (let* ((sql "SELECT tc.constraint_type, tc.constraint_name
                FROM information_schema.table_constraints tc
                JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
                JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
@@ -950,21 +964,17 @@ over the PostgreSQL connection CON."
                  AND tc.table_name = $2
                  AND c.column_name = $3
                  AND tc.constraint_type != 'FOREIGN KEY'")
-         (params `((,schema . "text") (,tname . "text") (,column . "text")))
-         (res (pg-exec-prepared con sql params))
-         (check-constraints (pg-result res :tuples))
-         ;; Query for FOREIGN KEY (REFERENCES) constraints.
-         (sql "SELECT
+           (argument-types (list "text" "text" "text")))
+      (setq pgmacs--qry-check-constraints
+            (pg-prepare con sql argument-types :name "QRY-check-constraints"))))
+  (unless pgmacs--qry-references-constraints
+    (let* ((sql "SELECT
                  ccu.table_schema AS foreign_table_schema,
                  ccu.table_name AS foreign_table_name,
                  ccu.column_name AS foreign_column_name
                FROM information_schema.table_constraints tc
                JOIN information_schema.constraint_column_usage AS ccu
                  USING (constraint_schema, constraint_name)
-               JOIN information_schema.columns AS c
-                 ON c.table_schema = tc.constraint_schema
-                 AND c.table_name = tc.table_name
-                 AND c.column_name = ccu.column_name
                JOIN information_schema.key_column_usage AS kcu
                  ON kcu.constraint_name = tc.constraint_name
                  AND kcu.table_schema = tc.table_schema
@@ -972,14 +982,27 @@ over the PostgreSQL connection CON."
                  AND tc.constraint_schema = $1
                  AND tc.table_name = $2
                  AND kcu.column_name = $3")
+           (argument-types (list "text" "text" "text")))
+      (setq pgmacs--qry-references-constraints
+            (pg-prepare con sql argument-types :name "QRY-references-constraints"))))
+  (unless pgmacs--qry-maxlen
+    (let* ((sql "SELECT character_maximum_length FROM information_schema.columns
+                WHERE table_schema=$1 AND table_name=$2 AND column_name=$3")
+           (argument-types (list "text" "text" "text")))
+      (setq pgmacs--qry-maxlen
+            (pg-prepare con sql argument-types :name "QRY-maxlen"))))
+  (let* ((schema (if (pg-qualified-name-p table)
+                     (pg-qualified-name-schema table)
+                   "public"))
+         (tname (if (pg-qualified-name-p table)
+                    (pg-qualified-name-name table)
+                  table))
          (params `((,schema . "text") (,tname . "text") (,column . "text")))
-         (res (pg-exec-prepared con sql params))
+         (res (pgmacs--fetch-ps con pgmacs--qry-check-constraints params))
+         (check-constraints (pg-result res :tuples))
+         (res (pgmacs--fetch-ps con pgmacs--qry-references-constraints params))
          (references-constraints (pg-result res :tuples))
-         (res (pg-exec-prepared
-               con
-               "SELECT character_maximum_length FROM information_schema.columns
-                WHERE table_schema=$1 AND table_name=$2 AND column_name=$3"
-               `((,schema . "text") (,tname . "text") (,column . "text"))))
+         (res (pgmacs--fetch-ps con pgmacs--qry-maxlen params))
          (maxlen (pg-result res :tuple 0))
          (defaults (pg-column-default con table column))
          (sql (format "SELECT %s FROM %s LIMIT 0"

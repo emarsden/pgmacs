@@ -1,6 +1,14 @@
 # Changelog
 
 
+## [0.11] - Unreleased
+
+- Speed optimization: the complex queries used to analyze the information_schema tables to identify
+  the constraints on a table column (CHECK constraints, maximum length constraints, FOREIGN KEY
+  constraints) are saved as prepared statements to be reused by later calls. This should speed up
+  the generation of row-list buffers.
+
+
 ## [0.10] - 2024-07-21
 
 - Include the content of CHECK constraints in the column metainformation shown for a table buffer.
