@@ -1518,9 +1518,6 @@ object."
          (sql (format "SELECT %s FROM pg_stat_activity" cols)))
     (pgmacs-show-result pgmacs--con sql)))
 
-;; We can't make this interactive because it's called from the keymap on a table list, where we
-;; receive unnecessary arguments related to the current cursor position.
-;;
 ;; TODO: allow input from a buffer which is set to sql-mode.
 (defun pgmacs-run-sql (&rest _ignore)
   "Prompt for an SQL query and display the output in a dedicated buffer."
@@ -1829,7 +1826,16 @@ CONNECTION-URI is a PostgreSQL connection URI of the form
 ;;    https://registry.hub.docker.com/r/bitnami/postgresql#!
 ;;;###autoload
 (defun pgmacs ()
-  "Open a widget-based login buffer for PostgreSQL."
+  "Open a widget-based login buffer for PostgreSQL.
+Widget fields are pre-populated by the values of the following
+enviroment variables, if set:
+
+- POSTGRES_DATABASE, POSTGRESQL_DATABASE, POSTGRES_DB
+- POSTGRES_HOSTNAME
+- POSTGRES_PORT_NUMBER, POSTGRESQL_PORT_NUMBER, PGPORT
+- POSTGRES_USER, POSTGRESQL_USERNAME
+- POSTGRES_PASSWORD, POSTGRESQL_PASSWORD
+"
   (interactive)
   (switch-to-buffer "*PGmacs connection widget*")
   (kill-all-local-variables)
