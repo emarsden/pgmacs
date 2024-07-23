@@ -893,47 +893,59 @@ default value instead of the last copied value."
       ;; This means that we can't insert at the current-row position.
       (pgmacs--display-table pgmacs--table))))
 
-
-;; This SQL query adapted from https://stackoverflow.com/a/20537829
-(defun pgmacs--table-primary-keys (con table)
-  "Return the columns active as PRIMARY KEY in TABLE.
-Uses PostgreSQL connection CON."
-  (let* ((schema (if (pg-qualified-name-p table)
-                     (pg-qualified-name-schema table)
-                   "public"))
-         (tname (if (pg-qualified-name-p table)
-                    (pg-qualified-name-name table)
-                  table))
-         (sql "SELECT a.attname
-               FROM pg_catalog.pg_index idx
-               JOIN pg_catalog.pg_class c ON c.oid = idx.indrelid
-               JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(idx.indkey)
-               JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-               WHERE relname = $1 AND nspname = $2 AND indisprimary")
-         (res (pg-exec-prepared con sql `((,tname . "text") (,schema . "text")))))
-    (mapcar #'cl-first (pg-result res :tuples))))
-
-(defun pgmacs--column-nullable-p (con table column)
-  "Is there a NOT NULL constraint on COLUMN in TABLE?
-Uses PostgreSQL connection CON."
-  (let* ((schema (if (pg-qualified-name-p table)
-                     (pg-qualified-name-schema table)
-                   "public"))
-         (tname (if (pg-qualified-name-p table)
-                    (pg-qualified-name-name table)
-                  table))
-         (sql "SELECT 1 from information_schema.columns
-               WHERE table_schema=$1 AND table_name=$2 AND column_name=$3 AND is_nullable='YES'")
-         (params `((,schema . "text") (,tname . "text") (,column . "text")))
-         (res (pg-exec-prepared con sql params)))
-    (null (pg-result res :tuples))))
-
 ;; Execute a previously prepared statement with argument values.
 (defun pgmacs--fetch-ps (con ps-name typed-arguments)
   (let* ((portal-name (pg-bind con ps-name typed-arguments :portal "pgmacs"))
          (result (make-pgresult :connection con :portal portal-name)))
     (pg-describe-portal con portal-name)
     (pg-fetch con result)))
+
+(defvar pgmacs--qry-tbl-primary-keys nil)
+
+;; This SQL query adapted from https://stackoverflow.com/a/20537829
+(defun pgmacs--table-primary-keys (con table)
+  "Return the columns active as PRIMARY KEY in TABLE.
+Uses PostgreSQL connection CON."
+  (unless pgmacs--qry-tbl-primary-keys
+    (let* ((sql "SELECT a.attname
+                FROM pg_catalog.pg_index idx
+                JOIN pg_catalog.pg_class c ON c.oid = idx.indrelid
+                JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(idx.indkey)
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                WHERE relname = $1 AND nspname = $2 AND indisprimary")
+           (argument-types (list "text" "text")))
+      (setq pgmacs--qry-tbl-primary-keys
+            (pg-prepare con sql argument-types :name "QRY-tbl-primary-keys"))))
+  (let* ((schema (if (pg-qualified-name-p table)
+                     (pg-qualified-name-schema table)
+                   "public"))
+         (tname (if (pg-qualified-name-p table)
+                    (pg-qualified-name-name table)
+                  table))
+         (params `((,tname . "text") (,schema . "text")))
+         (res (pgmacs--fetch-ps con pgmacs--qry-tbl-primary-keys params)))
+    (mapcar #'cl-first (pg-result res :tuples))))
+
+(defvar pgmacs--qry-column-nullable nil)
+
+(defun pgmacs--column-nullable-p (con table column)
+  "Is there a NOT NULL constraint on COLUMN in TABLE?
+Uses PostgreSQL connection CON."
+  (unless pgmacs--qry-column-nullable
+    (let* ((sql "SELECT 1 from information_schema.columns
+               WHERE table_schema=$1 AND table_name=$2 AND column_name=$3 AND is_nullable='YES'")
+           (argument-types (list "text" "text" "text")))
+      (setq pgmacs--qry-column-nullable
+            (pg-prepare con sql argument-types :name "QRY-column-nullable"))))
+  (let* ((schema (if (pg-qualified-name-p table)
+                     (pg-qualified-name-schema table)
+                   "public"))
+         (tname (if (pg-qualified-name-p table)
+                    (pg-qualified-name-name table)
+                  table))
+         (params `((,schema . "text") (,tname . "text") (,column . "text")))
+         (res (pgmacs--fetch-ps con pgmacs--qry-column-nullable params)))
+    (null (pg-result res :tuples))))
 
 ;; Function pgmacs--column-info uses some moderately complex SQL queries to determine the
 ;; constraints of a column. These queries are called once per column for a row-list buffer. To avoid
