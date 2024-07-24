@@ -113,7 +113,7 @@ table-list buffer displayed on startup allows you to:
  - modify the SQL comment on a table (type `RET' in the `comment' column)
  - show the output from an SQL query in table mode (type `e' to enter the
    SQL query in the minibuffer)
- - type `h' to show buffer-specific help
+ - type `h' to show buffer-specific help and keybindings
 
 In a table buffer, which displays metainformation on the table (types of
 the different columns and their associated SQL constraints, on-disk size,
@@ -135,7 +135,7 @@ table owner), you can:
  - delete a row (type `DEL' on the row you wish to delete)
  - copy/paste rows of a database table (type `k' to copy, `y' to paste)
  - export the contents of a table to CSV using a dedicated button
- - type `h' to show buffer-specific help
+ - type `h' to show buffer-specific help and keybindings
 
 See the `pgmacs' customization group for a list of user options.
 
@@ -320,7 +320,7 @@ Applies format string FMT to ARGS."
     (cond ((pg-qualified-name-p name)
            (let ((schema (pg-qualified-name-schema name))
                  (name (pg-qualified-name-name name)))
-             (if schema
+             (if (and schema (not (string= "public" schema)))
                  (format "%s.%s"
                          (user-facing schema)
                          (user-facing name))
@@ -370,6 +370,21 @@ Use PROMPT in the minibuffer and show the current value CURRENT-VALUE."
          (parser (pg-lookup-parser type))
          (ce (pgcon-client-encoding pgmacs--con)))
     (if parser (funcall parser user-provided ce) user-provided)))
+
+;; Used in table-list buffer: if point is on a column which REFERENCES a foreign table, then jump to
+;; that table on the appropriate row; otherwise prompt to edit using pgmcs--edit-value-minibuffer
+(defun pgmacs--table-list-dwim (row primary-keys)
+  (let* ((colinfo (get-text-property (point) 'pgmacs--column-info))
+         (refs (and colinfo (gethash "REFERENCES" colinfo))))
+    (if refs
+        (let* ((table (cl-first refs))
+               (pk (cl-second refs))
+               (pk-col-id (pgmacstbl-current-column))
+               (pk-col-type (aref pgmacs--column-type-names pk-col-id))
+               (pk-val (nth pk-col-id row))
+               (center-on (list pk pk-val pk-col-type)))
+          (pgmacs--display-table table center-on))
+      (pgmacs--edit-value-minibuffer row primary-keys))))
 
 (defun pgmacs--edit-value-minibuffer (row primary-keys)
   "Edit and update in PostgreSQL the column value at point.
@@ -1035,9 +1050,8 @@ over the PostgreSQL connection CON."
             (t
              (puthash (cl-first c) (cl-second c) column-info))))
     (dolist (c references-constraints)
-      (let ((schema (if (string= "public" (cl-first c)) ""
-                      (format "%s." (cl-first c)))))
-        (puthash "REFERENCES" (format "%s%s(%s)" schema (cl-second c) (cl-third c)) column-info)))
+      (let ((sqn (make-pg-qualified-name :schema (cl-first c) :name (cl-second c))))
+        (puthash "REFERENCES" (list sqn (cl-third c)) column-info)))
     (when (pgmacs--column-nullable-p con table column)
       (puthash "NOT NULL" nil column-info))
     (when (cl-first maxlen)
@@ -1050,8 +1064,14 @@ over the PostgreSQL connection CON."
 (defun pgmacs--format-column-info (column-info)
   (let ((items (list)))
     (maphash (lambda (k v)
-               (unless (string= "TYPE" k)
-                 (push (if v (format "%s %s" k v) k) items)))
+               (cond ((string= "TYPE" k) nil)
+                     ((string= "REFERENCES" k)
+                      (push (format "%s(%s)"
+                                    (pgmacs--display-identifier (cl-first v))
+                                    (cl-second v))
+                            items))
+                     (t
+                      (push (if v (format "%s %s" k v) k) items))))
              column-info)
     ;; We want the type to appear first in the column metainformation
     (let ((type (gethash "TYPE" column-info)))
@@ -1099,17 +1119,19 @@ Table names are schema-qualified if the schema is non-default."
     entries))
 
 ;; ref-p is non-nil if the column references a foreign key.
-(defun pgmacs--make-column-displayer (metainfo ref-p)
-  "Return a display function which echos METAINFO in minibuffer."
+(defun pgmacs--make-column-displayer (echo-text column-metainfo)
+  "Return a display function which echos ECHO-TEXT in minibuffer."
   (lambda (fvalue max-width _table)
-    (let ((truncated (if (> (string-pixel-width fvalue) max-width)
-                         ;; TODO could include the ellipsis here
-                         (pgmacstbl--limit-string fvalue max-width)
-                       fvalue))
-          (face (if ref-p 'pgmacs-column-foreign-key 'pgmacs-table-data)))
+    (let* ((truncated (if (> (string-pixel-width fvalue) max-width)
+                          ;; TODO could include the ellipsis here
+                          (pgmacstbl--limit-string fvalue max-width)
+                        fvalue))
+           (ref-p (gethash "REFERENCES" column-metainfo))
+           (face (if ref-p 'pgmacs-column-foreign-key 'pgmacs-table-data)))
       (propertize truncated
                   'face face
-                  'help-echo metainfo))))
+                  'help-echo echo-text
+                  'pgmacs--column-info column-metainfo))))
 
 (defun pgmacs--table-to-csv (&rest _ignore)
   "Dump the current PostgreSQL table in CSV format into an Emacs buffer."
@@ -1209,6 +1231,34 @@ Table names are schema-qualified if the schema is non-default."
       (goto-char (point-min)))))
 
 
+;; Select row-count values from table "around" (ordered by pk) the row where pk=value.
+;; center-on is a list of the form (pk pk-value pk-type)
+(defun pgmacs--select-rows-around (con table center-on row-count)
+  (let* ((pk-id (pg-escape-identifier (cl-first center-on)))
+         (pk-val (cl-second center-on))
+         (pk-type (cl-third center-on))
+         (sql (format "WITH target_row AS (SELECT * FROM %s WHERE %s = $1),
+                       rows_before AS (SELECT * FROM %s WHERE %s < $1 ORDER BY %s DESC LIMIT $2),
+                       rows_after AS (SELECT * FROM %s WHERE %s > $1 ORDER BY %s ASC LIMIT $2)
+                       SELECT * FROM rows_before
+                       UNION ALL
+                       SELECT * FROM target_row
+                       UNION ALL
+                       SELECT * FROM rows_after
+                       ORDER BY %s"
+                      table pk-id
+                      table pk-id pk-id
+                      table pk-id pk-id
+                      pk-id))
+         (params `((,pk-val . ,pk-type) (,(/ row-count 2) . "int4"))))
+    (pg-exec-prepared con sql params)))
+
+;; Used to retrieve rows in a row-list buffer.
+(defun pgmacs--select-rows-offset (con table offset row-count)
+  (let ((sql (format "SELECT * FROM %s OFFSET %s" table offset)))
+    (pg-exec-prepared con sql (list) :max-rows row-count)))
+
+
 ;; TODO: add additional information as per psql
 ;; Table « public.books »
 ;; Colonne |           Type           | Collationnement | NULL-able |            Par défaut
@@ -1224,10 +1274,13 @@ Table names are schema-qualified if the schema is non-default."
 ;; Référencé par :
 ;; TABLE "book_author" CONSTRAINT "book_author_book_id_fkey" FOREIGN KEY (book_id) REFERENCES books(id)
 
-(defun pgmacs--display-table (table)
+(defun pgmacs--display-table (table &optional center-on)
   "Create and populate a buffer to display PostgreSQL table TABLE.
-Table may be specified as a string or as a schema-qualified pg-qualified-name
-object."
+TABLE may be specified as a string or as a schema-qualified pg-qualified-name
+object. Optional argument CENTER-ON of the form (pk-name pk-value pk-type)
+specifies the name, value and type of a primary key which we wish to have centered
+in the display (rows will be shown for values smaller than and larger than this
+value, in the limit of pgmacs-row-limit."
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
          (t-id (pg-escape-identifier table))
@@ -1245,9 +1298,9 @@ object."
     (let* ((primary-keys (pgmacs--table-primary-keys con table))
            (comment (pg-table-comment con table))
            (offset (or pgmacs--offset 0))
-           (portal (format "pgbp%s" t-pretty))
-           (sql (format "SELECT * FROM %s OFFSET %s" t-id offset))
-           (res (pg-exec-prepared con sql (list) :max-rows pgmacs-row-limit :portal portal))
+           (res (if center-on
+                    (pgmacs--select-rows-around con t-id center-on pgmacs-row-limit)
+                  (pgmacs--select-rows-offset con t-id offset pgmacs-row-limit)))
            (rows (pg-result res :tuples))
            (column-names (mapcar #'cl-first (pg-result res :attributes)))
            (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
@@ -1273,7 +1326,6 @@ object."
                      for align in column-alignment
                      for fmt in column-formatters
                      for w in column-widths
-                     for ref-p = (gethash "REFERENCES" (gethash name column-info))
                      collect (make-pgmacstbl-column
                               :name (propertize name
                                                 'face 'pgmacs-table-header
@@ -1282,17 +1334,19 @@ object."
                               :min-width (1+ (max w (length name)))
                               :max-width pgmacs-max-column-width
                               :formatter fmt
-                              :displayer (pgmacs--make-column-displayer meta ref-p))))
+                              :displayer (pgmacs--make-column-displayer meta (gethash name column-info)))))
            (inhibit-read-only t)
            (pgmacstbl (make-pgmacstbl
-                    :insert nil
-                    :use-header-line nil
-                    :face 'pgmacs-table-data
-                    :columns columns
-                    :row-colors pgmacs-row-colors
-                    :objects rows
-                    ;; same syntax for keys as keymap-set
-                    :actions `("RET" (lambda (row) (pgmacs--edit-value-minibuffer row ',primary-keys))
+                       :insert nil
+                       :use-header-line nil
+                       :face 'pgmacs-table-data
+                       :columns columns
+                       :row-colors pgmacs-row-colors
+                       :objects rows
+                       ;; same syntax for keys as keymap-set
+                       ;; TODO: the primary-keys could perhaps be saved as a text property on the table?
+                       :actions `(;; "RET" (lambda (row) (pgmacs--edit-value-minibuffer row ',primary-keys))
+                               "RET" (lambda (row) (pgmacs--table-list-dwim row ',primary-keys))
                                "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
                                "v" pgmacs--view-value
                                "<delete>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
@@ -1399,7 +1453,20 @@ object."
       (if (null rows)
           (insert "(no rows in table)")
         (pgmacstbl-insert pgmacstbl))
-      (pgmacs--stop-progress-reporter))))
+      (pgmacs--stop-progress-reporter)
+      ;; if asked to center-on a particular pk value, search for it and move point to that row
+      (when center-on
+        (let* ((pk-name (cl-first center-on))
+               (pk-val (cl-second center-on))
+               (cols (pgmacstbl-columns pgmacstbl))
+               (pk-col-id (cl-position pk-name cols :key #'pgmacstbl-column-name :test #'string=)))
+          (unless pk-col-id
+            (error "Can't find column named %s" pk-name))
+          (cl-loop named position-cursor
+           for row in (pgmacstbl-objects pgmacstbl)
+           when (equal (nth pk-col-id row) pk-val) do
+           (progn (pgmacstbl-goto-object row) (cl-return-from position-cursor))
+           finally do (message "Didn't find row matching %s" pk-val)))))))
 
 ;; bound to "o"
 (defun pgmacs-display-table (table)

@@ -8,6 +8,10 @@
   constraints) are saved as prepared statements to be reused by later calls. This should speed up
   the generation of row-list buffers.
 
+- In a row-list buffer, typing `RET` on a column that references a foreign key will open the
+  referenced table and position the cursor on the referenced row. To force an edit (the normal
+  behaviour for `RET` in a row-list buffer) you can type `w`.
+
 
 ## [0.10] - 2024-07-21
 
