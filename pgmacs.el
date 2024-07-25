@@ -1397,8 +1397,15 @@ value, in the limit of pgmacs-row-limit."
                   buffer-read-only t
                   truncate-lines t)
       (when comment
-        (insert (propertize "Comment" 'face 'bold))
-        (insert (format ": %s\n" comment)))
+        (insert (propertize "Table comment" 'face 'bold))
+        (insert (format ": %s  " comment))
+        (insert-text-button "Modify"
+                            'action (lambda (&rest _ignore)
+                                      (let ((comment (read-from-minibuffer "New table comment: ")))
+                                        (setf (pg-table-comment con table) comment))
+                                      (pgmacs--display-table table))
+                            'help-echo "Modify the table comment")
+        (insert "\n"))
       (let* ((sql "SELECT pg_size_pretty(pg_total_relation_size($1)),
                           pg_size_pretty(pg_indexes_size($1))")
              (res (pg-exec-prepared con sql `((,t-id . "text"))))
@@ -1447,6 +1454,14 @@ value, in the limit of pgmacs-row-limit."
       (insert-text-button "ANALYZE this table"
                           'action #'pgmacs--run-analyze
                           'help-echo "Run ANALYZE on this table")
+      (unless comment
+        (insert "\n")
+        (insert-text-button "Add table comment"
+                            'action (lambda (&rest _ignore)
+                                      (let ((comment (read-from-minibuffer "Table comment: ")))
+                                        (setf (pg-table-comment con table) comment))
+                                      (pgmacs--display-table table))
+                            'help-echo "Add an SQL comment to the table"))
       (insert "\n\n")
       (when (pg-result res :incomplete)
         (pgmacs-paginated-mode)

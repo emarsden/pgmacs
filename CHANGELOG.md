@@ -15,6 +15,8 @@
 - New customizable face `pgmacs-column-primary-key` (defaults to the bold of the standard table data
   face) is used to display a table column that is part of a primary key.
 
+- New text button affordances to add/modify table comments in row-list buffers.
+
 
 ## [0.10] - 2024-07-21
 
