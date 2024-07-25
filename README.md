@@ -1,5 +1,9 @@
 # pgmacs.el -- Emacs editing PostgreSQL databases
 
+<img src="img/PGmacs-logo.svg"
+     alt="PGmacs logo"
+     style="width:15em;display:block;margin:auto">
+
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 ![Beta status](https://img.shields.io/badge/status-beta-blue)
 
@@ -81,7 +85,7 @@ data.
 pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
 Windows and MacOS. It works both in graphical mode and in the terminal.
 
-**PostgreSQL version**: PGmacs has been tested with PostgreSQL version 16.3 and 17beta1, but should
+**PostgreSQL version**: PGmacs has been tested with PostgreSQL version 16.4 and 17beta2, but should
 work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate with
 PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
