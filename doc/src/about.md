@@ -1,6 +1,8 @@
 # PGmacs
 
-<img src="img/PGmacs-logo.svg" style="width:50em;display:block;margin:auto">
+<img src="img/PGmacs-logo.svg" 
+     alt="PGmacs logo"
+     style="width:15em;display:block;margin:auto">
 
 An Emacs-based browser and editor for the PostgreSQL database.
 

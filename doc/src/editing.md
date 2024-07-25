@@ -1,19 +1,26 @@
 # Editing data in a PostgreSQL table
 
-![Screenshot table](img/screenshot-table.png)
-
 A row-list buffer shows some metainformation on the table and its columns, then the row data in tabular form.
+
+![Screenshot table](img/screenshot-table.png)
 
 If the table contains a large number of rows, the contents will be **paginated**, with `Next` and
 `Previous` buttons to move page by page. The number of rows in each page is determined by the
 variable `pgmacs-row-limit`.
 
-The following keys are bound when the point is located in the table: 
+A column which is a part of a primary key will be displayed using the customizable
+`pgmacs-column-primary-key` face, which defaults to a bold version of the `pgmacs-table-data` face.
+A column which references a foreign key will be displayed using the `pgmacs-column-foreign-key`
+face, which defaults to a blue color. If you type `RET` with point on a foreign key reference,
+PGmacs will jump to the referenced row and column in the other table (a new row-list buffer is
+opened; type `q` to come back to the orginal row-list buffer).
+
+The following keys are bound when the point is located in the row-list table:
 
 | Key         | Binding                                                                              |
 |-------------|--------------------------------------------------------------------------------------|
 | `v`         | Display the value at point in a dedicated buffer.                                    |
-| `RET`       | Edit the value at point in the minibuffer.                                           |
+| `RET`       | Edit the value at point in the minibuffer, or jump to foreign table.                 |
 | `w`         | Edit the value at point in a widget-based buffer.                                    |
 | `DEL`       | Delete the row at point.                                                             |
 | `M-left`    | Move to the previous column.                                                         |
