@@ -1,6 +1,6 @@
 # pgmacs.el -- Emacs editing PostgreSQL databases
 
-<img src="img/PGmacs-logo.svg"
+<img src="doc/src/img/PGmacs-logo.svg"
      alt="PGmacs logo"
      style="width:15em;display:block;margin:auto">
 
