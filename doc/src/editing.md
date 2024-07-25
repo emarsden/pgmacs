@@ -2,7 +2,7 @@
 
 ![Screenshot table](img/screenshot-table.png)
 
-A table buffer shows some metainformation on the table and its columns, then the row data in tabular form.
+A row-list buffer shows some metainformation on the table and its columns, then the row data in tabular form.
 
 If the table contains a large number of rows, the contents will be **paginated**, with `Next` and
 `Previous` buttons to move page by page. The number of rows in each page is determined by the
@@ -18,6 +18,7 @@ The following keys are bound when the point is located in the table:
 | `DEL`       | Delete the row at point.                                                             |
 | `M-left`    | Move to the previous column.                                                         |
 | `M-right`   | Move to the next column.                                                             |
+| `o`         | Prompt for a table name and open a new buffer displaying that table's data.          |
 | `+`         | Insert a new row into the current table, prompting for new values in the minibuffer. |
 | `i`         | Insert a new row, prompting for new values in a dedicated buffer.                    |
 | `k`         | Copy the current row.                                                                |
@@ -33,6 +34,7 @@ The following keys are bound when the point is located in the table:
 | `S`         | Sort the table by the current column.                                                |
 | `{`         | Make the current column narrower.                                                    |
 | `}`         | Make the current column wider.                                                       |
+| `T`         | Jump to the main PGmacs table-list buffer.                                           |
 | `q`         | Kill the current buffer.                                                             |
 
 
