@@ -121,9 +121,9 @@ table-list buffer displayed on startup allows you to:
    SQL query in the minibuffer)
  - type `h' to show buffer-specific help and keybindings
 
-In a table buffer, which displays metainformation on the table (types of
+In a row-list buffer, which displays metainformation on the table (types of
 the different columns and their associated SQL constraints, on-disk size,
-table owner), you can:
+table owner) and the rows of data in that table, you can:
  - browse the table contents row by row, in paginated mode for large
    tables. Type `n' and `p' to move to the next/previous page in a
    paginated buffer.
@@ -141,6 +141,8 @@ table owner), you can:
  - delete a row (type `DEL' on the row you wish to delete)
  - copy/paste rows of a database table (type `k' to copy, `y' to paste)
  - export the contents of a table to CSV using a dedicated button
+ - type `o' to open a new row-list buffer for another table
+ - type `T' to jump back to the main table-list buffer
  - type `h' to show buffer-specific help and keybindings
 
 See the `pgmacs' customization group for a list of user options.
@@ -1233,6 +1235,7 @@ Table names are schema-qualified if the schema is non-default."
       (shw ">" "Move point to the last row in the table")
       (shw "{" "Shrink the horizontal space used by the current column")
       (shw "}" "Grow the horizontal space used by the current column")
+      (shw "o" "Prompt for a table name and open a new buffer displaying that table's data")
       (shw "r" "Redraw the table (does not refetch data from PostgreSQL)")
       (shw "T" "Switch to the main table-list buffer for this database")
       (shw "q" "Bury this buffer")
@@ -1774,6 +1777,7 @@ Uses PostgreSQL connection CON."
       (shw ">" "Go to the last table in the table list")
       (shw "{" "Shrink the horizontal space used by the current column")
       (shw "}" "Grow the horizontal space used by the current column")
+      (shw "g" "Redraw this table-list buffer (refetches data from PostgreSQL)")
       (shw "q" "Bury this buffer")
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min)))))
