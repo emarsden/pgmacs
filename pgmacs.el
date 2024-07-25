@@ -1363,6 +1363,7 @@ value, in the limit of pgmacs-row-limit."
                                   "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                   "h" pgmacs--row-list-help
                                   "?" pgmacs--row-list-help
+                                  "o" pgmacs-display-table
                                   "+" pgmacs--insert-row
                                   "i" pgmacs--insert-row-widget
                                   "k" pgmacs--copy-row
@@ -1480,12 +1481,11 @@ value, in the limit of pgmacs-row-limit."
            finally do (message "Didn't find row matching %s" pk-val)))))))
 
 ;; bound to "o"
-(defun pgmacs-display-table (table)
-  (interactive (list (completing-read
-                       "PostgreSQL table: "
-                       (pg-tables pgmacs--con)
-                       nil t)))
-  (pgmacs--display-table table))
+(defun pgmacs-display-table (&rest _ignore)
+  (let ((table (completing-read "PostgreSQL table: "
+                                (pg-tables pgmacs--con)
+                                nil t)))
+    (pgmacs--display-table table)))
 
 ;; This is similar to pgmacstbl-revert, but works correctly with a buffer than contains content other
 ;; than the pgmacstbl.
@@ -1660,6 +1660,7 @@ Uses PostgreSQL connection CON."
                               :actions '("e" pgmacs-run-sql
                                          "r" pgmacs--redraw-pgmacstbl
                                          "j" pgmacs--row-as-json
+                                         "o" pgmacs-display-table
                                          ;; "n" and "p" are bound when table is paginated to next/prev page
                                          "<" (lambda (&rest _ignored)
                                                (text-property-search-backward 'pgmacstbl)
