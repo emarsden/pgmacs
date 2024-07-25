@@ -41,6 +41,12 @@
   "Face used to display data in a column that references another table."
   :group 'pgmacs)
 
+(defface pgmacs-column-primary-key
+  '((t (:inherit pgmacs-table-data
+                 :bold t)))
+  "Face used to display data in a column that is part of a primary key."
+  :group 'pgmacs)
+
 (defface pgmacs-table-header
   '((((class color) (background light))
      :bold t
@@ -1118,7 +1124,6 @@ Table names are schema-qualified if the schema is non-default."
         (push (list table rows size owner (or comment "")) entries)))
     entries))
 
-;; ref-p is non-nil if the column references a foreign key.
 (defun pgmacs--make-column-displayer (echo-text column-metainfo)
   "Return a display function which echos ECHO-TEXT in minibuffer."
   (lambda (fvalue max-width _table)
@@ -1126,8 +1131,12 @@ Table names are schema-qualified if the schema is non-default."
                           ;; TODO could include the ellipsis here
                           (pgmacstbl--limit-string fvalue max-width)
                         fvalue))
-           (ref-p (gethash "REFERENCES" column-metainfo))
-           (face (if ref-p 'pgmacs-column-foreign-key 'pgmacs-table-data)))
+           (face (cond
+                  ((gethash "REFERENCES" column-metainfo)
+                   'pgmacs-column-foreign-key)
+                  ((gethash "PRIMARY KEY" column-metainfo)
+                   'pgmacs-column-primary-key)
+                  (t 'pgmacs-table-data))))
       (propertize truncated
                   'face face
                   'help-echo echo-text
@@ -1345,42 +1354,41 @@ value, in the limit of pgmacs-row-limit."
                        :objects rows
                        ;; same syntax for keys as keymap-set
                        ;; TODO: the primary-keys could perhaps be saved as a text property on the table?
-                       :actions `(;; "RET" (lambda (row) (pgmacs--edit-value-minibuffer row ',primary-keys))
-                               "RET" (lambda (row) (pgmacs--table-list-dwim row ',primary-keys))
-                               "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
-                               "v" pgmacs--view-value
-                               "<delete>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                               "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                               "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                               "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                               "h" pgmacs--row-list-help
-                               "?" pgmacs--row-list-help
-                               "+" pgmacs--insert-row
-                               "i" pgmacs--insert-row-widget
-                               "k" pgmacs--copy-row
-                               "y" pgmacs--yank-row
-                               "e" pgmacs-run-sql
-                               "r" pgmacs--redraw-pgmacstbl
-                               "j" pgmacs--row-as-json
-                               ;; "n" and "p" are bound when table is paginated to next/prev page
-                               "<" (lambda (&rest _ignored)
-                                     (text-property-search-backward 'pgmacstbl)
-                                     (next-line))
-                               ">" (lambda (&rest _ignored)
-                                     (text-property-search-forward 'pgmacstbl)
-                                     (previous-line))
-                               "0" (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
-                               "1" (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
-                               "2" (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
-                               "3" (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
-                               "4" (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
-                               "5" (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
-                               "6" (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
-                               "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
-                               "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
-                               "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
-                               "T" pgmacs--switch-to-database-buffer
-                               "q" (lambda (&rest ignore) (bury-buffer))))))
+                       :actions `("RET" (lambda (row) (pgmacs--table-list-dwim row ',primary-keys))
+                                  "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
+                                  "v" pgmacs--view-value
+                                  "<delete>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                                  "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                                  "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                                  "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                                  "h" pgmacs--row-list-help
+                                  "?" pgmacs--row-list-help
+                                  "+" pgmacs--insert-row
+                                  "i" pgmacs--insert-row-widget
+                                  "k" pgmacs--copy-row
+                                  "y" pgmacs--yank-row
+                                  "e" pgmacs-run-sql
+                                  "r" pgmacs--redraw-pgmacstbl
+                                  "j" pgmacs--row-as-json
+                                  ;; "n" and "p" are bound when table is paginated to next/prev page
+                                  "<" (lambda (&rest _ignored)
+                                        (text-property-search-backward 'pgmacstbl)
+                                        (next-line))
+                                  ">" (lambda (&rest _ignored)
+                                        (text-property-search-forward 'pgmacstbl)
+                                        (previous-line))
+                                  "0" (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
+                                  "1" (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
+                                  "2" (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
+                                  "3" (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
+                                  "4" (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
+                                  "5" (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
+                                  "6" (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
+                                  "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
+                                  "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
+                                  "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
+                                  "T" pgmacs--switch-to-database-buffer
+                                  "q" (lambda (&rest ignore) (bury-buffer))))))
       (setq-local pgmacs--con con
                   pgmacs--table table
                   pgmacs--offset offset
@@ -1465,7 +1473,10 @@ value, in the limit of pgmacs-row-limit."
           (cl-loop named position-cursor
            for row in (pgmacstbl-objects pgmacstbl)
            when (equal (nth pk-col-id row) pk-val) do
-           (progn (pgmacstbl-goto-object row) (cl-return-from position-cursor))
+           (progn
+             (pgmacstbl-goto-object row)
+             (pgmacstbl-goto-column pk-col-id)
+             (cl-return-from position-cursor))
            finally do (message "Didn't find row matching %s" pk-val)))))))
 
 ;; bound to "o"
