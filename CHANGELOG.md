@@ -20,6 +20,8 @@
 - Improve keymap handling: bindings in `pgmacs-table-list-map`, `pgmacs-row-list-map`,
   `pgmacs-transient-map` and our minor keymap `pgmacs-paginated-map` also apply outside of the
   pgmacstbl.
+  
+- The beginnings of a basic menu-bar, with entries for open-uri and open-string.
 
 - Rename function `pgmacs-display-table` to `pgmacs-open-table`.
 

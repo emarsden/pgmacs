@@ -108,6 +108,19 @@ Uses customizations implemented in Emacs' customize support."
   (kbd "e") #'pgmacs-run-sql
   (kbd "T") #'pgmacs--switch-to-database-buffer)
 
+(define-key global-map [menu-bar tools PGmacs]
+   (cons "PGmacs" (make-sparse-keymap "PGmacs")))
+
+(define-key global-map [menu-bar tools PGmacs open-uri]
+   '("Open PostgreSQL URI" . pgmacs-open-uri))
+
+(define-key global-map [menu-bar tools PGmacs open-string]
+   '("Open PostgreSQL connection string" . pgmacs-open-string))
+
+(define-key pgmacs-table-list-map [menu-bar tools PGmacs run-sql]
+   '("Run SQL query" . pgmacs-run-sql))
+
+
 (defun pgmacs-mode ()
   "Mode for browsing and editing data in a PostgreSQL database.
 PGmacs provides an editing interface for PostgreSQL. The main PGmacs
@@ -390,21 +403,6 @@ Use PROMPT in the minibuffer and show the current value CURRENT-VALUE."
          (parser (pg-lookup-parser type))
          (ce (pgcon-client-encoding pgmacs--con)))
     (if parser (funcall parser user-provided ce) user-provided)))
-
-;; Used in table-list buffer: if point is on a column which REFERENCES a foreign table, then jump to
-;; that table on the appropriate row; otherwise prompt to edit using pgmcs--edit-value-minibuffer
-(defun pgmacs--table-list-dwim (row primary-keys)
-  (let* ((colinfo (get-text-property (point) 'pgmacs--column-info))
-         (refs (and colinfo (gethash "REFERENCES" colinfo))))
-    (if refs
-        (let* ((table (cl-first refs))
-               (pk (cl-second refs))
-               (pk-col-id (pgmacstbl-current-column))
-               (pk-col-type (aref pgmacs--column-type-names pk-col-id))
-               (pk-val (nth pk-col-id row))
-               (center-on (list pk pk-val pk-col-type)))
-          (pgmacs--display-table table center-on))
-      (pgmacs--edit-value-minibuffer row primary-keys))))
 
 (defun pgmacs--edit-value-minibuffer (row primary-keys)
   "Edit and update in PostgreSQL the column value at point.
@@ -1302,7 +1300,7 @@ Table names are schema-qualified if the schema is non-default."
 ;; TABLE "book_author" CONSTRAINT "book_author_book_id_fkey" FOREIGN KEY (book_id) REFERENCES books(id)
 
 (defun pgmacs--display-table (table &optional center-on)
-  "Create and populate a buffer to display PostgreSQL table TABLE.
+  "Open a row-list buffer to display TABLE in PGmacs.
 TABLE may be specified as a string or as a schema-qualified pg-qualified-name
 object. Optional argument CENTER-ON of the form (pk-name pk-value pk-type)
 specifies the name, value and type of a primary key which we wish to have centered
@@ -1379,6 +1377,8 @@ value, in the limit of pgmacs-row-limit."
                                   "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                   "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                   "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                                  "TAB" (lambda (_row) (pgmacstbl-next-column))
+                                  "<backtab>" (lambda (_row) (pgmacstbl-previous-column))
                                   "h" pgmacs--row-list-help
                                   "?" pgmacs--row-list-help
                                   "o" pgmacs-open-table
@@ -1516,14 +1516,28 @@ value, in the limit of pgmacs-row-limit."
 (defun pgmacs--row-list-redraw (&rest _ignore)
   "Refresh a PostgreSQL row-list buffer."
   (interactive)
-  (let ((con pgmacs--con)
-        (table pgmacs--table)
-        (offset pgmacs--offset))
+  (let ((table pgmacs--table)
+        (_offset pgmacs--offset))
     ;; FIXME actually we lose the current offset with this implementation. Do we need to switch back
     ;; to the main PGmacs buffer before recreating the row-list buffer, in case the second buffer we
     ;; fall back to is not a PGmacs buffer?
     (kill-buffer)
     (pgmacs--display-table table)))
+
+;; Used in table-list buffer: if point is on a column which REFERENCES a foreign table, then jump to
+;; that table on the appropriate row; otherwise prompt to edit using pgmcs--edit-value-minibuffer
+(defun pgmacs--table-list-dwim (row primary-keys)
+  (let* ((colinfo (get-text-property (point) 'pgmacs--column-info))
+         (refs (and colinfo (gethash "REFERENCES" colinfo))))
+    (if refs
+        (let* ((table (cl-first refs))
+               (pk (cl-second refs))
+               (pk-col-id (pgmacstbl-current-column))
+               (pk-col-type (aref pgmacs--column-type-names pk-col-id))
+               (pk-val (nth pk-col-id row))
+               (center-on (list pk pk-val pk-col-type)))
+          (pgmacs--display-table table center-on))
+      (pgmacs--edit-value-minibuffer row primary-keys))))
 
 ;; bound to "o"
 (defun pgmacs-open-table (&rest _ignore)
