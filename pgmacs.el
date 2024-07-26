@@ -98,15 +98,15 @@ Uses customizations implemented in Emacs' customize support."
     (setq-local widget-link-prefix "")
     (setq-local widget-link-suffix "")))
 
-(defvar pgmacs-mode-map (make-sparse-keymap))
-
-(keymap-set pgmacs-mode-map (kbd "q") 'bury-buffer)
-(keymap-set pgmacs-mode-map (kbd "h") 'pgmacs--table-list-help)
-(keymap-set pgmacs-mode-map (kbd "?") 'pgmacs--table-list-help)
-(keymap-set pgmacs-mode-map (kbd "r") 'pgmacs--table-list-redraw)
-(keymap-set pgmacs-mode-map (kbd "o") 'pgmacs-display-table)
-(keymap-set pgmacs-mode-map (kbd "e") 'pgmacs-run-sql)
-(keymap-set pgmacs-mode-map (kbd "T") 'pgmacs--switch-to-database-buffer)
+(defvar-keymap pgmacs-table-list-map
+  :doc "Keymap for PGmacs table-list buffers"
+  (kbd "q") #'bury-buffer
+  (kbd "h") #'pgmacs--table-list-help
+  (kbd "?") #'pgmacs--table-list-help
+  (kbd "r") #'pgmacs--table-list-redraw
+  (kbd "o") #'pgmacs-open-table
+  (kbd "e") #'pgmacs-run-sql
+  (kbd "T") #'pgmacs--switch-to-database-buffer)
 
 (defun pgmacs-mode ()
   "Mode for browsing and editing data in a PostgreSQL database.
@@ -153,17 +153,28 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
         mode-name "PGmacs")
   ;; Not appropriate for user to type stuff into our buffers.
   (put 'pgmacs-mode 'mode-class 'special)
-  (use-local-map pgmacs-mode-map)
+  (use-local-map pgmacs-table-list-map)
   (pgmacs--widget-setup)
   (run-mode-hooks 'pgmacs-mode-hook))
 
 ;; For use in a row-list buffer that is presenting data from a table.
-(defvar pgmacs-row-list-map (make-sparse-keymap))
-(keymap-set pgmacs-row-list-map (kbd "i") 'pgmacs--insert-row-empty)
+(defvar-keymap pgmacs-row-list-map
+  :doc "Keymap for PGmacs row-list buffers"
+  (kbd "q") #'bury-buffer
+  (kbd "h") #'pgmacs--row-list-help
+  (kbd "?") #'pgmacs--row-list-help
+  (kbd "r") #'pgmacs--row-list-redraw
+  (kbd "i") #'pgmacs--insert-row-empty
+  (kbd "o") #'pgmacs-open-table
+  (kbd "e") #'pgmacs-run-sql
+  (kbd "T") #'pgmacs--switch-to-database-buffer)
 
-(defvar pgmacs-transient-map (make-sparse-keymap))
-(keymap-set pgmacs-transient-map (kbd "q") 'bury-buffer)
-(keymap-set pgmacs-transient-map (kbd "T") 'pgmacs--switch-to-database-buffer)
+(defvar-keymap pgmacs-transient-map
+  :doc "Keymap for PGmacs transient buffers"
+  (kbd "q") #'bury-buffer
+  (kbd "o") #'pgmacs-open-table
+  (kbd "e") #'pgmacs-run-sql
+  (kbd "T") #'pgmacs--switch-to-database-buffer)
 
 (define-minor-mode pgmacs-transient-mode
   "Minor mode for transient PGmacs buffers."
@@ -171,9 +182,10 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   :init-value nil
   :keymap pgmacs-transient-map)
 
-(defvar pgmacs-paginated-map (make-sparse-keymap))
-(keymap-set pgmacs-paginated-map (kbd "n") 'pgmacs--paginated-next)
-(keymap-set pgmacs-paginated-map (kbd "p") 'pgmacs--paginated-prev)
+(defvar-keymap pgmacs-paginated-map
+  :doc "Additional keymap for paginated PGmacs row-list buffers"
+  (kbd "n") #'pgmacs--paginated-next
+  (kbd "p") #'pgmacs--paginated-prev)
 
 (define-minor-mode pgmacs-paginated-mode
   "Minor mode for paginated PGmacs table buffers."
@@ -1134,6 +1146,9 @@ Table names are schema-qualified if the schema is non-default."
                           (pgmacstbl--limit-string fvalue max-width)
                         fvalue))
            (face (cond
+                  ;; For a row-list buffer created by pgmacs-show-result, we have no column-metainfo
+                  ((null column-metainfo)
+                   'pgmacs-table-data)
                   ((gethash "REFERENCES" column-metainfo)
                    'pgmacs-column-foreign-key)
                   ((gethash "PRIMARY KEY" column-metainfo)
@@ -1366,7 +1381,7 @@ value, in the limit of pgmacs-row-limit."
                                   "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                   "h" pgmacs--row-list-help
                                   "?" pgmacs--row-list-help
-                                  "o" pgmacs-display-table
+                                  "o" pgmacs-open-table
                                   "+" pgmacs--insert-row
                                   "i" pgmacs--insert-row-widget
                                   "k" pgmacs--copy-row
@@ -1498,8 +1513,21 @@ value, in the limit of pgmacs-row-limit."
              (cl-return-from position-cursor))
            finally do (message "Didn't find row matching %s" pk-val)))))))
 
+(defun pgmacs--row-list-redraw (&rest _ignore)
+  "Refresh a PostgreSQL row-list buffer."
+  (interactive)
+  (let ((con pgmacs--con)
+        (table pgmacs--table)
+        (offset pgmacs--offset))
+    ;; FIXME actually we lose the current offset with this implementation. Do we need to switch back
+    ;; to the main PGmacs buffer before recreating the row-list buffer, in case the second buffer we
+    ;; fall back to is not a PGmacs buffer?
+    (kill-buffer)
+    (pgmacs--display-table table)))
+
 ;; bound to "o"
-(defun pgmacs-display-table (&rest _ignore)
+(defun pgmacs-open-table (&rest _ignore)
+  (interactive)
   (let ((table (completing-read "PostgreSQL table: "
                                 (pg-tables pgmacs--con)
                                 nil t)))
@@ -1640,8 +1668,6 @@ Uses PostgreSQL connection CON."
   (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   ;; Insert initial content into buffer early.
   (let ((inhibit-read-only t))
-    (erase-buffer)
-    (remove-overlays)
     (insert (propertize "PostgreSQL query output" 'face 'bold))
     (insert "\n")
     (insert (propertize "SQL" 'face 'bold))
@@ -1678,7 +1704,7 @@ Uses PostgreSQL connection CON."
                               :actions '("e" pgmacs-run-sql
                                          "r" pgmacs--redraw-pgmacstbl
                                          "j" pgmacs--row-as-json
-                                         "o" pgmacs-display-table
+                                         "o" pgmacs-open-table
                                          ;; "n" and "p" are bound when table is paginated to next/prev page
                                          "<" (lambda (&rest _ignored)
                                                (text-property-search-backward 'pgmacstbl)
@@ -1834,7 +1860,7 @@ Uses PostgreSQL connection CON."
                              "<deletechar>" pgmacs--table-list-delete
                              "r" pgmacs--table-list-rename
                              "g" pgmacs--table-list-redraw
-                             "o" pgmacs-display-table
+                             "o" pgmacs-open-table
                              "e" pgmacs-run-sql
                              ;; the functions pgmacstbl-beginning-of-table and pgmacstbl-end-of-table don't work when
                              ;; we have inserted text before the pgmacstbl.

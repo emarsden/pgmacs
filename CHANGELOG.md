@@ -17,6 +17,12 @@
 
 - New text button affordances to add/modify table comments in row-list buffers.
 
+- Improve keymap handling: bindings in `pgmacs-table-list-map`, `pgmacs-row-list-map`,
+  `pgmacs-transient-map` and our minor keymap `pgmacs-paginated-map` also apply outside of the
+  pgmacstbl.
+
+- Rename function `pgmacs-display-table` to `pgmacs-open-table`.
+
 
 ## [0.10] - 2024-07-21
 
