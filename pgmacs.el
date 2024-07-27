@@ -1539,12 +1539,15 @@ value, in the limit of pgmacs-row-limit."
           (pgmacs--display-table table center-on))
       (pgmacs--edit-value-minibuffer row primary-keys))))
 
-;; bound to "o"
+;; bound to "o". We make sure here to retain a schema-qualified name for a table, because
+;; pgmacs--display-table needs a schema-qualified name for tables not in the current schema.
 (defun pgmacs-open-table (&rest _ignore)
   (interactive)
-  (let ((table (completing-read "PostgreSQL table: "
-                                (pg-tables pgmacs--con)
-                                nil t)))
+  (let* ((tables (pg-tables pgmacs--con))
+         (completions (mapcar (lambda (mqn) (cons (pgmacs--display-identifier mqn) mqn)) tables))
+         (identifier (completing-read "PostgreSQL table: " completions nil t))
+         (table (or (cdr (assoc identifier completions #'string=))
+                    identifier)))
     (pgmacs--display-table table)))
 
 ;; This is similar to pgmacstbl-revert, but works correctly with a buffer than contains content other
