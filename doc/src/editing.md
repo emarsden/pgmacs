@@ -11,9 +11,7 @@ variable `pgmacs-row-limit`.
 A column which is a part of a primary key will be displayed using the customizable
 `pgmacs-column-primary-key` face, which defaults to a bold version of the `pgmacs-table-data` face.
 A column which references a foreign key will be displayed using the `pgmacs-column-foreign-key`
-face, which defaults to a blue color. If you type `RET` with point on a foreign key reference,
-PGmacs will jump to the referenced row and column in the other table (a new row-list buffer is
-opened; type `q` to come back to the orginal row-list buffer).
+face, which defaults to a blue color.
 
 The following keys are bound when the point is located in the row-list table:
 
@@ -89,6 +87,16 @@ generated value, rather than the value in the copied row.
 
 All updates, insertions and deletions are immediately made on the PostgreSQL server by sending it
 the appropriate SQL `UPDATE TABLE`, `DELETE FROM` or `INSERT INTO` commands. 
+
+
+## Follow foreign key references
+
+A column that references data in a foreign table (`FOREIGN KEY`) will be shown in blue. If you type
+`RET` when point is located on a foreign key reference, PGmacs will jump to the referenced row and column in
+the other table. A new row-list buffer is opened; type `q` to come back to the orginal row-list
+buffer.
+
+![Following foreign key](img/follow-foreign-key.gif)
 
 
 
