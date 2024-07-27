@@ -1084,7 +1084,7 @@ over the PostgreSQL connection CON."
     (maphash (lambda (k v)
                (cond ((string= "TYPE" k) nil)
                      ((string= "REFERENCES" k)
-                      (push (format "%s(%s)"
+                      (push (format "REFERENCES %s(%s)"
                                     (pgmacs--display-identifier (cl-first v))
                                     (cl-second v))
                             items))
