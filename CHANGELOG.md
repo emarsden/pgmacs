@@ -12,6 +12,9 @@
   referenced table and position the cursor on the referenced row. To force an edit (the normal
   behaviour for `RET` in a row-list buffer) you can type `w`.
 
+- New functionality to run SQL from an Emacs buffer and display the output. Bound to `E` (the
+  existing functionality to run SQL read from the minibuffer is bound to `e`).
+
 - New customizable face `pgmacs-column-primary-key` (defaults to the bold of the standard table data
   face) is used to display a table column that is part of a primary key.
 

@@ -33,6 +33,7 @@ The following keys are bound when the point is located in the row-list table:
 | `>`         | Move point to the last row of data.                                                  |
 | number      | Move point to the nth column (numbering is zero-based).                              |
 | `e`         | Open a new buffer to display the result of an SQL query.                             |
+| `E`         | Execute SQL from an Emacs buffer and display the output.                             |
 | `r`         | Redraw the table (does not refetch data from PostgreSQL).                            |
 | `n`         | Next page of output (if table contents are paginated).                               |
 | `p`         | Previous page of output (if table contents are paginated).                           |
@@ -105,7 +106,10 @@ buffer.
 ## Viewing output from an SQL query
 
 You can also view (but obviously not edit!) the output from an SQL query you enter. Type `e` in a
-PGmacs buffer, which will prompt you for an SQL query, then display the output in a dedicated
-temporary buffer. Type `q` to kill the temporary buffer.
+PGmacs buffer, which will prompt you for an SQL query in the minibuffer, then display the output in
+a dedicated temporary buffer. Type `q` to kill the temporary buffer.
+
+Likewise, PGmacs can display the output from an SQL query in an Emacs buffer. Type `E` and it will
+prompt you for the buffer name, then display the query output in a dedicated temporary buffer.
 
 ![Screenshot table](img/screenshot-sql-query.png)

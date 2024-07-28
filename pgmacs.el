@@ -106,6 +106,7 @@ Uses customizations implemented in Emacs' customize support."
   (kbd "r") #'pgmacs--table-list-redraw
   (kbd "o") #'pgmacs-open-table
   (kbd "e") #'pgmacs-run-sql
+  (kbd "E") #'pgmacs-run-buffer-sql
   (kbd "T") #'pgmacs--switch-to-database-buffer)
 
 (define-key global-map [menu-bar tools PGmacs]
@@ -185,6 +186,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (kbd "i") #'pgmacs--insert-row-empty
   (kbd "o") #'pgmacs-open-table
   (kbd "e") #'pgmacs-run-sql
+  (kbd "E") #'pgmacs-run-buffer-sql
   (kbd "T") #'pgmacs--switch-to-database-buffer)
 
 (defvar-keymap pgmacs-transient-map
@@ -192,6 +194,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (kbd "q") #'bury-buffer
   (kbd "o") #'pgmacs-open-table
   (kbd "e") #'pgmacs-run-sql
+  (kbd "E") #'pgmacs-run-buffer-sql
   (kbd "T") #'pgmacs--switch-to-database-buffer)
 
 (define-minor-mode pgmacs-transient-mode
@@ -1249,6 +1252,7 @@ Table names are schema-qualified if the schema is non-default."
       (shw "n" "Next page of output (if table contents are paginated)")
       (shw "p" "Previous page of output (if table contents are paginated)")
       (shw "e" "New buffer with output from SQL query")
+      (shw "E" "Run SQL from a buffer and display the output")
       (shw "<number>" "Move point to nth column")
       (shw "<" "Move point to the first row in the table")
       (shw ">" "Move point to the last row in the table")
@@ -1393,6 +1397,7 @@ value, in the limit of pgmacs-row-limit."
                                   "k" pgmacs--copy-row
                                   "y" pgmacs--yank-row
                                   "e" pgmacs-run-sql
+                                  "E" pgmacs-run-buffer-sql
                                   "r" pgmacs--redraw-pgmacstbl
                                   "j" pgmacs--row-as-json
                                   ;; "n" and "p" are bound when table is paginated to next/prev page
@@ -1548,6 +1553,8 @@ value, in the limit of pgmacs-row-limit."
 ;; bound to "o". We make sure here to retain a schema-qualified name for a table, because
 ;; pgmacs--display-table needs a schema-qualified name for tables not in the current schema.
 (defun pgmacs-open-table (&rest _ignore)
+  "Open a row-list buffer for a PostgreSQL table.
+Prompt for the table name in the minibuffer."
   (interactive)
   (let* ((tables (pg-tables pgmacs--con))
          (completions (mapcar (lambda (mqn) (cons (pgmacs--display-identifier mqn) mqn)) tables))
@@ -1665,13 +1672,23 @@ value, in the limit of pgmacs-row-limit."
          (sql (format "SELECT %s FROM pg_stat_activity" cols)))
     (pgmacs-show-result pgmacs--con sql)))
 
-;; TODO: allow input from a buffer which is set to sql-mode.
+(defvar pgmacs--run-sql-history nil)
+
 (defun pgmacs-run-sql (&rest _ignore)
   "Prompt for an SQL query and display the output in a dedicated buffer."
   (interactive)
-  (let ((sql (read-from-minibuffer "SQL query: ")))
+  (let ((sql (read-from-minibuffer "SQL query: " nil nil nil 'pgmacs--run-sql-history)))
     (pgmacs-show-result pgmacs--con sql)))
 
+(defun pgmacs-run-buffer-sql (&rest _ignore)
+  "Execute the SQL in BUFFFER and display the output in a dedicated buffer."
+  (interactive)
+  (let* ((con pgmacs--con)
+         (buffers (mapcar #'buffer-name (buffer-list)))
+         (buffer (completing-read "Run SQL from buffer: " buffers nil t)))
+    (with-current-buffer buffer
+      (let ((sql (buffer-substring-no-properties (point-min) (point-max))))
+        (pgmacs-show-result con sql)))))
 
 ;; TODO: should limit this function to returning the pgmacstbl and let the caller pop to buffer, set
 ;; pgmacs-mode, insert the information text.
@@ -1725,6 +1742,7 @@ Uses PostgreSQL connection CON."
                               :row-colors pgmacs-row-colors
                               :objects rows
                               :actions '("e" pgmacs-run-sql
+                                         "E" pgmacs-run-buffer-sql
                                          "r" pgmacs--redraw-pgmacstbl
                                          "j" pgmacs--row-as-json
                                          "o" pgmacs-open-table
@@ -1822,6 +1840,7 @@ Uses PostgreSQL connection CON."
       (shw "r" "Rename the table at point")
       (shw "o" "Prompt for a table to browse/edit in a new buffer")
       (shw "e" "New buffer with output from SQL query")
+      (shw "E" "Run buffer SQL and display the output")
       (shw "<" "Go to the first table in the table list")
       (shw ">" "Go to the last table in the table list")
       (shw "{" "Shrink the horizontal space used by the current column")
@@ -1885,6 +1904,7 @@ Uses PostgreSQL connection CON."
                              "g" pgmacs--table-list-redraw
                              "o" pgmacs-open-table
                              "e" pgmacs-run-sql
+                             "E" pgmacs-run-buffer-sql
                              ;; the functions pgmacstbl-beginning-of-table and pgmacstbl-end-of-table don't work when
                              ;; we have inserted text before the pgmacstbl.
                              "<" (lambda (&rest _ignored)
