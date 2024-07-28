@@ -65,7 +65,7 @@
   :type '(list color color)
   :group 'pgmacs)
 
-(defcustom pgmacs-row-limit 1000
+(defcustom pgmacs-row-limit 200
   "The maximum number of rows to retrieve per database query.
 If more rows are present in the PostgreSQL query result, the display of results
 will be paginated.  You may wish to set this to a low value if accessing
@@ -124,9 +124,11 @@ Uses customizations implemented in Emacs' customize support."
 (defun pgmacs-mode ()
   "Mode for browsing and editing data in a PostgreSQL database.
 PGmacs provides an editing interface for PostgreSQL. The main PGmacs
-table-list buffer displayed on startup allows you to:
+table-list buffer displayed when you connect to a database backend
+allows you to:
  - browse the list of tables in the database
- - browse/edit a table (type `RET' on the table name)
+ - browse/edit a table (type `RET' on the table name or `o' to be
+   prompted for a table name in the minibuffer)
  - delete a table (type `DEL' on the table name)
  - rename a table (type `r' on the table name)
  - modify the SQL comment on a table (type `RET' in the `comment' column)
@@ -134,9 +136,10 @@ table-list buffer displayed on startup allows you to:
    SQL query in the minibuffer)
  - type `h' to show buffer-specific help and keybindings
 
-In a row-list buffer, which displays metainformation on the table (types of
-the different columns and their associated SQL constraints, on-disk size,
-table owner) and the rows of data in that table, you can:
+In a row-list buffer, which displays the rows of data in a
+database table along with metainformation on the table (column
+types and associated SQL constraints, on-disk size, table owner),
+you can:
  - browse the table contents row by row, in paginated mode for large
    tables. Type `n' and `p' to move to the next/previous page in a
    paginated buffer.
@@ -158,6 +161,9 @@ table owner) and the rows of data in that table, you can:
  - type `T' to jump back to the main table-list buffer
  - type `h' to show buffer-specific help and keybindings
 
+Please note that edits, insertions and deletions are made immediately on
+the live PostgreSQL database.
+
 See the `pgmacs' customization group for a list of user options.
 
 Entering this mode runs the functions on `pgmacs-mode-hook'.
@@ -170,7 +176,6 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (pgmacs--widget-setup)
   (run-mode-hooks 'pgmacs-mode-hook))
 
-;; For use in a row-list buffer that is presenting data from a table.
 (defvar-keymap pgmacs-row-list-map
   :doc "Keymap for PGmacs row-list buffers"
   (kbd "q") #'bury-buffer
@@ -246,7 +251,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 (defvar-local pgmacs--db-buffer nil)
 
 ;; We can have several table-list buffers open, corresponding to different PostgreSQL databases. The
-;; buffer-local pgmacs--db-buffer is kept up to date in all PGmacs buffers to point to the main
+;; buffer-local pgmacs--db-buffer is kept up to date in each PGmacs buffer to point to its main
 ;; table-list buffer.
 (defun pgmacs--switch-to-database-buffer (&rest _ignore)
   "Switch to the main table-list buffer for the current PostgreSQL database."
@@ -578,7 +583,7 @@ PRIMARY-KEYS."
 Uses a dedicated widget buffer.  Editing is only possible if the current table
 has primary keys, named in the list PRIMARY-KEYS."
   (when (null primary-keys)
-      (error "Can't edit content of a table that has no PRIMARY KEY"))
+    (error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
          (table pgmacs--table)
@@ -684,8 +689,8 @@ Point is located in CURRENT-ROW."
 
 (defun pgmacs--delete-row (row primary-keys)
   "Delete ROW from the current table.
-Modifying the PostgreSQL database is only possible when the current table has
-primary keys, whose names are given by the list PRIMARY-KEYS."
+Deletion is only possible when the current table has primary
+keys, whose names are given by the list PRIMARY-KEYS."
   (when (null primary-keys)
     (error "Can't edit content of a table that has no PRIMARY KEY"))
   (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
@@ -726,6 +731,7 @@ primary keys, whose names are given by the list PRIMARY-KEYS."
                  (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))))
 
 (defun pgmacs--insert-row-empty ()
+  "Insert an empty row into the PostgreSQL table at point."
   (interactive)
   (let* ((col-names (pg-columns pgmacs--con pgmacs--table))
          (nodefault-columns (list))

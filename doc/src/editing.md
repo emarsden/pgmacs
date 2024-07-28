@@ -47,9 +47,11 @@ The following keys are bound when the point is located in the row-list table:
 
 If your table has a primary key, you can edit the contents of the table. To modify a value, move the
 cursor to the relevant column value and type `RET`. This will prompt you for the new value, and
-update the row to the value you specified (it sends PostgreSQL an SQL command similar to `UPDATE
-table_name SET column_name to X WHERE pk_col1 = value1 AND pk_col2 = value2`, where `pk_col1` and
-`pk_col2` are the names of the columns that comprise the primary key constraint).
+immediately update the cell to the value you specified (it sends PostgreSQL an SQL command similar
+to `UPDATE table_name SET column_name to X WHERE pk_col1 = value1 AND pk_col2 = value2`, where
+`pk_col1` and `pk_col2` are the names of the columns that comprise the primary key constraint).
+Please note that there is no undo support for editing operations; you'll have to re-execute an
+update operation.
 
 Note that PGmacs tells you the column type when prompting for the new value. You must specify a
 value in the format accepted by PostgreSQL for that type (check the current value as displayed in the
