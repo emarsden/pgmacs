@@ -35,7 +35,10 @@ installability:
    printf '%s' "$INSTALL_EL" > {{ init-el }}
    ls -l {{ init-el }}
    cat {{ init-el }}
-   podman run --rm -ti -v {{ tmpdir }}:/tmp docker.io/silex/emacs:29.4-ci \
+   podman run --rm -ti -v {{ tmpdir }}:/tmp \
+     -e TERM=xterm-256color \
+     --network=host \
+     docker.io/silex/emacs:29.4-ci \
       ${EMACS:-emacs} -l /tmp/init.el
 
 
