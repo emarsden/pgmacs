@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.11] - Unreleased
+## [0.11] - 2024-07-30
 
 - Speed optimization: the complex queries used to analyze the information_schema tables to identify
   the constraints on a table column (CHECK constraints, maximum length constraints, FOREIGN KEY
