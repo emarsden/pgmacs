@@ -6,7 +6,7 @@
 - Speed optimization: the complex queries used to analyze the information_schema tables to identify
   the constraints on a table column (CHECK constraints, maximum length constraints, FOREIGN KEY
   constraints) are saved as prepared statements to be reused by later calls. This should speed up
-  the generation of row-list buffers.
+  the generation of row-list buffers. This change requires the latest release of the pg-el library.
 
 - In a row-list buffer, typing `RET` on a column that references a foreign key will open the
   referenced table and position the cursor on the referenced row. To force an edit (the normal
