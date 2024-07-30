@@ -6,7 +6,7 @@
 
 An Emacs-based browser and editor for the PostgreSQL database.
 
-[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0)
 ![Beta status](https://img.shields.io/badge/status-beta-blue)
 
 
@@ -33,10 +33,13 @@ PGmacs works with Emacs running in a **terminal** (started with the `-nw` comman
 running in your platform’s **window system**.
 
 
-## Supported versions
+## Production-ready? 
 
-PGmacs is in **beta status**. Please only use it on test databases that do not contain important
-data. 
+PGmacs is in **beta status**. As of 2024-07, the author has sufficient confidence in the code to use
+it to modify real PostgreSQL databases used in production.
+
+
+## Supported versions
 
 **Emacs version**: PGmacs requires Emacs version 29. It has also been tested on the
 pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
@@ -67,9 +70,7 @@ on-disk size of tables, and these functions are not always implemented. What we 
 
 ## License
 
-PGmacs is distributed under the terms of the GNU General Public License, version 2.
+PGmacs is distributed under the terms of the GNU General Public License, version 3.
 
 Copyright 2023-2024 Eric Marsden.
-
-
 

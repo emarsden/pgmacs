@@ -6,7 +6,7 @@
 ;; Package-Requires: ((emacs "29.1") (pg "0.39"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
-;; SPDX-License-Identifier: GPL-2.0-or-later
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
 ;;

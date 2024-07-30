@@ -28,6 +28,8 @@
 
 - Rename function `pgmacs-display-table` to `pgmacs-open-table`.
 
+- Change licence from GPL v2-or-later to GPL v3-or-later.
+
 
 ## [0.10] - 2024-07-21
 
