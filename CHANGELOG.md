@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.12] - Unreleased
+
+- Typing `!` in a row-list buffer runs a shell-command on the current cell value, and displays the
+  output in the echo area. If called with a prefix argument, it replaces the current cell value with
+  the output of the cell command, and also updates the PostgreSQL database.
+
+  For example, to count the length in characters of the current cell value (or of its displayed
+  representation, when it is not a text field), type
+
+```shell
+! wc -c
+```
+
+  To reverse the characters in the current cell, and also update the database:
+
+```shell
+C-u ! rev
+```
+
+  To downcase the characters in the current cell, and also update the database:
+
+```shell
+C-u ! tr '[:upper:]' '[:lower:']
+```
+
+- New customizable variable `pgmacs-enable-query-logging` specifies whether SQL queries should be
+  logged to a dedicated buffer. The default value is false.
+
 
 ## [0.11] - 2024-07-30
 
@@ -23,7 +51,7 @@
 - Improve keymap handling: bindings in `pgmacs-table-list-map`, `pgmacs-row-list-map`,
   `pgmacs-transient-map` and our minor keymap `pgmacs-paginated-map` also apply outside of the
   pgmacstbl.
-  
+
 - The beginnings of a basic menu-bar, with entries for open-uri and open-string.
 
 - Rename function `pgmacs-display-table` to `pgmacs-open-table`.
@@ -144,7 +172,7 @@
 
 - New functions `pgmacs-open/string` to open PGmacs with a PostgreSQL connection string, and
   `pgmacs-open/uri` to open PGmacs with a PostgreSQL connection URI.
-  
+
 - New function `pgmacs` which opens a widget-based buffer to enter PostgreSQL connection information.
 
 - `e` in keymap reads an SQL query from the minibuffer and displays the output in a temporary buffer.
@@ -162,7 +190,7 @@
 - Pressing `+` in a table view allows you to insert a new row, with values for each column entered
   in the minibuffer. Columns for which an SQL default value is specified will use that default
   value.
-  
+
 - Pressing `i` in a table view allows you to insert a new row, with values for each column entered
   in a widget-based buffer. Columns for which an SQL default value is specified will use that default
   value.
@@ -171,7 +199,7 @@
 
 - Faces `pgmacs-table-header` and `pgmacs-table-data` are used to display the header and the rows of
   database tables.
-  
+
 - Variable `pgmacs-row-colors` specifies the colors used for alternating rows in a database table.
 
 - Variable `pgmacs-row-limit` specifies the maximum number of rows to retrieve per database query,

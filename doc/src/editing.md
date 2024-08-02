@@ -20,6 +20,7 @@ The following keys are bound when the point is located in the row-list table:
 | `v`         | Display the value at point in a dedicated buffer.                                    |
 | `RET`       | Edit the value at point in the minibuffer, or jump to foreign table.                 |
 | `w`         | Edit the value at point in a widget-based buffer.                                    |
+| `!`         | Run a shell command on the value at point, replacing the output if prefix argument.  |
 | `DEL`       | Delete the row at point.                                                             |
 | `M-left`    | Move to the previous column.                                                         |
 | `M-right`   | Move to the next column.                                                             |
@@ -89,7 +90,36 @@ or are specified as `SERIAL`, or timestap values that default to `now`) will be 
 generated value, rather than the value in the copied row.
 
 All updates, insertions and deletions are immediately made on the PostgreSQL server by sending it
-the appropriate SQL `UPDATE TABLE`, `DELETE FROM` or `INSERT INTO` commands. 
+the appropriate SQL `UPDATE TABLE`, `DELETE FROM` or `INSERT INTO` commands.
+
+
+
+## Running a shell command on a cell value
+
+Typing `!` in a row-list buffer runs a shell-command on the current cell value, and displays the
+output in the echo area. The cell value is sent as standard input to the shell command, as for the
+Emacs function `shell-command-on-region`. If called with a prefix argument, the current cell value
+is replaced by the output of the cell command, and the PostgreSQL database is updated.
+
+For example, to count the length in characters of the current cell value (or of its displayed
+representation, when it is not a text field), type
+
+```shell
+! wc -c
+```
+
+To reverse the characters in the current cell, and also update the database:
+
+```shell
+C-u ! rev
+```
+
+To downcase the characters in the current cell, and also update the database:
+
+```shell
+C-u ! tr '[:upper:]' '[:lower:']
+```
+
 
 
 ## Follow foreign key references

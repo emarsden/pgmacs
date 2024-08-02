@@ -78,6 +78,11 @@ PostgreSQL over a slow network link."
   :type 'number
   :group 'pgmacs)
 
+(defcustom pgmacs-enable-query-logging nil
+  "Whether SQL queries sent to PostgreSQL should be logged."
+  :type 'boolean
+  :group 'pgmacs)
+
 (defcustom pgmacs-mode-hook nil
   "Mode hook for `pgmacs-mode'."
   :type 'hook
@@ -460,6 +465,80 @@ PRIMARY-KEYS."
         (forward-line -1)
         (pgmacs--redraw-pgmacstbl)))))
 
+(defvar pgmacs--shell-command-history nil)
+
+(defun pgmacs--shell-command-on-value (current-row primary-keys)
+  "Run a shell command with the current cell value as input.
+Normally display output in the echo area. If called with a prefix argument,
+place the current cell value with the output.
+
+For example, to count the number of characters in the current cell,
+
+   ! wc -c
+
+To downcase the value of a text cell (and modify the value in the database) use
+
+   C-u ! tr '[:upper:]' '[:lower]'
+
+To reverse the order of the characters in the cell (and modify the value in
+the database), use
+
+   C-u ! rev
+
+Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
+  (when current-prefix-arg
+    (message "Called shell-command-on-value with a prefix arg"))
+  (when (null primary-keys)
+    (error "Can't edit content of a table that has no PRIMARY KEY"))
+  (let* ((pgmacstbl (or (pgmacstbl-current-table)
+                        (error "Cursor is not in a pgmacstbl")))
+         (cols (pgmacstbl-columns pgmacstbl))
+         (col-id (or (pgmacstbl-current-column)
+                     (error "Not on a pgmacstbl column")))
+         (col (nth col-id cols))
+         (col-name (pgmacstbl-column-name col))
+         (col-type (aref pgmacs--column-type-names col-id))
+         (pk (cl-first primary-keys))
+         (pk-col-id (or (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=)
+                        (error "Can't find primary key %s in the pgmacstbl column list" pk)))
+         (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
+         (pk-value (and pk-col-id (nth pk-col-id current-row))))
+    (unless pk-value
+      (error "Can't find value for primary key %s" pk))
+    (let* ((current (funcall (pgmacstbl-column-formatter col)
+                             (nth col-id current-row)))
+           (prompt "Shell command: ")
+           (cmd (read-string prompt nil 'pgmacs--shell-command-history))
+           (new-value (with-temp-buffer
+                        (insert current)
+                        (let ((status (shell-command-on-region (point-min) (point-max) cmd t t
+                                                               " *PGmacs shell command error*" t)))
+                          (when (zerop status)
+                            (buffer-substring-no-properties (point-min) (point-max)))))))
+      (unless new-value
+        (error "Shell command failed: check *PGmacs shell command error* buffer"))
+      (if (not current-prefix-arg)
+          (message "PostgreSQL shell: %s" new-value)
+        ;; With a prefix argument, we update the value in the PostgreSQL database and in the
+        ;; displayed pgmacstbl.
+        (let* ((sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
+                            (pg-escape-identifier pgmacs--table)
+                            (pg-escape-identifier col-name)
+                            (pg-escape-identifier pk)))
+               (res (pg-exec-prepared pgmacs--con sql
+                                      `((,new-value . ,col-type)
+                                        (,pk-value . ,pk-col-type)))))
+          (pgmacs--notify "%s" (pg-result res :status))
+          (let ((new-row (copy-sequence current-row)))
+            (setf (nth col-id new-row) new-value)
+            ;; pgmacstbl-update-object doesn't work, so insert then delete old row
+            (pgmacstbl-insert-object pgmacstbl new-row current-row)
+            (pgmacstbl-remove-object pgmacstbl current-row)
+            ;; redrawing is necessary to ensure that all keybindings are present for the newly
+            ;; inserted row.
+            (forward-line -1)
+            (pgmacs--redraw-pgmacstbl)))))))
+  
 
 (define-widget 'pgmacs-hstore-widget 'list
   "Widget to edit a PostgreSQL HSTORE key-value map."
@@ -509,6 +588,7 @@ PRIMARY-KEYS."
   :tag "Date"
   :format "%v"
   :offset 2
+  :valid-regexp "\d+-\d\{2\}-\d\{2\}"
   :value-to-internal (lambda (_widget val)
                        (format-time-string "%Y-%m-%d" val))
   :value-to-external (lambda (_widget str)
@@ -734,6 +814,7 @@ keys, whose names are given by the list PRIMARY-KEYS."
                  (warn "Deletion affected more than 1 row; rolling back")
                  (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))))
 
+;; TOOD: could handle a numeric arg prefix
 (defun pgmacs--insert-row-empty ()
   "Insert an empty row into the PostgreSQL table at point."
   (interactive)
@@ -1222,6 +1303,7 @@ Table names are schema-qualified if the schema is non-default."
       (shw "k" "Copy the row at point")
       (shw "y" "Yank the previously copied row and insert into the table")
       (shw "j" "Copy the current row to the kill-ring in JSON format")
+      (shw "!" "Run a shell command on the value of the current shell")
       (shw "n" "Next page of output (if table contents are paginated)")
       (shw "p" "Previous page of output (if table contents are paginated)")
       (shw "e" "New buffer with output from SQL query")
@@ -1355,6 +1437,7 @@ value, in the limit of pgmacs-row-limit."
                        ;; TODO: the primary-keys could perhaps be saved as a text property on the table?
                        :actions `("RET" (lambda (row) (pgmacs--table-list-dwim row ',primary-keys))
                                   "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
+                                  "!" (lambda (row) (pgmacs--shell-command-on-value row ',primary-keys))
                                   "v" pgmacs--view-value
                                   "<delete>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                   "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
@@ -1509,7 +1592,7 @@ value, in the limit of pgmacs-row-limit."
     (pgmacs--display-table table)))
 
 ;; Used in table-list buffer: if point is on a column which REFERENCES a foreign table, then jump to
-;; that table on the appropriate row; otherwise prompt to edit using pgmcs--edit-value-minibuffer
+;; that table on the appropriate row; otherwise prompt to edit using pgmacs--edit-value-minibuffer
 (defun pgmacs--table-list-dwim (row primary-keys)
   (let* ((colinfo (get-text-property (point) 'pgmacs--column-info))
          (refs (and colinfo (gethash "REFERENCES" colinfo))))
@@ -1826,7 +1909,8 @@ Uses PostgreSQL connection CON."
 ;;;###autoload
 (defun pgmacs-open (con)
   "Browse the contents of PostgreSQL database to which we are connected over CON."
-  ;; (pg-enable-query-log con)
+  (when pgmacs-enable-query-logging
+    (pg-enable-query-log con))
   (pg-hstore-setup con)
   (pg-vector-setup con)
   (pop-to-buffer-same-window (format "*PostgreSQL %s*" (pgcon-dbname con)))
@@ -1970,11 +2054,11 @@ CONNECTION-URI is a PostgreSQL connection URI of the form
 Widget fields are pre-populated by the values of the following
 enviroment variables, if set:
 
-- POSTGRES_DATABASE, POSTGRESQL_DATABASE, POSTGRES_DB
-- POSTGRES_HOSTNAME
+- POSTGRES_DATABASE, POSTGRESQL_DATABASE, POSTGRES_DB, PGDATABASE
+- POSTGRES_HOSTNAME, PGHOST
 - POSTGRES_PORT_NUMBER, POSTGRESQL_PORT_NUMBER, PGPORT
-- POSTGRES_USER, POSTGRESQL_USERNAME
-- POSTGRES_PASSWORD, POSTGRESQL_PASSWORD
+- POSTGRES_USER, POSTGRESQL_USERNAME, PGUSER
+- POSTGRES_PASSWORD, POSTGRESQL_PASSWORD, PGPASSWORD
 "
   (interactive)
   (switch-to-buffer "*PGmacs connection widget*")
@@ -1991,6 +2075,8 @@ enviroment variables, if set:
                            (or (getenv "POSTGRES_DATABASE")
                                (getenv "POSTGRESQL_DATABASE")
                                (getenv "POSTGRES_DB")
+                               ;; this one accepted by libpq
+                               (getenv "PGDATABASE")
                                ""))))
          (w-hostname
           (progn
@@ -2000,6 +2086,8 @@ enviroment variables, if set:
                            :default ""
                            :size 20
                            (or (getenv "POSTGRES_HOSTNAME")
+                               ;; accepted by libpq
+                               (getenv "PGHOST")
                                "localhost"))))
         (w-port
          (progn
@@ -2019,6 +2107,8 @@ enviroment variables, if set:
                           :size 20
                           (or (getenv "POSTGRES_USER")
                               (getenv "POSTGRESQL_USERNAME")
+                              ;; this one accepted by libpq
+                              (getenv "PGUSER")
                               ""))))
         (w-password
          (progn
@@ -2028,6 +2118,8 @@ enviroment variables, if set:
                           :size 20
                           (or (getenv "POSTGRES_PASSWORD")
                               (getenv "POSTGRESQL_PASSWORD")
+                              ;; this one accepted by libpq
+                              (getenv "PGPASSWORD")
                               ""))))
         (w-tls
          (progn
