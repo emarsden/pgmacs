@@ -1303,7 +1303,8 @@ Table names are schema-qualified if the schema is non-default."
       (shw "k" "Copy the row at point")
       (shw "y" "Yank the previously copied row and insert into the table")
       (shw "j" "Copy the current row to the kill-ring in JSON format")
-      (shw "!" "Run a shell command on the value of the current shell")
+      (shw "R" "Rename the current column")
+      (shw "!" "Run a shell command on the value of the current cell")
       (shw "n" "Next page of output (if table contents are paginated)")
       (shw "p" "Previous page of output (if table contents are paginated)")
       (shw "e" "New buffer with output from SQL query")
@@ -1320,6 +1321,20 @@ Table names are schema-qualified if the schema is non-default."
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min)))))
 
+(defun pgmacs--row-list-rename-column (&rest _ignore)
+  "Rename the current PostgreSQL column."
+  (let* ((col-id (pgmacstbl-current-column))
+         (cols (pgmacstbl-columns (pgmacstbl-current-table)))
+         (col (nth col-id cols))
+         (col-name (pgmacstbl-column-name col))
+         (new (read-string (format "Rename column %s to: " col-name)))
+         (sql (format "ALTER TABLE %s RENAME %s TO %s"
+                      (pg-escape-identifier pgmacs--table)
+                      (pg-escape-identifier col-name)
+                      (pg-escape-identifier new)))
+         (res (pg-exec pgmacs--con sql)))
+    (pgmacs--notify "%s" (pg-result res :status))
+    (pgmacs--display-table pgmacs--table)))
 
 ;; Select row-count values from table "around" (ordered by pk) the row where pk=value.
 ;; center-on is a list of the form (pk pk-value pk-type)
@@ -1445,6 +1460,7 @@ value, in the limit of pgmacs-row-limit."
                                   "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                   "TAB" (lambda (_row) (pgmacstbl-next-column))
                                   "<backtab>" (lambda (_row) (pgmacstbl-previous-column))
+                                  "R" pgmacs--row-list-rename-column
                                   "h" pgmacs--row-list-help
                                   "?" pgmacs--row-list-help
                                   "o" pgmacs-open-table
@@ -1962,8 +1978,9 @@ Uses PostgreSQL connection CON."
                              "o" pgmacs-open-table
                              "e" pgmacs-run-sql
                              "E" pgmacs-run-buffer-sql
-                             ;; the functions pgmacstbl-beginning-of-table and pgmacstbl-end-of-table don't work when
-                             ;; we have inserted text before the pgmacstbl.
+                             ;; the functions pgmacstbl-beginning-of-table and
+                             ;; pgmacstbl-end-of-table don't work when we have inserted text before
+                             ;; the pgmacstbl.
                              "<" (lambda (&rest _ignored)
                                    (text-property-search-backward 'pgmacstbl)
                                    (next-line))
@@ -2048,6 +2065,8 @@ CONNECTION-URI is a PostgreSQL connection URI of the form
 ;; and the more sophisticated Bitnami PostgreSQL image
 ;;
 ;;    https://registry.hub.docker.com/r/bitnami/postgresql#!
+;;
+;; and from libpq/psql.
 ;;;###autoload
 (defun pgmacs ()
   "Open a widget-based login buffer for PostgreSQL.

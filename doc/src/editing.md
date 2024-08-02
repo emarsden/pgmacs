@@ -30,6 +30,7 @@ The following keys are bound when the point is located in the row-list table:
 | `k`         | Copy the current row.                                                                |
 | `y`         | Paste (yank) the copied row.                                                         |
 | `j`         | Copy the current row to the kill ring in JSON format.                                |
+| `R`         | Rename the current column.                                                           |
 | `<`         | Move point to the first row of data.                                                 |
 | `>`         | Move point to the last row of data.                                                  |
 | number      | Move point to the nth column (numbering is zero-based).                              |

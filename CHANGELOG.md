@@ -25,6 +25,9 @@ C-u ! rev
 C-u ! tr '[:upper:]' '[:lower:']
 ```
 
+- Typing `R` in a row-list table will rename the current table column. The new name will be read
+  from the minibuffer.
+
 - New customizable variable `pgmacs-enable-query-logging` specifies whether SQL queries should be
   logged to a dedicated buffer. The default value is false.
 
