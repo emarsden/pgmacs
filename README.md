@@ -98,7 +98,7 @@ list of tables available, and these tables are not always present in PostgreSQL-
 databases. PGmacs also uses some PostgreSQL-specific functions to display information such as the
 on-disk size of tables, and these functions are not always implemented. What we have tested so far:
 
-- ParadeDB v0.7.3 sees to work fine in limited testing (it's more a PostgreSQL extension than a
+- ParadeDB v0.7.3 seems to work fine in limited testing (it's more a PostgreSQL extension than a
   fully separate product).
   
 - YugabyteDB v2.21 works to a limited extent: we are not able to run the SQL command that adds a

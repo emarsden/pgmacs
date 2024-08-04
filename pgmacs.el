@@ -83,7 +83,32 @@ PostgreSQL over a slow network link."
   :type 'boolean
   :group 'pgmacs)
 
-(defcustom pgmacs-mode-hook nil
+(defcustom pgmacs-header-line
+  (list (concat (when (display-graphic-p) "🐘") "PGmacs"))
+  "Header-line to use in PGmacs buffers. Nil to disable."
+  :type 'list
+  :group 'pgmacs)
+
+(defun pgmacs--update-header-line ()
+  (setq pgmacs-header-line
+        (list (concat (when (char-displayable-p ?🐘) "🐘")
+                      " PGmacs "
+                      (when pgmacs--con
+                        ;; (list :tcp host port dbname user password)
+                        (let ((ci (pgcon-connect-info pgmacs--con)))
+                          (cl-case (cl-first ci)
+                            (:tcp
+                             (format "%s as %s on %s:%s"
+                                     (propertize (cl-fourth ci) 'face 'bold)
+                                     (cl-fifth ci)
+                                     (cl-second ci)
+                                     (cl-third ci)))
+                            (:local
+                             (format "%s as %s on Unix socket"
+                                     (propertize (cl-fourth ci) 'face bold)
+                                     (cl-fifth ci))))))))))
+
+(defcustom pgmacs-mode-hook 'pgmacs--update-header-line
   "Mode hook for `pgmacs-mode'."
   :type 'hook
   :group 'pgmacs)
@@ -176,6 +201,8 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 "
   (setq major-mode 'pgmacs-mode
         mode-name "PGmacs")
+  (when pgmacs-header-line
+    (setq header-line-format pgmacs-header-line))
   ;; Not appropriate for user to type stuff into our buffers.
   (put 'pgmacs-mode 'mode-class 'special)
   (use-local-map pgmacs-table-list-map)
@@ -712,11 +739,11 @@ has primary keys, named in the list PRIMARY-KEYS."
       (erase-buffer)
       (remove-overlays)
       (kill-all-local-variables)
-      (pgmacs-mode)
       (setq-local pgmacs--con con
                   pgmacs--db-buffer db-buffer
                   pgmacs--table table
                   header-line-format (format "🐘 Update PostgreSQL column %s" col-name))
+      (pgmacs-mode)
       (widget-insert "\n")
       (let* ((column-info (pgmacs--column-info con table col-name))
              (formatted-info (pgmacs--format-column-info column-info)))
@@ -939,10 +966,10 @@ PostgreSQL database."
       (erase-buffer)
       (remove-overlays)
       (kill-all-local-variables)
-      (pgmacs-mode)
       (setq-local pgmacs--con con
                   pgmacs--db-buffer db-buffer
                   pgmacs--table table)
+      (pgmacs-mode)
       (widget-insert (propertize (format "Insert row into table %s" table) 'face 'bold))
       (widget-insert "\n\n")
       (dolist (ecv editable-cols)
@@ -1393,8 +1420,6 @@ value, in the limit of pgmacs-row-limit."
     (pop-to-buffer-same-window (format "*PostgreSQL %s %s*" (pgcon-dbname con) t-pretty))
     (setq-local pgmacs--db-buffer db-buffer)
     (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
-    (pgmacs-mode)
-    (use-local-map pgmacs-row-list-map)
     ;; Place some initial content in the buffer early up.
     (let ((inhibit-read-only t)
           (owner (pg-table-owner con table)))
@@ -1497,6 +1522,8 @@ value, in the limit of pgmacs-row-limit."
                   pgmacs--column-type-names (apply #'vector column-type-names)
                   buffer-read-only t
                   truncate-lines t)
+      (pgmacs-mode)
+      (use-local-map pgmacs-row-list-map)
       (when comment
         (insert (propertize "Table comment" 'face 'bold))
         (insert (format ": %s  " comment))
@@ -1772,11 +1799,11 @@ Uses PostgreSQL connection CON."
     (erase-buffer)
     (remove-overlays)
     (kill-all-local-variables)
-    (pgmacs-mode)
     (setq-local pgmacs--con con
                 pgmacs--db-buffer db-buffer
                 buffer-read-only t
                 truncate-lines t))
+  (pgmacs-mode)
   (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   ;; Insert initial content into buffer early.
   (let ((inhibit-read-only t))
@@ -1930,11 +1957,11 @@ Uses PostgreSQL connection CON."
   (pg-hstore-setup con)
   (pg-vector-setup con)
   (pop-to-buffer-same-window (format "*PostgreSQL %s*" (pgcon-dbname con)))
-  (pgmacs-mode)
   (setq-local pgmacs--con con
               pgmacs--db-buffer (current-buffer)
               buffer-read-only t
               truncate-lines t)
+  (pgmacs-mode)
   (pgmacs--start-progress-reporter "Retrieving PostgreSQL table list")
   (set-process-query-on-exit-flag (pgcon-process con) nil)
   ;; Make sure some initial content is visible in the buffer, in case of a slow connection to
