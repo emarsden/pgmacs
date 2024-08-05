@@ -83,6 +83,24 @@ PostgreSQL over a slow network link."
   :type 'boolean
   :group 'pgmacs)
 
+;; To run SchemaSpy on the current database and display images describing the schema. Requires the
+;; following software to be installed:
+;;
+;;  - SchemaSpy (here to ~/lib/schemaspy.jar, see schemaspy.org)
+;;  - Java (available as "java" here)
+;;  - GraphViz
+;;  - JDBC support for PostgreSQL (here in /usr/share/java/postgresql-jdbc4.jar, installable for example
+;;    using "sudo apt install libpostgresql-jdbc-java")
+(defcustom pgmacs-schemaspy-cmdline
+  "java -jar ~/lib/schemaspy.jar -dp /usr/share/java/postgresql-jdbc4.jar -t pgsql11 -host %h -port %P -u %u -p %p -db %d -s %s -i %t -imageformat svg -o /tmp/schema"
+  "Commandline for running SchemaSpy java application.
+In this commandline, %d is replaced by the database name, %h by
+the hostname on which PostgreSQL is running, %P by the port it is
+running on, %u by the user, %p by the password, %s by the current
+table schema and %t by the current table name."
+  :type 'string
+  :group 'pgmacs)
+
 (defcustom pgmacs-header-line
   (list (concat (when (display-graphic-p) "🐘") "PGmacs"))
   "Header-line to use in PGmacs buffers. Nil to disable."
@@ -105,7 +123,7 @@ PostgreSQL over a slow network link."
                                      (cl-third ci)))
                             (:local
                              (format "%s as %s on Unix socket"
-                                     (propertize (cl-fourth ci) 'face bold)
+                                     (propertize (cl-fourth ci) 'face 'bold)
                                      (cl-fifth ci))))))))))
 
 (defcustom pgmacs-mode-hook 'pgmacs--update-header-line
@@ -1495,6 +1513,7 @@ value, in the limit of pgmacs-row-limit."
                                   "y" pgmacs--yank-row
                                   "e" pgmacs-run-sql
                                   "E" pgmacs-run-buffer-sql
+                                  "S" pgmacs--schemaspy-table
                                   "r" pgmacs--redraw-pgmacstbl
                                   "j" pgmacs--row-as-json
                                   ;; "n" and "p" are bound when table is paginated to next/prev page
@@ -1948,6 +1967,37 @@ Uses PostgreSQL connection CON."
       (shw "q" "Bury this buffer")
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min)))))
+
+;; Run SchemaSpy on the current table, display the SVG.
+(defun pgmacs--schemaspy-table (&rest _ignore)
+  (interactive)
+  (unless (display-graphic-p)
+    (error "SchemaSpy will only work on a graphical terminal"))
+  (unless (image-type-available-p 'svg)
+    (error "SchemaSpy support needs SVG support in your Emacs"))
+  (let ((ci (pgcon-connect-info pgmacs--con))
+        (schema-name (if (pg-qualified-name-p pgmacs--table)
+                         (pg-qualified-name-schema pgmacs--table)
+                       "public"))
+        (table-name (if (pg-qualified-name-p pgmacs--table)
+                        (pg-qualified-name-name pgmacs--table)
+                      pgmacs--table)))
+    (when (eql :local (cl-first ci))
+      (message "Replacing Unix connection by network connection to localhost for SchemaSpy"))
+    (let ((cmd (cl-multiple-value-bind (type host port dbname user password) ci
+                 (let ((spec (list (cons ?h (if (eq type :local) "localhost" host))
+                                   (cons ?P (or port 5432))
+                                   (cons ?d dbname)
+                                   (cons ?u user)
+                                   (cons ?p password)
+                                   (cons ?s schema-name)
+                                   (cons ?t table-name))))
+                   (format-spec pgmacs-schemaspy-cmdline spec))))
+          (out (format "/tmp/schema/diagrams/tables/%s.1degree.svg" table-name)))
+      (message "Running cmd %s, output to %s" cmd out)
+      (shell-command cmd)
+      (when (file-exists-p out)
+        (find-file out)))))
 
 ;;;###autoload
 (defun pgmacs-open (con)

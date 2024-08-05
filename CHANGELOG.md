@@ -28,6 +28,9 @@ C-u ! tr '[:upper:]' '[:lower:']
 - Typing `R` in a row-list table will rename the current table column. The new name will be read
   from the minibuffer.
 
+- Preliminary support for running the SchemaSpy application on the current table and displaying the
+  schema diagram. See customizable variable `pgmacs-schemaspy-cmdline`. 
+
 - Preliminary support for a customized header line (see customizable variable `pgmacs-header-line`).
 
 - New customizable variable `pgmacs-enable-query-logging` specifies whether SQL queries should be
