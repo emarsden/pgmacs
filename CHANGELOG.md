@@ -25,6 +25,9 @@ C-u ! rev
 C-u ! tr '[:upper:]' '[:lower:']
 ```
 
+- New keybindings to upcase (`M-u`), downcase (`M-l`) and capitalize (`M-c`) the contents of the
+  current cell, and update the database.
+
 - Typing `R` in a row-list table will rename the current table column. The new name will be read
   from the minibuffer.
 

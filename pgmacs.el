@@ -113,25 +113,6 @@ directory) in which output files are created by SchemaSpy."
   :type 'list
   :group 'pgmacs)
 
-(defun pgmacs--update-header-line ()
-  (setq pgmacs-header-line
-        (list (concat (when (char-displayable-p ?🐘) "🐘")
-                      " PGmacs "
-                      (when pgmacs--con
-                        ;; (list :tcp host port dbname user password)
-                        (let ((ci (pgcon-connect-info pgmacs--con)))
-                          (cl-case (cl-first ci)
-                            (:tcp
-                             (format "%s as %s on %s:%s"
-                                     (propertize (cl-fourth ci) 'face 'bold)
-                                     (cl-fifth ci)
-                                     (cl-second ci)
-                                     (cl-third ci)))
-                            (:local
-                             (format "%s as %s on Unix socket"
-                                     (propertize (cl-fourth ci) 'face 'bold)
-                                     (cl-fifth ci))))))))))
-
 (defcustom pgmacs-mode-hook 'pgmacs--update-header-line
   "Mode hook for `pgmacs-mode'."
   :type 'hook
@@ -309,6 +290,26 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 (defvar-local pgmacs--offset nil)
 (defvar-local pgmacs--db-buffer nil)
 
+(defun pgmacs--update-header-line ()
+  (setq pgmacs-header-line
+        (list (concat (when (char-displayable-p ?🐘) "🐘")
+                      " PGmacs "
+                      (when pgmacs--con
+                        ;; (list :tcp host port dbname user password)
+                        (let ((ci (pgcon-connect-info pgmacs--con)))
+                          (cl-case (cl-first ci)
+                            (:tcp
+                             (format "%s as %s on %s:%s"
+                                     (propertize (cl-fourth ci) 'face 'bold)
+                                     (cl-fifth ci)
+                                     (cl-second ci)
+                                     (cl-third ci)))
+                            (:local
+                             (format "%s as %s on Unix socket"
+                                     (propertize (cl-fourth ci) 'face 'bold)
+                                     (cl-fifth ci))))))))))
+
+
 ;; We can have several table-list buffers open, corresponding to different PostgreSQL databases. The
 ;; buffer-local pgmacs--db-buffer is kept up to date in each PGmacs buffer to point to its main
 ;; table-list buffer.
@@ -468,15 +469,11 @@ Use PROMPT in the minibuffer and show the current value CURRENT-VALUE."
          (ce (pgcon-client-encoding pgmacs--con)))
     (if parser (funcall parser user-provided ce) user-provided)))
 
-(defun pgmacs--edit-value-minibuffer (row primary-keys)
-  "Edit and update in PostgreSQL the column value at point.
-The new value in database row ROW is read in the minibuffer.
-Editing requires the database table to have primary keys named in the list
-PRIMARY-KEYS."
-  (when (null primary-keys)
-    (error "Can't edit content of a table that has no PRIMARY KEY"))
+
+;; FUNCTION is called on (old-value col-name col-type) and returns the new value.
+(defun pgmacs--funcall-cell (row primary-keys function update-db)
   (let* ((pgmacstbl (or (pgmacstbl-current-table)
-                     (error "Cursor is not in a pgmacstbl")))
+                        (error "Cursor is not in a pgmacstbl")))
          (current-row (or (pgmacstbl-current-object)
                           (error "Cursor is not on a pgmacstbl row")))
          (cols (pgmacstbl-columns pgmacstbl))
@@ -490,31 +487,45 @@ PRIMARY-KEYS."
                         (error "Can't find primary key %s in the pgmacstbl column list" pk)))
          (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
          (pk-value (and pk-col-id (nth pk-col-id row))))
-    (unless pk-value
-      (error "Can't find value for primary key %s" pk))
     (let* ((current (funcall (pgmacstbl-column-formatter col)
                              (nth col-id current-row)))
-           (new-value (pgmacs--read-value (substring-no-properties col-name)
-                                          (substring-no-properties col-type)
-                                          "Change %s (%s) to: "
-                                          current))
-           (sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
-                        (pg-escape-identifier pgmacs--table)
-                        (pg-escape-identifier col-name)
-                        (pg-escape-identifier pk)))
-           (res (pg-exec-prepared pgmacs--con sql
-                                  `((,new-value . ,col-type)
-                                    (,pk-value . ,pk-col-type)))))
-      (pgmacs--notify "%s" (pg-result res :status))
-      (let ((new-row (copy-sequence current-row)))
-        (setf (nth col-id new-row) new-value)
-        ;; pgmacstbl-update-object doesn't work, so insert then delete old row
-        (pgmacstbl-insert-object pgmacstbl new-row current-row)
-        (pgmacstbl-remove-object pgmacstbl current-row)
-        ;; redrawing is necessary to ensure that all keybindings are present for the newly inserted
-        ;; row.
-        (forward-line -1)
-        (pgmacs--redraw-pgmacstbl)))))
+           (new-value (funcall function current col-name col-type)))
+      (when update-db
+        (when (null primary-keys)
+          (error "Can't edit content of a table that has no PRIMARY KEY"))
+        (unless pk-value
+          (error "Can't find value for primary key %s" pk))
+        (let* ((sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
+                            (pg-escape-identifier pgmacs--table)
+                            (pg-escape-identifier col-name)
+                            (pg-escape-identifier pk)))
+               (res (pg-exec-prepared pgmacs--con sql
+                                      `((,new-value . ,col-type)
+                                        (,pk-value . ,pk-col-type)))))
+          (pgmacs--notify "%s" (pg-result res :status)))
+        (let ((new-row (copy-sequence current-row)))
+          (setf (nth col-id new-row) new-value)
+          ;; pgmacstbl-update-object doesn't work, so insert then delete old row
+          (pgmacstbl-insert-object pgmacstbl new-row current-row)
+          (pgmacstbl-remove-object pgmacstbl current-row)
+          ;; redrawing is necessary to ensure that all keybindings are present for the newly inserted
+          ;; row.
+          (forward-line -1)
+          (pgmacs--redraw-pgmacstbl)))
+      new-value)))
+
+(defun pgmacs--edit-value-minibuffer (row primary-keys)
+  "Edit and update in PostgreSQL the column value at point.
+The new value in database row ROW is read in the minibuffer.
+Editing requires the database table to have primary keys named in the list
+PRIMARY-KEYS."
+  (let ((get-value (lambda (old-value col-name col-type)
+                     (pgmacs--read-value (substring-no-properties col-name)
+                                         (substring-no-properties col-type)
+                                         "Change %s (%s) to: "
+                                         old-value))))
+  (pgmacs--funcall-cell row primary-keys get-value t)))
+
 
 (defvar pgmacs--shell-command-history nil)
 
@@ -537,59 +548,69 @@ the database), use
    C-u ! rev
 
 Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
-  (when current-prefix-arg
-    (message "Called shell-command-on-value with a prefix arg"))
-  (when (null primary-keys)
-    (error "Can't edit content of a table that has no PRIMARY KEY"))
-  (let* ((pgmacstbl (or (pgmacstbl-current-table)
-                        (error "Cursor is not in a pgmacstbl")))
-         (cols (pgmacstbl-columns pgmacstbl))
-         (col-id (or (pgmacstbl-current-column)
-                     (error "Not on a pgmacstbl column")))
-         (col (nth col-id cols))
-         (col-name (pgmacstbl-column-name col))
-         (col-type (aref pgmacs--column-type-names col-id))
-         (pk (cl-first primary-keys))
-         (pk-col-id (or (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=)
-                        (error "Can't find primary key %s in the pgmacstbl column list" pk)))
-         (pk-col-type (and pk-col-id (aref pgmacs--column-type-names pk-col-id)))
-         (pk-value (and pk-col-id (nth pk-col-id current-row))))
-    (unless pk-value
-      (error "Can't find value for primary key %s" pk))
-    (let* ((current (funcall (pgmacstbl-column-formatter col)
-                             (nth col-id current-row)))
-           (prompt "Shell command: ")
-           (cmd (read-string prompt nil 'pgmacs--shell-command-history))
-           (new-value (with-temp-buffer
-                        (insert current)
-                        (let ((status (shell-command-on-region (point-min) (point-max) cmd t t
-                                                               " *PGmacs shell command error*" t)))
-                          (when (zerop status)
-                            (buffer-substring-no-properties (point-min) (point-max)))))))
-      (unless new-value
-        (error "Shell command failed: check *PGmacs shell command error* buffer"))
-      (if (not current-prefix-arg)
-          (message "PostgreSQL shell: %s" new-value)
-        ;; With a prefix argument, we update the value in the PostgreSQL database and in the
-        ;; displayed pgmacstbl.
-        (let* ((sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
-                            (pg-escape-identifier pgmacs--table)
-                            (pg-escape-identifier col-name)
-                            (pg-escape-identifier pk)))
-               (res (pg-exec-prepared pgmacs--con sql
-                                      `((,new-value . ,col-type)
-                                        (,pk-value . ,pk-col-type)))))
-          (pgmacs--notify "%s" (pg-result res :status))
-          (let ((new-row (copy-sequence current-row)))
-            (setf (nth col-id new-row) new-value)
-            ;; pgmacstbl-update-object doesn't work, so insert then delete old row
-            (pgmacstbl-insert-object pgmacstbl new-row current-row)
-            (pgmacstbl-remove-object pgmacstbl current-row)
-            ;; redrawing is necessary to ensure that all keybindings are present for the newly
-            ;; inserted row.
-            (forward-line -1)
-            (pgmacs--redraw-pgmacstbl)))))))
-  
+  (let ((get-value
+         (lambda (old-value _col-name _col-type)
+           (let* ((prompt "Shell command: ")
+                  (cmd (read-string prompt nil 'pgmacs--shell-command-history))
+                  (new-value (with-temp-buffer
+                               (insert old-value)
+                               (let ((status (shell-command-on-region
+                                              (point-min) (point-max) cmd t t
+                                              " *PGmacs shell command error*" t)))
+                                 (when (zerop status)
+                                   (buffer-substring-no-properties (point-min) (point-max)))))))
+             (unless new-value
+               (error "Shell command failed: check *PGmacs shell command error* buffer"))
+             new-value))))
+    (if (not current-prefix-arg)
+        (let ((new-value (pgmacs--funcall-cell current-row primary-keys get-value nil)))
+          (message "PostgreSQL shell: %s" new-value))
+      ;; With a prefix argument, we update the value in the PostgreSQL database and in the
+      ;; displayed pgmacstbl.
+      (pgmacs--funcall-cell current-row primary-keys get-value t))))
+
+(defun pgmacs--downcase-value (current-row primary-keys)
+  "Downcase the value in the cell at point and update PostgreSQL."
+  (let ((get-value
+         (lambda (old-value _col-name col-type)
+           (unless (or (string= "text" col-type)
+                       (string= "varchar" col-type)
+                       (string= "name" col-type))
+             (error "Can only downcase text values"))
+           (with-temp-buffer
+             (insert old-value)
+             (downcase-region (point-min) (point-max))
+             (buffer-substring-no-properties (point-min) (point-max))))))
+    (pgmacs--funcall-cell current-row primary-keys get-value t)))
+
+(defun pgmacs--upcase-value (current-row primary-keys)
+  "Upcase the value in the cell at point and update PostgreSQL."
+  (let ((get-value
+         (lambda (old-value _col-name col-type)
+           (unless (or (string= "text" col-type)
+                       (string= "varchar" col-type)
+                       (string= "name" col-type))
+             (error "Can only upcase text values"))
+           (with-temp-buffer
+            (insert old-value)
+            (upcase-region (point-min) (point-max))
+            (buffer-substring-no-properties (point-min) (point-max))))))
+    (pgmacs--funcall-cell current-row primary-keys get-value t)))
+
+(defun pgmacs--capitalize-value (current-row primary-keys)
+  "Capitalize the value in the cell at point and update PostgreSQL."
+  (let ((get-value
+         (lambda (old-value _col-name col-type)
+           (unless (or (string= "text" col-type)
+                       (string= "varchar" col-type)
+                       (string= "name" col-type))
+             (error "Can only capitalize text values"))
+           (with-temp-buffer
+             (insert old-value)
+             (capitalize-region (point-min) (point-max))
+             (buffer-substring-no-properties (point-min) (point-max))))))
+    (pgmacs--funcall-cell current-row primary-keys get-value t)))
+
 
 (define-widget 'pgmacs-hstore-widget 'list
   "Widget to edit a PostgreSQL HSTORE key-value map."
@@ -1356,6 +1377,9 @@ Table names are schema-qualified if the schema is non-default."
       (shw "j" "Copy the current row to the kill-ring in JSON format")
       (shw "R" "Rename the current column")
       (shw "!" "Run a shell command on the value of the current cell")
+      (shw "M-u" "Upcase the value of the current cell")
+      (shw "M-l" "Downcase the value of the current cell")
+      (shw "M-c" "Capitalize the value of the current cell")
       (shw "n" "Next page of output (if table contents are paginated)")
       (shw "p" "Previous page of output (if table contents are paginated)")
       (shw "e" "New buffer with output from SQL query")
@@ -1502,6 +1526,9 @@ value, in the limit of pgmacs-row-limit."
                        :actions `("RET" (lambda (row) (pgmacs--table-list-dwim row ',primary-keys))
                                   "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
                                   "!" (lambda (row) (pgmacs--shell-command-on-value row ',primary-keys))
+                                  "M-u" (lambda (row) (pgmacs--upcase-value row ',primary-keys))
+                                  "M-l" (lambda (row) (pgmacs--downcase-value row ',primary-keys))
+                                  "M-c" (lambda (row) (pgmacs--capitalize-value row ',primary-keys))
                                   "v" pgmacs--view-value
                                   "<delete>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                   "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))

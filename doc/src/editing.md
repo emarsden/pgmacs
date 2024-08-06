@@ -21,6 +21,9 @@ The following keys are bound when the point is located in the row-list table:
 | `RET`       | Edit the value at point in the minibuffer, or jump to foreign table.                 |
 | `w`         | Edit the value at point in a widget-based buffer.                                    |
 | `!`         | Run a shell command on the value at point, replacing the output if prefix argument.  |
+| `M-u`       | Upcase the content of the current cell and update PostgreSQL.                        |
+| `M-l`       | Downcase the content of the current cell and update PostgreSQL.                      |
+| `M-c`       | Capitalize the content of the current cell and update PostgreSQL.                    |
 | `DEL`       | Delete the row at point.                                                             |
 | `M-left`    | Move to the previous column.                                                         |
 | `M-right`   | Move to the next column.                                                             |
