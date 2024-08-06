@@ -83,21 +83,27 @@ PostgreSQL over a slow network link."
   :type 'boolean
   :group 'pgmacs)
 
-;; To run SchemaSpy on the current database and display images describing the schema. Requires the
+;; To run SchemaSpy on the current database and display images describing the schema. The default
+;; setting runs SchemaSpy in a Docker/Podman software container, using Podman. This is the easiest
+;; way of running SchemaSpy, because all necessary dependencies are preinstalled. Alternatively (see
+;; commented commandline), you can run the SchemaSpy java application natively, which requires the
 ;; following software to be installed:
 ;;
-;;  - SchemaSpy (here to ~/lib/schemaspy.jar, see schemaspy.org)
-;;  - Java (available as "java" here)
+;;  - SchemaSpy (see schemaspy.org)
+;;  - Java
 ;;  - GraphViz
 ;;  - JDBC support for PostgreSQL (here in /usr/share/java/postgresql-jdbc4.jar, installable for example
 ;;    using "sudo apt install libpostgresql-jdbc-java")
 (defcustom pgmacs-schemaspy-cmdline
-  "java -jar ~/lib/schemaspy.jar -dp /usr/share/java/postgresql-jdbc4.jar -t pgsql11 -host %h -port %P -u %u -p %p -db %d -s %s -i %t -imageformat svg -o /tmp/schema"
-  "Commandline for running SchemaSpy java application.
+  ;; "podman run -v %D:/output --network=host docker.io/schemaspy/schemaspy:latest -t pgsql11 -host %h -port %P -u %u -p %p -db %d -s %s -i %t -imageformat svg"
+  "java -jar ~/lib/schemaspy.jar -dp /usr/share/java/postgresql-jdbc4.jar -t pgsql11 -host %h -port %P -u %u -p %p -db %d -s %s -i %t -imageformat svg -o %D"
+  "Commandline for running the SchemaSpy application or software container.
 In this commandline, %d is replaced by the database name, %h by
 the hostname on which PostgreSQL is running, %P by the port it is
 running on, %u by the user, %p by the password, %s by the current
-table schema and %t by the current table name."
+table schema name, %t by the current table name and %D by the
+directory (which will be created in the system temporary
+directory) in which output files are created by SchemaSpy."
   :type 'string
   :group 'pgmacs)
 
@@ -1975,29 +1981,40 @@ Uses PostgreSQL connection CON."
     (error "SchemaSpy will only work on a graphical terminal"))
   (unless (image-type-available-p 'svg)
     (error "SchemaSpy support needs SVG support in your Emacs"))
-  (let ((ci (pgcon-connect-info pgmacs--con))
-        (schema-name (if (pg-qualified-name-p pgmacs--table)
-                         (pg-qualified-name-schema pgmacs--table)
-                       "public"))
-        (table-name (if (pg-qualified-name-p pgmacs--table)
-                        (pg-qualified-name-name pgmacs--table)
-                      pgmacs--table)))
-    (when (eql :local (cl-first ci))
-      (message "Replacing Unix connection by network connection to localhost for SchemaSpy"))
-    (let ((cmd (cl-multiple-value-bind (type host port dbname user password) ci
-                 (let ((spec (list (cons ?h (if (eq type :local) "localhost" host))
-                                   (cons ?P (or port 5432))
-                                   (cons ?d dbname)
-                                   (cons ?u user)
-                                   (cons ?p password)
-                                   (cons ?s schema-name)
-                                   (cons ?t table-name))))
-                   (format-spec pgmacs-schemaspy-cmdline spec))))
-          (out (format "/tmp/schema/diagrams/tables/%s.1degree.svg" table-name)))
-      (message "Running cmd %s, output to %s" cmd out)
-      (shell-command cmd)
-      (when (file-exists-p out)
-        (find-file out)))))
+  (let* ((tmpdir (temporary-file-directory))
+         (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
+    (when (file-directory-p schemaspy-dir)
+      (delete-directory schemaspy-dir t))
+    (with-file-modes #o777
+      (make-directory schemaspy-dir t))
+    ;; The Docker image for schemaspy runs as user "java" for an obscure reason, so ensure that the
+    ;; temporary schemaspy-dir is writable for all.
+    (let ((ci (pgcon-connect-info pgmacs--con))
+          (schema-name (if (pg-qualified-name-p pgmacs--table)
+                           (pg-qualified-name-schema pgmacs--table)
+                         "public"))
+          (table-name (if (pg-qualified-name-p pgmacs--table)
+                          (pg-qualified-name-name pgmacs--table)
+                        pgmacs--table)))
+      (when (eql :local (cl-first ci))
+        (message "Replacing Unix connection by network connection to localhost for SchemaSpy"))
+      (let ((cmd (cl-multiple-value-bind (type host port dbname user password) ci
+                   (let ((spec (list (cons ?h (if (eq type :local) "localhost" host))
+                                     (cons ?P (or port 5432))
+                                     (cons ?d dbname)
+                                     (cons ?u user)
+                                     (cons ?p password)
+                                     (cons ?s schema-name)
+                                     (cons ?t table-name)
+                                     (cons ?D schemaspy-dir))))
+                     (format-spec pgmacs-schemaspy-cmdline spec))))
+            (out (format "%s/diagrams/tables/%s.1degree.svg"
+                         schemaspy-dir
+                         table-name)))
+        (message "Running cmd %s, output to %s" cmd out)
+        (shell-command cmd)
+        (when (file-exists-p out)
+          (find-file out))))))
 
 ;;;###autoload
 (defun pgmacs-open (con)
