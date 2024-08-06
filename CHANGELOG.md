@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.12] - Unreleased
+## [0.12] - 2024-08-06
 
 - Typing `!` in a row-list buffer runs a shell-command on the current cell value, and displays the
   output in the echo area. If called with a prefix argument, it replaces the current cell value with
