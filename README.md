@@ -28,7 +28,7 @@ It allows you to:
 
 - save the contents of a table in CSV or TSV format, or the contents of a row in JSON format
 
-It works both in the **terminal** and in **GUI mode**.
+It works both in the **terminal** (TUI) and in **GUI mode**.
 
 ![GIF editing](doc/src/img/edit-value.gif)
 

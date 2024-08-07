@@ -345,6 +345,8 @@ Applies format string FMT to ARGS."
              (string-join items ","))))
         ((string= type-name "json")
          #'json-serialize)
+        ((string= type-name "jsonb")
+         #'json-serialize)
         ((string= type-name "vector")
          (lambda (val)
            (concat "[" (string-join (mapcar #'prin1-to-string val) ",") "]")))

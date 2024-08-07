@@ -29,8 +29,8 @@ It allows you to:
 
 - export the contents of a table to CSV or TSV format
 
-PGmacs works with Emacs running in a **terminal** (started with the `-nw` commandline option), or
-running in your platform’s **window system**.
+PGmacs works with Emacs running in a **terminal** (TUI), or running in your platform’s GUI **window
+system**.
 
 
 ## Production-ready? 

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.13] - Unreleased
+
+- Display JSONB columns in the same was as JSON columns.
+
+
 ## [0.12] - 2024-08-06
 
 - Typing `!` in a row-list buffer runs a shell-command on the current cell value, and displays the
