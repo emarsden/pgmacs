@@ -1113,6 +1113,45 @@ Uses PostgreSQL connection CON."
          (res (pg-fetch-prepared con ps-name params)))
     (mapcar #'cl-first (pg-result res :tuples))))
 
+(defun pgmacs--table-indexes (con table)
+  "Return details of the indexes present on TABLE.
+Uses PostgreSQL connection CON."
+  (let* ((schema (if (pg-qualified-name-p table)
+                     (pg-qualified-name-schema table)
+                   "public"))
+         (tname (if (pg-qualified-name-p table)
+                    (pg-qualified-name-name table)
+                         table))
+         (sql "SELECT
+                  c.relname AS index_name,
+                  i.indisunique AS is_unique,
+                  i.indisprimary AS is_primary,
+                  i.indisclustered AS is_clustered,
+                  i.indisvalid AS is_valid,
+                  pg_catalog.pg_get_indexdef(i.indexrelid, 0, true) AS index_definition,
+                  am.amname AS index_type,
+                  ARRAY_AGG(a.attname ORDER BY x.ordinality) AS indexed_columns
+               FROM
+                  pg_class c
+                  JOIN pg_index i ON c.oid = i.indexrelid
+                  JOIN pg_class t ON t.oid = i.indrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  JOIN pg_am am ON c.relam = am.oid
+                  JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS x(attnum, ordinality)
+                      ON TRUE
+                  JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = x.attnum
+               WHERE
+                  n.nspname = $1
+                  AND t.relname = $2
+               GROUP BY
+                  n.nspname, t.relname, c.relname, i.indisunique, i.indisprimary, i.indisclustered, i.indisvalid, i.indexrelid, am.amname
+               ORDER BY c.relname")
+         (argument-types (list "text" "text"))
+         (params `((,schema . "text") (,tname . "text")))
+         (ps-name (pg-ensure-prepared-statement con "QRY-table-indexes" sql argument-types))
+         (res (pg-fetch-prepared con ps-name params)))
+    (pg-result res :tuples)))
+
 (defun pgmacs--column-nullable-p (con table column)
   "Is there a NOT NULL constraint on COLUMN in TABLE?
 Uses PostgreSQL connection CON."
@@ -1477,6 +1516,7 @@ value, in the limit of pgmacs-row-limit."
       (insert (propertize (format "PostgreSQL table %s, owned by %s\n" t-pretty owner) 'face 'bold)))
     (let* ((primary-keys (pgmacs--table-primary-keys con table))
            (comment (pg-table-comment con table))
+           (indexes (pgmacs--table-indexes con table))
            (offset (or pgmacs--offset 0))
            (res (if center-on
                     (pgmacs--select-rows-around con t-id center-on pgmacs-row-limit)
@@ -1615,6 +1655,18 @@ value, in the limit of pgmacs-row-limit."
             (insert "` "))
           (insert last)
           (insert "\n")))
+      (when indexes
+        (insert (propertize "Indexes" 'face 'bold))
+        (insert ":\n")
+        (dolist (idx indexes)
+          (cl-multiple-value-bind (name unique-p primary-p clustered-p valid-p _def type cols) idx
+              (insert (format "  %s %s%s%s%s %s (cols: %s)\n"
+                              name
+                              (if unique-p "UNIQUE " "")
+                              (if primary-p "PRIMARY " "")
+                              (if clustered-p "CLUSTERED " "")
+                              (if valid-p "" "INVALID ")
+                              type cols)))))
       (insert "Row-level access control: ")
       (if (pgmacs--row-security-active con table)
           (insert "enabled")

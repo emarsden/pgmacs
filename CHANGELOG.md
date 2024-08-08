@@ -4,6 +4,9 @@
 
 - Display JSONB columns in the same was as JSON columns.
 
+- In a row-list buffer, display meta-information on any table indexes under the column
+  metainformation.
+
 
 ## [0.12] - 2024-08-06
 
