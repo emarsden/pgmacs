@@ -6,6 +6,13 @@
 
 - In a row-list buffer, display meta-information on any table indexes under the column
   metainformation.
+  
+- Multi-line content in columns is truncated, and only the first line shown (along with the default
+  ellipsis returned by function `truncate-string-ellipsis`). To display the full content of a
+  truncated cell in a dedicated buffer, type `v`.
+  
+- The text button `Display procedures` in the main table-list buffer displays all the user-defined
+  functions and procedures in the current database.
 
 
 ## [0.12] - 2024-08-06

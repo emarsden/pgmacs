@@ -1311,13 +1311,20 @@ Table names are schema-qualified if the schema is non-default."
         (push (list table rows size owner (or comment "")) entries)))
     entries))
 
+(defun pgmacs--truncate-multiline (string)
+  (let ((pos (or (cl-position ?\C-m string)
+                 (cl-position ?\C-j string))))
+    (if pos (concat (substring string 0 pos) (truncate-string-ellipsis))
+      string)))
+
 (defun pgmacs--make-column-displayer (echo-text column-metainfo)
   "Return a display function which echos ECHO-TEXT in minibuffer."
   (lambda (fvalue max-width _table)
-    (let* ((truncated (if (> (string-pixel-width fvalue) max-width)
+    (let* ((first-line (pgmacs--truncate-multiline fvalue))
+           (truncated (if (> (string-pixel-width first-line) max-width)
                           ;; TODO could include the ellipsis here
-                          (pgmacstbl--limit-string fvalue max-width)
-                        fvalue))
+                          (pgmacstbl--limit-string first-line max-width)
+                        first-line))
            (face (cond
                   ;; For a row-list buffer created by pgmacs-show-result, we have no column-metainfo
                   ((null column-metainfo)
@@ -1365,6 +1372,47 @@ Table names are schema-qualified if the schema is non-default."
         (let ((res (pg-exec pgmacs--con sql)))
           (pgmacs--notify "%s" (pg-result res :status))))))
   (pgmacs--display-table pgmacs--table))
+
+(defun pgmacs--display-procedures (&rest _ignore)
+  "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
+  (let* ((db-buffer pgmacs--db-buffer)
+         (con pgmacs--con)
+         (sql "SELECT n.nspname AS schema_name,
+                      p.proname AS specific_name,
+                      CASE p.prokind
+                           when 'f' then 'FUNCTION'
+                           when 'p' then 'PROCEDURE'
+                           when 'a' then 'AGGREGATE'
+                           when 'w' then 'WINDOW'
+                      END AS KIND,
+                      l.lanname as language,
+                      CASE WHEN l.lanname = 'internal' THEN p.prosrc
+                           ELSE pg_get_functiondef(p.oid)
+                           END AS DEFINITION,
+                      pg_get_function_arguments(p.oid) AS arguments,
+                      t.typname AS return_type
+               FROM pg_proc p
+               LEFT JOIN pg_namespace n ON p.pronamespace = n.oid
+               LEFT JOIN pg_language l ON p.prolang = l.oid
+               LEFT JOIN pg_type t ON t.oid = p.prorettype
+               WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+               ORDER BY schema_name, specific_name")
+         (ps-name (pg-ensure-prepared-statement con "QRY-list-procedures" sql nil))
+         (res (pg-fetch-prepared con ps-name nil))
+         (buf (get-buffer-create "*PGmacs procedures*")))
+    (pop-to-buffer buf)
+    (erase-buffer)
+    (remove-overlays)
+    (kill-all-local-variables)
+    (setq-local pgmacs--con con
+                pgmacs--db-buffer db-buffer
+                buffer-read-only t
+                truncate-lines t)
+    (pgmacs-mode)
+    (let ((inhibit-read-only t))
+      (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
+      (insert "\n\n")
+      (pgmacs--show-pgresult buf res))))
 
 (defun pgmacs--run-analyze (&rest _ignore)
   "Run ANALYZE on the current PostgreSQL table."
@@ -1917,61 +1965,67 @@ Uses PostgreSQL connection CON."
     (insert "\n")
     (insert (propertize "SQL" 'face 'bold))
     (insert (format ": %s\n\n" sql)))
-  (let* ((res (pg-exec con sql))
-         (rows (pg-result res :tuples)))
-    (cond ((null rows)
-           (insert "(no rows)"))
-          (t
-           (let* ((column-names (mapcar #'cl-first (pg-result res :attributes)))
-                  (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
-                  (column-type-names (mapcar (lambda (o) (pg-lookup-type-name con o)) column-type-oids))
-                  (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
-                  (value-widths (mapcar #'pgmacs--value-width column-type-names))
-                  (column-widths (cl-loop for w in value-widths
-                                          for name in column-names
-                                          collect (1+ (max w (length name)))))
-                  (columns (cl-loop for name in column-names
-                                    for fmt in column-formatters
-                                    for w in column-widths
-                                    collect (make-pgmacstbl-column
-                                             :name (propertize name 'face 'pgmacs-table-header)
-                                             :min-width (1+ (max w (length name)))
-                                             :formatter fmt
-                                             :displayer (pgmacs--make-column-displayer "" nil))))
-                  (inhibit-read-only t)
-                  (pgmacstbl (make-pgmacstbl
-                              :insert nil
-                              :use-header-line nil
-                              :face 'pgmacs-table-data
-                              :columns columns
-                              :row-colors pgmacs-row-colors
-                              :objects rows
-                              :actions '("e" pgmacs-run-sql
-                                         "E" pgmacs-run-buffer-sql
-                                         "r" pgmacs--redraw-pgmacstbl
-                                         "j" pgmacs--row-as-json
-                                         "o" pgmacs-open-table
-                                         ;; "n" and "p" are bound when table is paginated to next/prev page
-                                         "<" (lambda (&rest _ignored)
-                                               (text-property-search-backward 'pgmacstbl)
-                                               (next-line))
-                                         ">" (lambda (&rest _ignored)
-                                               (text-property-search-forward 'pgmacstbl)
-                                               (previous-line))
-                                         "0" (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
-                                         "1" (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
-                                         "2" (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
-                                         "3" (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
-                                         "4" (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
-                                         "5" (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
-                                         "6" (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
-                                         "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
-                                         "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
-                                         "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
-                                         "q" (lambda (&rest _ignore) (bury-buffer))))))
-             (pgmacstbl-insert pgmacstbl))))
-    (shrink-window-if-larger-than-buffer)
-    (pgmacs--stop-progress-reporter)))
+  (let* ((res (pg-exec con sql)))
+    (pgmacs--show-pgresult (current-buffer) res)))
+
+(defun pgmacs--show-pgresult (buffer pgresult)
+  (with-current-buffer buffer
+    (let ((rows (pg-result pgresult :tuples))
+          (attributes (pg-result pgresult :attributes))
+          (con pgmacs--con))
+      (cond ((null rows)
+             (insert "(no rows)"))
+            (t
+             (let* ((column-names (mapcar #'cl-first attributes))
+                    (column-type-oids (mapcar #'cl-second attributes))
+                    (column-type-names (mapcar (lambda (o) (pg-lookup-type-name con o)) column-type-oids))
+                    (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
+                    (value-widths (mapcar #'pgmacs--value-width column-type-names))
+                    (column-widths (cl-loop for w in value-widths
+                                            for name in column-names
+                                            collect (1+ (max w (length name)))))
+                    (columns (cl-loop for name in column-names
+                                      for fmt in column-formatters
+                                      for w in column-widths
+                                      collect (make-pgmacstbl-column
+                                               :name (propertize name 'face 'pgmacs-table-header)
+                                               :min-width (1+ (max w (length name)))
+                                               :formatter fmt
+                                               :displayer (pgmacs--make-column-displayer "" nil))))
+                    (inhibit-read-only t)
+                    (pgmacstbl (make-pgmacstbl
+                                :insert nil
+                                :use-header-line nil
+                                :face 'pgmacs-table-data
+                                :columns columns
+                                :row-colors pgmacs-row-colors
+                                :objects rows
+                                :actions '("e" pgmacs-run-sql
+                                           "E" pgmacs-run-buffer-sql
+                                           "r" pgmacs--redraw-pgmacstbl
+                                           "j" pgmacs--row-as-json
+                                           "o" pgmacs-open-table
+                                           ;; "n" and "p" are bound when table is paginated to next/prev page
+                                           "<" (lambda (&rest _ignored)
+                                                 (text-property-search-backward 'pgmacstbl)
+                                                 (next-line))
+                                           ">" (lambda (&rest _ignored)
+                                                 (text-property-search-forward 'pgmacstbl)
+                                                 (previous-line))
+                                           "0" (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
+                                           "1" (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
+                                           "2" (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
+                                           "3" (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
+                                           "4" (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
+                                           "5" (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
+                                           "6" (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
+                                           "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
+                                           "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
+                                           "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
+                                           "q" (lambda (&rest _ignore) (bury-buffer))))))
+               (pgmacstbl-insert pgmacstbl))))
+      (shrink-window-if-larger-than-buffer)
+      (pgmacs--stop-progress-reporter))))
 
 
 ;; If the cursor is on the Comment column, allow the user to set the table comment. Otherwise,
@@ -2044,6 +2098,7 @@ Uses PostgreSQL connection CON."
       (shw "<deletechar>" "Delete the table at point")
       (shw "r" "Rename the table at point")
       (shw "o" "Prompt for a table to browse/edit in a new buffer")
+      (shw "p" "New buffer listing the functions and procedures in the current database")
       (shw "e" "New buffer with output from SQL query")
       (shw "E" "Run buffer SQL and display the output")
       (shw "<" "Go to the first table in the table list")
@@ -2185,6 +2240,9 @@ Uses PostgreSQL connection CON."
     ;; select state, count(*) from pg_stat_activity where pid <> pg_backend_pid() group by 1 order by 1;'
     ;; see https://gitlab.com/postgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
     (insert "\n")
+    (insert-text-button "Display procedures"
+                        'action #'pgmacs--display-procedures)
+    (insert "   ")
     (insert-text-button "More backend information"
                         'action #'pgmacs--display-backend-information)
     (insert "   ")
