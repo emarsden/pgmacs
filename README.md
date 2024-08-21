@@ -92,20 +92,35 @@ Windows and MacOS. It works both in graphical mode and in the terminal.
 work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate with
 PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
-PGmacs also works with some databases that implement the PostgreSQL frontend-backend protocol, but
+PGmacs also works with some databases that implement the PostgreSQL wire protocol, but
 not with all of them. PGmacs queries various internal PostgreSQL tables for metainformation on the
 list of tables available, and these tables are not always present in PostgreSQL-compatible
 databases. PGmacs also uses some PostgreSQL-specific functions to display information such as the
 on-disk size of tables, and these functions are not always implemented. What we have tested so far:
 
-- ParadeDB v0.7.3 seems to work fine in limited testing (it's more a PostgreSQL extension than a
-  fully separate product).
+- ParadeDB v0.9.1 seems to work fine in limited testing (it's really a PostgreSQL extension rather
+  than a fully separate product).
   
 - YugabyteDB v2.21 works to a limited extent: we are not able to run the SQL command that adds a
   PRIMARY KEY to an existing table, nor to display total database size on disk, for example. 
   
 - CrateDB v5.7 does not currently work; it does not implement PostgreSQL functions that we use to
   query table metainformation.
+
+- CockroachDB version 24.1 does not work with PGmacs: our query for `pg-table-owner` triggers an
+  internal error, there is no implementation of the function `pg_size_pretty`, and the database
+  fails on basic SQL such as the boolean vector syntax b'1001000'.
+
+- [Google Spanner](https://cloud.google.com/spanner), or at least the Spanner emulator (that reports
+  itself as `PostgreSQL 14.1`) and the PGAdapter library that enables support for the PostgreSQL
+  wire protocol, do not work with PGmacs. Spanner has only limited PostgreSQL compatibility, for
+  example refusing to create tables that do not have a primary key. It does not implement some
+  functions we use to query the current user and database status, such as `current_user`,
+  `pg_backend_pid`, `pg_is_in_recovery`.
+
+- [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) version 23-4 has very limited
+  PostgreSQL compatibility and does not work with PGmacs. The system tables that we query to obtain
+  the list of tables in the current database are not implemented.
 
 - ClickHouse v24.5 does not work: its implementation of the wire protocol is very limited, with no
   support for the `pg_type` metadata.

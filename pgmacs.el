@@ -296,14 +296,18 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
                       " PGmacs "
                       (when pgmacs--con
                         ;; (list :tcp host port dbname user password)
-                        (let ((ci (pgcon-connect-info pgmacs--con)))
+                        (let ((ci (pgcon-connect-info pgmacs--con))
+                              (tls (cl-first
+                                    (pg-result
+                                     (pg-exec pgmacs--con "SHOW ssl") :tuple 0))))
                           (cl-case (cl-first ci)
                             (:tcp
-                             (format "%s as %s on %s:%s"
+                             (format "%s as %s on %s:%s (TLS: %s)"
                                      (propertize (cl-fourth ci) 'face 'bold)
                                      (cl-fifth ci)
                                      (cl-second ci)
-                                     (cl-third ci)))
+                                     (cl-third ci)
+                                     tls))
                             (:local
                              (format "%s as %s on Unix socket"
                                      (propertize (cl-fourth ci) 'face 'bold)
@@ -834,13 +838,16 @@ Point is located in CURRENT-ROW."
          (col-id (pgmacstbl-current-column))
          (cols (pgmacstbl-columns (pgmacstbl-current-table)))
          (col (nth col-id cols))
-         (buf (get-buffer-create (format "*PostgreSQL column value %s*" (pgmacstbl-column-name col))))
+         (col-name (pgmacstbl-column-name col))
+         (buf (get-buffer-create (format "*PostgreSQL column value %s*" col-name)))
          (value (funcall (pgmacstbl-column-formatter col)
                          (nth col-id current-row))))
     (pop-to-buffer buf)
+    (let ((buffer-read-only nil))
+      (erase-buffer)
+      (insert value))
     (setq-local pgmacs--db-buffer db-buffer)
     (pgmacs-transient-mode)
-    (insert value)
     (shrink-window-if-larger-than-buffer)
     (setq buffer-read-only t)
     (goto-char (point-min))))
@@ -2004,6 +2011,7 @@ Uses PostgreSQL connection CON."
                                            "E" pgmacs-run-buffer-sql
                                            "r" pgmacs--redraw-pgmacstbl
                                            "j" pgmacs--row-as-json
+                                           "v" pgmacs--view-value
                                            "o" pgmacs-open-table
                                            ;; "n" and "p" are bound when table is paginated to next/prev page
                                            "<" (lambda (&rest _ignored)
