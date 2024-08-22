@@ -16,6 +16,11 @@
 
 - The header line now shows whether the current database connection is secured with TLS.
 
+- New function `pgmacs-register-column-displayer` allows the user to register a dedicated display
+  function for a particular column in a particular table. The display-function takes three
+  arguments: the cell-value, max-width, table. This functionality can be used to display BYTEA
+  columns as inline images, for example.
+
 
 ## [0.12] - 2024-08-06
 

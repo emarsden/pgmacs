@@ -290,6 +290,19 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 (defvar-local pgmacs--offset nil)
 (defvar-local pgmacs--db-buffer nil)
 
+(defvar pgmacs--column-display-functions (make-hash-table :test #'equal))
+
+;; Allow the user to register a dedicated display function for a particular column in a particular
+;; table. The display-function takes three arguments: the cell-value, max-width, table.
+;;
+;; This functionality can be used to display BYTEA columns as inline images, for example.
+(defun pgmacs-register-column-displayer (table column display-function)
+  (puthash (cons table column) display-function pgmacs--column-display-functions))
+
+(defun pgmacs--lookup-column-displayer (table column)
+  (gethash (cons table column) pgmacs--column-display-functions nil))
+
+
 (defun pgmacs--update-header-line ()
   (setq pgmacs-header-line
         (list (concat (when (char-displayable-p ?🐘) "🐘")
@@ -1318,6 +1331,7 @@ Table names are schema-qualified if the schema is non-default."
         (push (list table rows size owner (or comment "")) entries)))
     entries))
 
+;; Used to display only the first line of a table cell.
 (defun pgmacs--truncate-multiline (string)
   (let ((pos (or (cl-position ?\C-m string)
                  (cl-position ?\C-j string))))
@@ -1601,6 +1615,8 @@ value, in the limit of pgmacs-row-limit."
                      for align in column-alignment
                      for fmt in column-formatters
                      for w in column-widths
+                     for dpy = (or (pgmacs--lookup-column-displayer table name)
+                                   (pgmacs--make-column-displayer meta (gethash name column-info)))
                      collect (make-pgmacstbl-column
                               :name (propertize name
                                                 'face 'pgmacs-table-header
@@ -1609,7 +1625,7 @@ value, in the limit of pgmacs-row-limit."
                               :min-width (1+ (max w (length name)))
                               :max-width pgmacs-max-column-width
                               :formatter fmt
-                              :displayer (pgmacs--make-column-displayer meta (gethash name column-info)))))
+                              :displayer dpy)))
            (inhibit-read-only t)
            (pgmacstbl (make-pgmacstbl
                        :insert nil
