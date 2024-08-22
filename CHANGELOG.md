@@ -2,7 +2,7 @@
 
 ## [0.13] - Unreleased
 
-- Display JSONB columns in the same was as JSON columns.
+- Display JSONB columns in the same way as JSON columns.
 
 - In a row-list buffer, display meta-information on any table indexes under the column
   metainformation.
@@ -20,6 +20,9 @@
   function for a particular column in a particular table. The display-function takes three
   arguments: the cell-value, max-width, table. This functionality can be used to display BYTEA
   columns as inline images, for example.
+
+- The SchemaSpy functionality has been extended to allow the application to be run on the entire
+  database, displaying a graphical representation of the relations between tables.
 
 
 ## [0.12] - 2024-08-06
