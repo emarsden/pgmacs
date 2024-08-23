@@ -10,7 +10,7 @@ conditions are not met.
 In the main table-list buffer, type `S` to run SchemaSpy on the current database and display the
 relationships between the tables in a dedicated buffer.
 
-![Screenshot table](img/screenshot-schemaspy-table.png)
+![Screenshot table](img/screenshot-schemaspy-database.png)
 
 In a row-list buffer, type `S` to run SchemaSpy the on the current table and view the table
 structure diagram in a dedicated buffer.
