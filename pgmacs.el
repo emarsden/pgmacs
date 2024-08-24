@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
-;; Version: 0.12
+;; Version: 0.13
 ;; Package-Requires: ((emacs "29.1") (pg "0.39"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
@@ -1670,6 +1670,8 @@ value, in the limit of pgmacs-row-limit."
                                   "e" pgmacs-run-sql
                                   "E" pgmacs-run-buffer-sql
                                   "S" pgmacs--schemaspy-table
+                                  ;; TMP TMP
+                                  "=" pgmacs--shrink-columns
                                   "r" pgmacs--redraw-pgmacstbl
                                   "j" pgmacs--row-as-json
                                   ;; "n" and "p" are bound when table is paginated to next/prev page
@@ -1819,6 +1821,41 @@ value, in the limit of pgmacs-row-limit."
     ;; fall back to is not a PGmacs buffer?
     (kill-buffer)
     (pgmacs--display-table table)))
+
+;; Shrink the current column size to the smallest possible for the values that are currently visible.
+(defun pgmacs--shrink-column (&rest _ignore)
+  (let* ((pgmacstbl (pgmacstbl-current-table))
+         (widths (pgmacstbl--widths pgmacstbl))
+         (cols (pgmacstbl-columns pgmacstbl))
+         (col-id (pgmacstbl-current-column))
+         (col (elt cols col-id))
+         (max-width 0))
+    (dolist (row (pgmacstbl-objects pgmacstbl))
+      (let* ((val (nth col-id row))
+             ;; FIXME perhaps should call the column display-function here
+             (valstr (if (stringp val) val (format "%s" val)))
+             (valw (string-width valstr)))
+        (setq max-width (max max-width valw))))
+    (setf (aref widths col-id) (* (pgmacstbl--char-width pgmacstbl) max-width))
+    (setf (pgmacstbl-column-width col) (format "%dpx" max-width)))
+  (pgmacs--redraw-pgmacstbl))
+
+;; Shrink each column to the smallest size possible.
+(defun pgmacs--shrink-columns (&rest _ignore)
+  (let* ((pgmacstbl (pgmacstbl-current-table))
+         (widths (pgmacstbl--widths pgmacstbl))
+         (cols (pgmacstbl-columns pgmacstbl)))
+    (dotimes (col-id (length cols))
+      (let ((max-width 0))
+        (dolist (row (pgmacstbl-objects pgmacstbl))
+          (let* ((val (nth col-id row))
+                 ;; FIXME perhaps should call the column display-function here
+                 (valstr (if (stringp val) val (format "%s" val)))
+                 (valw (string-width valstr)))
+            (setq max-width (max max-width valw))))
+        (setf (aref widths col-id) (* (pgmacstbl--char-width pgmacstbl) max-width))))
+    (pgmacs--redraw-pgmacstbl)))
+
 
 ;; Used in table-list buffer: if point is on a column which REFERENCES a foreign table, then jump to
 ;; that table on the appropriate row; otherwise prompt to edit using pgmacs--edit-value-minibuffer
@@ -2039,6 +2076,7 @@ Uses PostgreSQL connection CON."
                                            "v" pgmacs--view-value
                                            "o" pgmacs-open-table
                                            ;; "n" and "p" are bound when table is paginated to next/prev page
+                                           "=" pgmacs--shrink-columns
                                            "<" (lambda (&rest _ignored)
                                                  (text-property-search-backward 'pgmacstbl)
                                                  (next-line))

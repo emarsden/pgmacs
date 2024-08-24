@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.13] - Unreleased
+## [0.13] - 2024-08-24
 
 - Display JSONB columns in the same way as JSON columns.
 
