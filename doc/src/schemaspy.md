@@ -1,11 +1,13 @@
 # Running SchemaSpy
 
 The [SchemaSpy application](https://schemaspy.org/) is able to generate useful illustrations
-documenting the tables present in a database, the links between them and their schema structure.
-PGmacs includes functionality to run SchemaSpy on the database and table you are viewing, and
-display the relevant images in an Emacs buffer. This functionality only works in graphical mode (not
-in the terminal) and requires your Emacs to support SVG images; PGmacs will inform you if these
-conditions are not met.
+documenting the tables present in a database, the links between them (entity relationship diagrams)
+and their schema structure. PGmacs includes functionality to run SchemaSpy on the database and table
+you are viewing, and display the relevant images in an Emacs buffer. This functionality only works
+in graphical mode (not in the terminal) and requires your Emacs to support SVG images; PGmacs will
+inform you if these conditions are not met.
+
+SchemaSpy is free software distributed under the terms of the GNU LGPL version 3.
 
 In the main table-list buffer, type `S` to run SchemaSpy on the current database and display the
 relationships between the tables in a dedicated buffer.
@@ -24,7 +26,7 @@ SchemaSpy to your local installation.
 
 ## Running in a software container (Podman/Docker)
 
-The default setting for `pgmacs-schemaspy-cmdline` runs SchemaSpy in a prebuild Docker/Podman
+The default setting for `pgmacs-schemaspy-cmdline` runs SchemaSpy in a prebuilt Docker/Podman
 software container. You will need to have [Podman](https://podman.io/) or Docker installed (we
 recommend Podman, because it's fully free software and it runs well in rootless mode, which is
 better for security). This is the easiest way of running SchemaSpy, because all necessary
@@ -39,9 +41,9 @@ Some notes on customizing this commandline:
 
 - Replace `podman` by `docker` if that is your preference.
 
-- The official SchemaSpy container `docker.io/schemaspy/schemaspy` will need network access to the
+- The official SchemaSpy container `docker.io/schemaspy/schemaspy` will need **network access** to the
   host where PostgreSQL is running. (In its default configuration, SchemaSpy is not able to connect
-  to PostgreSQL over a Unix socket.) This will require a setting such as `--network=host`.
+  to PostgreSQL over a Unix socket.) This will require a Podman setting such as `--network=host`.
 
 - In this commandline, `%d` is replaced by the database name, `%h` by the hostname on which
   PostgreSQL is running, `%P` by the port it is running on, `%u` by the user, `%p` by the PostgreSQL
@@ -66,7 +68,7 @@ java -jar ~/lib/schemaspy.jar -dp /usr/share/java/postgresql-jdbc4.jar -t pgsql1
 
 This requires the following software to be installed:
 
-  - SchemaSpy, installed to `~/lib/schemaspy.jar` with the default value of `pgmacs-schemaspy-cmdline`
+  - SchemaSpy, in this example installed to `~/lib/schemaspy.jar`
 
   - Java (available as `java` here)
 

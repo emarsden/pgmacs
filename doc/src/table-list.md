@@ -10,21 +10,25 @@ current PostgreSQL user).
 
 The following keys are bound when the point is located in the table list buffer: 
 
-| Key   | Binding                                                       |
-|-------|---------------------------------------------------------------|
-| `RET` | Open a new buffer to browse/edit the table at point.          |
-| `DEL` | Delete the table at point.                                    |
-| `r`   | Rename the table at point.                                    |
-| `o`   | Prompt for a table to browse/edit in a new buffer.            |
-| `e`   | Open a new buffer to display the output from an SQL query.    |
-| `E`   | Execute SQL from an Emacs buffer and display the output.      |
-| `<`   | Move to the beginning of the table list.                      |
-| `>`   | Move to the end of the table list.                            |
-| `{`   | Make the current column narrower.                             |
-| `}`   | Make the current column wider.                                |
-| `g`   | Redraw the current buffer.                                    |
-| `h`   | Display help for the table-list buffer.                       |
-| `q`   | Bury the current buffer.                                      |
+| Key   | Binding                                                                              |
+|-------|--------------------------------------------------------------------------------------|
+| `RET` | Open a new buffer to browse/edit the table at point.                                 |
+| `DEL` | Delete the table at point.                                                           |
+| `r`   | Rename the table at point.                                                           |
+| `o`   | Prompt for a table to browse/edit in a new buffer.                                   |
+| `p`   | New buffer listing the functions and procedures in the current database.             |
+| `e`   | Open a new buffer to display the output from an SQL query.                           |
+| `E`   | Execute SQL from an Emacs buffer and display the output.                             |
+| `S`   | [Run SchemaSpy](schemaspy.html) on the current database and display the SVG output.   |
+| `<`   | Move to the beginning of the table list.                                             |
+| `>`   | Move to the end of the table list.                                                   |
+| `{`   | Make the current column narrower.                                                    |
+| `}`   | Make the current column wider.                                                       |
+| `g`   | Redraw the current buffer (refetches data from PostgreSQL).                          |
+| `h`   | Display help for the table-list buffer.                                              |
+| `q`   | Bury the current buffer.                                                             |
+
+
 
 
 The `More backend information` button will open a buffer that displays further information
