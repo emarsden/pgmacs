@@ -16,8 +16,8 @@ container:
   buildah build -f etc/Containerfile --platform linux/arm64 --tag pgmacs-linux-aarch64 --manifest pgmacs .
   buildah build -f etc/Containerfile --platform linux/arm/v7 --tag pgmacs-linux-armv7 --manifest pgmacs .
   buildah build -f etc/Containerfile --platform linux/riscv64 --tag pgmacs-linux-riscv64 --manifest pgmacs .
-  echo Now say "podman login ghcr.io"
-  echo Then say podman manifest push --all localhost/pgmacs ghcr.io/emarsden/pgmacs
+  @echo Now say "podman login ghcr.io"
+  @echo Then say podman manifest push --all localhost/pgmacs ghcr.io/emarsden/pgmacs
 
 
 

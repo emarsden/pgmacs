@@ -33,12 +33,16 @@ It works both in the **terminal** (TUI) and in **GUI mode**.
 ![GIF editing](doc/src/img/edit-value.gif)
 
 
+📖 You may be interested in the [user manual](https://emarsden.github.io/dash-mpd-cli/).
+
 
 ## Getting started
 
-If you want to get a quick feel for what PGmacs can do before installing it, you can try out our
-[prebuilt Podman/Docker container image](https://emarsden.github.io/pgmacs/container.html) which
-includes a terminal-only build of Emacs and the necessary dependencies.
+> [!TIP]
+> If you want to get a quick feel for what PGmacs can do before installing it, you can try out our
+> [prebuilt Podman/Docker container image](https://emarsden.github.io/pgmacs/container.html) which
+> includes a terminal-only build of Emacs and the necessary dependencies.
+
 
 In your Emacs initialization file, include the following to check out the latest version of the code
 from the git repository, as well as the [pg-el dependency](https://github.com/emarsden/pg-el/):

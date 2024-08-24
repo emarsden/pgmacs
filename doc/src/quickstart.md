@@ -1,8 +1,14 @@
 # Quickstart
 
+~~~admonish note title="Try it out before installing"
 If you want to get a quick feel for what PGmacs can do before installing it, you can try out our
 [prebuilt Podman/Docker container image](container.html) which includes a terminal-only build of
 Emacs and the necessary dependencies.
+
+Because it's running in terminal mode, some functionality such as the SchemaSpy diagram support
+won't work in the container.
+~~~
+
 
 ## Installation
 
@@ -11,9 +17,9 @@ from the git repository, as well as the dependency [pg-el](https://github.com/em
 
     ;; Requires Emacs 29 and git
     (unless (package-installed-p 'pg)
-       (package-vc-install "https://github.com/emarsden/pg-el" nil nil 'pg))
+       (package-vc-install "https://github.com/emarsden/pg-el/" nil nil 'pg))
     (unless (package-installed-p 'pgmacs)
-       (package-vc-install "https://github.com/emarsden/pgmacs"))
+       (package-vc-install "https://github.com/emarsden/pgmacs/"))
 
     (require 'pgmacs)
 
@@ -22,8 +28,8 @@ You can later upgrade PGmacs to the latest version with `M-x package-vc-upgrade 
 **With `use-package`**: if you prefer the `use-package` macro (which is integrated with Emacs 29),
 you can instead say
 
-    (use-package pg :vc (:url "https://github.com/emarsden/pg-el"))
-    (use-package pgmacs :vc (:url "https://github.com/emarsden/pgmacs"))
+    (use-package pg :vc (:url "https://github.com/emarsden/pg-el/"))
+    (use-package pgmacs :vc (:url "https://github.com/emarsden/pgmacs/"))
 
 
 ## Connecting to a PostgreSQL database

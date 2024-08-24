@@ -17,5 +17,7 @@ built for the following platforms:
 - Linux/armv7 (32-bit ARM)
 - Linux/riscv64
 
+We rebuild the container image on each new PGmacs release.
+
 Note that you need to run the container with `--network host` or a similar commandline option that
-allows network access to the PostgreSQL database.
+allows **network access to the PostgreSQL database**.
