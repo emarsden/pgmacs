@@ -33,7 +33,7 @@ It works both in the **terminal** (TUI) and in **GUI mode**.
 ![GIF editing](doc/src/img/edit-value.gif)
 
 
-📖 You may be interested in the [user manual](https://emarsden.github.io/dash-mpd-cli/).
+📖 You may be interested in the [user manual](https://emarsden.github.io/pgmacs/).
 
 
 ## Getting started
