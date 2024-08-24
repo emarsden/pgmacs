@@ -83,11 +83,11 @@ PostgreSQL over a slow network link."
   :type 'boolean
   :group 'pgmacs)
 
-;; To run SchemaSpy on the current database and display images describing the schema. The default
-;; setting runs SchemaSpy in a Docker/Podman software container, using Podman. This is the easiest
-;; way of running SchemaSpy, because all necessary dependencies are preinstalled. Alternatively (see
-;; commented commandline), you can run the SchemaSpy java application natively, which requires the
-;; following software to be installed:
+;; To run SchemaSpy on the current database or on the current table, and display images describing
+;; the schema. The default setting runs SchemaSpy in a Docker/Podman software container, using
+;; Podman or Docker. This is the easiest way of running SchemaSpy, because all necessary
+;; dependencies are preinstalled. Alternatively (see commented commandline), you can run the
+;; SchemaSpy java application natively, which requires the following software to be installed:
 ;;
 ;;  - SchemaSpy (see schemaspy.org)
 ;;  - Java
@@ -97,6 +97,13 @@ PostgreSQL over a slow network link."
 (defcustom pgmacs-schemaspy-cmdline
   "podman run -v %D:/output --network=host docker.io/schemaspy/schemaspy:latest -t pgsql11 -host %h -port %P -u %u -p %p -db %d -imageformat svg"
   "Commandline for running the SchemaSpy application or container.
+
+This commandline will be used both for generating an image
+representing the relations between tables in the current
+database, and for generating an image representing the schema of
+the current table. In the latter case, the string ` -s %s -i %t'
+will be appended to the commandline (with `%s' replaced by the
+table schema name and `%t' by the table name).
 
 SchemaSpy can be run as a Java application installed on the local
 machine, or (probably easier for most users) in a Docker/Podman
@@ -114,12 +121,31 @@ concerning a specific table, rather than the entire database."
   :group 'pgmacs)
 
 (defcustom pgmacs-header-line
-  (list (concat (when (display-graphic-p) "🐘") "PGmacs"))
+  (list (when (char-displayable-p ?🐘) " 🐘")
+        (propertize " PGmacs " 'font 'bold)
+        '(:eval (when pgmacs--con
+                 ;; (list :tcp host port dbname user password)
+                 (let ((ci (pgcon-connect-info pgmacs--con))
+                       (tls (cl-first
+                             (pg-result
+                              (pg-exec pgmacs--con "SHOW ssl") :tuple 0))))
+                   (cl-case (cl-first ci)
+                     (:tcp
+                      (format "%s as %s on %s:%s (TLS: %s)"
+                              (propertize (cl-fourth ci) 'face 'bold)
+                              (cl-fifth ci)
+                              (cl-second ci)
+                              (cl-third ci)
+                              tls))
+                     (:local
+                      (format "%s as %s on Unix socket"
+                              (propertize (cl-fourth ci) 'face 'bold)
+                              (cl-fifth ci))))))))
   "Header-line to use in PGmacs buffers. Nil to disable."
   :type 'list
   :group 'pgmacs)
 
-(defcustom pgmacs-mode-hook 'pgmacs--update-header-line
+(defcustom pgmacs-mode-hook nil
   "Mode hook for `pgmacs-mode'."
   :type 'hook
   :group 'pgmacs)
@@ -199,6 +225,7 @@ you can:
  - delete a row (type `DEL' on the row you wish to delete)
  - copy/paste rows of a database table (type `k' to copy, `y' to paste)
  - export the contents of a table to CSV using a dedicated button
+ - type `S' to run SchemaSpy on current database and display its structure
  - type `o' to open a new row-list buffer for another table
  - type `T' to jump back to the main table-list buffer
  - type `h' to show buffer-specific help and keybindings
@@ -307,30 +334,6 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 
 (defun pgmacs--lookup-column-displayer (table column)
   (gethash (cons table column) pgmacs--column-display-functions nil))
-
-
-(defun pgmacs--update-header-line ()
-  (setq pgmacs-header-line
-        (list (concat (when (char-displayable-p ?🐘) "🐘")
-                      " PGmacs "
-                      (when pgmacs--con
-                        ;; (list :tcp host port dbname user password)
-                        (let ((ci (pgcon-connect-info pgmacs--con))
-                              (tls (cl-first
-                                    (pg-result
-                                     (pg-exec pgmacs--con "SHOW ssl") :tuple 0))))
-                          (cl-case (cl-first ci)
-                            (:tcp
-                             (format "%s as %s on %s:%s (TLS: %s)"
-                                     (propertize (cl-fourth ci) 'face 'bold)
-                                     (cl-fifth ci)
-                                     (cl-second ci)
-                                     (cl-third ci)
-                                     tls))
-                            (:local
-                             (format "%s as %s on Unix socket"
-                                     (propertize (cl-fourth ci) 'face 'bold)
-                                     (cl-fifth ci))))))))))
 
 
 ;; We can have several table-list buffers open, corresponding to different PostgreSQL databases. The
@@ -2141,8 +2144,8 @@ Uses PostgreSQL connection CON."
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min)))))
 
-;; Run SchemaSpy on the current table, display the SVG.
 (defun pgmacs--schemaspy-table (&rest _ignore)
+  "Run SchemaSpy on current table and display the SVG describing the schema."
   (interactive)
   (unless (display-graphic-p)
     (error "SchemaSpy will only work on a graphical terminal"))
@@ -2224,6 +2227,7 @@ Uses PostgreSQL connection CON."
 (defun pgmacs-open (con)
   "Browse the contents of PostgreSQL database to which we are connected over CON."
   (when pgmacs-enable-query-logging
+    (message "Enabling PGmacs query logging")
     (pg-enable-query-log con))
   (pg-hstore-setup con)
   (pg-vector-setup con)
