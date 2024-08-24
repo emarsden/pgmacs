@@ -78,26 +78,3 @@ To downcase the characters in the current cell, and also update the database:
 C-u ! tr '[:upper:]' '[:lower:']
 ```
 
-
-
-## Follow foreign key references
-
-A column that references data in a foreign table (`FOREIGN KEY`) will be shown in blue. If you type
-`RET` when point is located on a foreign key reference, PGmacs will jump to the referenced row and column in
-the other table. A new row-list buffer is opened; type `q` to come back to the orginal row-list
-buffer.
-
-![Following foreign key](img/follow-foreign-key.gif)
-
-
-
-## Viewing output from an SQL query
-
-You can also view (but obviously not edit!) the output from an SQL query you enter. Type `e` in a
-PGmacs buffer, which will prompt you for an SQL query in the minibuffer, then display the output in
-a dedicated temporary buffer. Type `q` to kill the temporary buffer.
-
-Likewise, PGmacs can display the output from an SQL query in an Emacs buffer. Type `E` and it will
-prompt you for the buffer name, then display the query output in a dedicated temporary buffer.
-
-![Screenshot table](img/screenshot-sql-query.png)

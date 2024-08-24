@@ -8,4 +8,5 @@
 - [Editing data](./editing.md)
 - [Running SQL queries](./sql-query.md)
 - [SchemaSpy support](./schemaspy.md)
+- [Customizing column display](./custom-display.md)
 - [Feedback](./feedback.md)
