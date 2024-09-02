@@ -191,9 +191,9 @@ Uses customizations implemented in Emacs' customize support."
 
 (defun pgmacs-mode ()
   "Mode for browsing and editing data in a PostgreSQL database.
-PGmacs provides an editing interface for PostgreSQL. The main PGmacs
-table-list buffer displayed when you connect to a database backend
-allows you to:
+PGmacs provides an editing interface for PostgreSQL. The main
+PGmacs table-list buffer that is displayed when you connect to a
+database backend allows you to:
  - browse the list of tables in the database
  - browse/edit a table (type `RET' on the table name or `o' to be
    prompted for a table name in the minibuffer)
@@ -363,7 +363,7 @@ Applies format string FMT to ARGS."
              (string= type-name "name"))
          (lambda (s) (or s "")))
         ((string= type-name "bpchar")
-         #'byte-to-string)
+         #'char-to-string)
         ((string= type-name "hstore")
          (lambda (ht)
            (let ((items (list)))
