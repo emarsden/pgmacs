@@ -688,7 +688,7 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
   :tag "Date"
   :format "%v"
   :offset 2
-  :valid-regexp "\d+-\d\{2\}-\d\{2\}"
+  :valid-regexp (rx (+ digit) ?- (repeat 2 digit)) ?- (repeat 2 digit))
   :value-to-internal (lambda (_widget val)
                        (format-time-string "%Y-%m-%d" val))
   :value-to-external (lambda (_widget str)
@@ -708,13 +708,13 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
   :error "Invalid format for a UUID."
   :args '((list :inline t :format "%v"
                 (editable-field :size 8
-                                :valid-regexp "[:xdigit:]\{8\}"
+                                :valid-regexp (rx (repeat 8 xdigit))
                                 :error "Invalid format for UUID component"
                                 :format "%v-")
-                (editable-field :size 4 :valid-regexp "[:xdigit:]\{4\}" :format "%v-")
-                (editable-field :size 4 :valid-regexp "[:xdigit:]\{4\}" :format "%v-")
-                (editable-field :size 4 :valid-regexp "[:xdigit:]\{4\}" :format "%v-")
-                (editable-field :size 12 :valid-regexp "[:xdigit:]\{12\}" :format "%v"))))
+                (editable-field :size 4 :valid-regexp (rx (repeat 4 xdigit)) :format "%v-")
+                (editable-field :size 4 :valid-regexp (rx (repeat 4 xdigit)) :format "%v-")
+                (editable-field :size 4 :valid-regexp (rx (repeat 4 xdigit)) :format "%v-")
+                (editable-field :size 12 :valid-regexp (rx (repeat 12 xdigit)) :format "%v"))))
 
 (defun pgmacs--widget-for (type current-value)
   "Create a widget for TYPE and CURRENT-VALUE in the current buffer."
@@ -1965,7 +1965,7 @@ Prompt for the table name in the minibuffer."
       (when exts
         (push (list "Name" "Default version" "Installed version") exts))
       (dolist (ext exts)
-        (insert (apply #'format "%20s %17s %18s" ext))
+        (insert (apply #'format "%30s %17s %18s" ext))
         (unless (or (cl-third ext)
                     (string= "Name" (cl-first ext)))
           (insert "  ")
