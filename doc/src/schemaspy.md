@@ -2,7 +2,7 @@
 
 The [SchemaSpy application](https://schemaspy.org/) is able to generate useful illustrations
 documenting the tables present in a database, the links between them (entity relationship diagrams)
-and their schema structure. PGmacs includes functionality to run SchemaSpy on the database and table
+and their **schema structure**. PGmacs includes functionality to run SchemaSpy on the database and table
 you are viewing, and display the relevant images in an Emacs buffer. This functionality only works
 in graphical mode (not in the terminal) and requires your Emacs to support SVG images; PGmacs will
 inform you if these conditions are not met.
@@ -28,7 +28,7 @@ SchemaSpy to your local installation.
 
 The default setting for `pgmacs-schemaspy-cmdline` runs SchemaSpy in a prebuilt Docker/Podman
 software container. You will need to have [Podman](https://podman.io/) or Docker installed (we
-recommend Podman, because it's fully free software and it runs well in rootless mode, which is
+recommend Podman, because it’s fully free software and it runs well in rootless mode, which is
 better for security). This is the easiest way of running SchemaSpy, because all necessary
 dependencies are preinstalled. The container image is around 380MB in size.
 

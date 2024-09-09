@@ -9,8 +9,10 @@ Microsoft Windows and MacOS) or Docker installed.
 
     podman run --network host -ti ghcr.io/emarsden/pgmacs:latest
 
-The container image is based on a lightweight Alpine Linux image and is around 150MB in size. It’s
-built for the following platforms:
+[![Container size](https://ghcr-badge.egpl.dev/emarsden/pgmacs/size?label=Container%20image)](https://github.com/users/emarsden/packages/container/package/pgmacs)
+
+The container image is based on a lightweight Alpine Linux image. It’s built for the following
+platforms:
 
 - Linux/AMD64
 - Linux/Aarch64 (64-bit ARM)
