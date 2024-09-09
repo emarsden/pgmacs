@@ -1,4 +1,4 @@
-# pgmacs.el -- Emacs editing PostgreSQL databases
+# PGmacs -- Emacs editing PostgreSQL databases
 
 <img src="doc/src/img/PGmacs-logo.svg"
      alt="PGmacs logo"
@@ -6,6 +6,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Latest tagged version](https://img.shields.io/github/v/tag/emarsden/pg-el?label=Latest%20tagged%20version)](https://github.com/emarsden/pgmacs/)
+[![Container size](https://ghcr-badge.egpl.dev/emarsden/pgmacs/size?label=Container%20image)](https://github.com/users/emarsden/packages/container/package/pgmacs)
 [![Documentation build](https://img.shields.io/github/actions/workflow/status/emarsden/pgmacs/mdbook.yml?label=Documentation)](https://github.com/emarsden/pgmacs/actions/)
 ![Beta status](https://img.shields.io/badge/status-beta-blue)
 
