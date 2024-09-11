@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.14] - Unreleased
+
+- Run the SchemaSpy Podman/Docker container with the `--userns=keep-id` commandline option in order
+  for generated files to be owned by the user running Emacs (when running in rootless mode).
+
+- SchemaSpy SVG output is rewritten before display to inline the xlinked PNG files that mark foreign
+  key columns. These external xlinked PNG files were not being displayed by the SVG support in
+  Emacs. We inline a vector representation of the key icon encoded as an SVG data URL.
+
+
 ## [0.13] - 2024-08-24
 
 - Display JSONB columns in the same way as JSON columns.
