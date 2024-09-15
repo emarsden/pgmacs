@@ -16,7 +16,8 @@ It allows you to:
 
 - browse the **list of tables** in the database
 
-- browse the contents of a table, row by row, in paginated mode for large tables
+- browse the contents of a table, row by row, in paginated mode for large tables, and navigate
+  between tables if they are linked by a foreign key
 
 - edit the value of a column: type `RET` on the value you want to modify to edit the value in the
   minibuffer, or type `w` to edit the value in a widget-based buffer
@@ -95,7 +96,7 @@ it to modify real PostgreSQL databases used in production.
 pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
 Windows and MacOS. It works both in graphical mode and in the terminal.
 
-**PostgreSQL version**: PGmacs has been tested with PostgreSQL version 16.4 and 17beta2, but should
+**PostgreSQL version**: PGmacs has been tested with PostgreSQL version 16.4 and 17rc1, but should
 work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate with
 PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 

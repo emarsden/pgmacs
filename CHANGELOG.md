@@ -9,6 +9,9 @@
   key columns. These external xlinked PNG files were not being displayed by the SVG support in
   Emacs. We inline a vector representation of the key icon encoded as an SVG data URL.
 
+- On graphical SVG-capable displays, show a little table icon next to the names of tables in the
+  table-list buffer.
+
 
 ## [0.13] - 2024-08-24
 

@@ -20,6 +20,7 @@
 (require 'widget)
 (require 'wid-edit)
 (require 'cus-edit)
+(require 'svg)
 (require 'rx)
 (require 'pg)
 (require 'pgmacstbl)
@@ -129,7 +130,7 @@ concerning a specific table, rather than the entire database."
 
 (defcustom pgmacs-header-line
   (list (when (char-displayable-p ?🐘) " 🐘")
-        (propertize " PGmacs " 'font 'bold)
+        (propertize " PGmacs " 'face 'bold)
         '(:eval (when pgmacs--con
                  ;; (list :tcp host port dbname user password)
                  (let ((ci (pgcon-connect-info pgmacs--con))
@@ -252,6 +253,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (put 'pgmacs-mode 'mode-class 'special)
   (use-local-map pgmacs-table-list-map)
   (pgmacs--widget-setup)
+  (cursor-intangible-mode 1)
   (run-mode-hooks 'pgmacs-mode-hook))
 
 (defvar-keymap pgmacs-row-list-map
@@ -605,7 +607,8 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
       (pgmacs--funcall-cell current-row primary-keys get-value t))))
 
 (defun pgmacs--downcase-value (current-row primary-keys)
-  "Downcase the value in the cell at point and update PostgreSQL."
+  "Downcase the value in the cell at point and update PostgreSQL.
+Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
   (let ((get-value
          (lambda (old-value _col-name col-type)
            (unless (or (string= "text" col-type)
@@ -619,7 +622,8 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
     (pgmacs--funcall-cell current-row primary-keys get-value t)))
 
 (defun pgmacs--upcase-value (current-row primary-keys)
-  "Upcase the value in the cell at point and update PostgreSQL."
+  "Upcase the value in the cell at point and update PostgreSQL.
+Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
   (let ((get-value
          (lambda (old-value _col-name col-type)
            (unless (or (string= "text" col-type)
@@ -633,7 +637,8 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
     (pgmacs--funcall-cell current-row primary-keys get-value t)))
 
 (defun pgmacs--capitalize-value (current-row primary-keys)
-  "Capitalize the value in the cell at point and update PostgreSQL."
+  "Capitalize the value in the cell at point and update PostgreSQL.
+Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
   (let ((get-value
          (lambda (old-value _col-name col-type)
            (unless (or (string= "text" col-type)
@@ -762,8 +767,8 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
          (widget-create 'pgmacs-uuid-widget :value current-value
                         :action (lambda (wid &rest _ignore)
                                   (if (widget-apply wid :validate)
-                                      (error "The UUID is not valid: %s!" (widget-get wid :error))
-                                    (message "%s is ok!" (widget-value wid))))))
+                                      (error "Invalid UUID: %s" (widget-get wid :error))
+                                    (message "%s is ok" (widget-value wid))))))
         (t
          (widget-create 'editable-field
                         :size (min 200 (+ 5 (length current-value)))
@@ -1087,7 +1092,8 @@ PostgreSQL database."
   "Insert a new row into the current table after the current row.
 The new row contents are based on the last copied row. Columns for which
 a default SQL value is defined (such as a SERIAL type) will take the
-default value instead of the last copied value."
+default value instead of the last copied value.
+Updates the PostgreSQL database."
   (unless pgmacs--kill-ring
     (error "PGmacs kill ring is empty"))
   (unless (eq (car pgmacs--kill-ring) pgmacs--table)
@@ -1430,14 +1436,14 @@ Table names are schema-qualified if the schema is non-default."
                       END AS KIND,
                       l.lanname as language,
                       CASE WHEN l.lanname = 'internal' THEN p.prosrc
-                           ELSE pg_get_functiondef(p.oid)
+                           ELSE pg_catalog.pg_get_functiondef(p.oid)
                            END AS DEFINITION,
-                      pg_get_function_arguments(p.oid) AS arguments,
+                      pg_catalog.pg_get_function_arguments(p.oid) AS arguments,
                       t.typname AS return_type
-               FROM pg_proc p
-               LEFT JOIN pg_namespace n ON p.pronamespace = n.oid
-               LEFT JOIN pg_language l ON p.prolang = l.oid
-               LEFT JOIN pg_type t ON t.oid = p.prorettype
+               FROM pg_catalog.pg_proc p
+               LEFT JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid
+               LEFT JOIN pg_catalog.pg_language l ON p.prolang = l.oid
+               LEFT JOIN pg_catalog.pg_type t ON t.oid = p.prorettype
                WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
                ORDER BY schema_name, specific_name")
          (ps-name (pg-ensure-prepared-statement con "QRY-list-procedures" sql nil))
@@ -1683,7 +1689,6 @@ value, in the limit of pgmacs-row-limit."
                                   "e" pgmacs-run-sql
                                   "E" pgmacs-run-buffer-sql
                                   "S" pgmacs--schemaspy-table
-                                  ;; TMP TMP
                                   "=" pgmacs--shrink-columns
                                   "r" pgmacs--redraw-pgmacstbl
                                   "j" pgmacs--row-as-json
@@ -1724,8 +1729,8 @@ value, in the limit of pgmacs-row-limit."
                                       (pgmacs--display-table table))
                             'help-echo "Modify the table comment")
         (insert "\n"))
-      (let* ((sql "SELECT pg_size_pretty(pg_total_relation_size($1)),
-                          pg_size_pretty(pg_indexes_size($1))")
+      (let* ((sql "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_total_relation_size($1)),
+                          pg_catalog.pg_size_pretty(pg_catalog.pg_indexes_size($1))")
              (res (pg-exec-prepared con sql `((,t-id . "text"))))
              (row (pg-result res  :tuple 0)))
         (insert (propertize "On-disk-size" 'face 'bold))
@@ -1941,34 +1946,34 @@ Prompt for the table name in the minibuffer."
       (if addr
           (insert (format " at %s:%s\n" addr port))
         (insert " over Unix-domain socket\n")))
-    (let* ((res (pg-exec con "SELECT current_setting('ssl_library')"))
+    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('ssl_library')"))
            (row (pg-result res :tuple 0)))
       (insert (format "Backend compiled with SSL library %s\n" (cl-first row))))
-    (let* ((res (pg-exec con "SELECT current_user, current_setting('is_superuser')"))
+    (let* ((res (pg-exec con "SELECT current_user, pg_catalog.current_setting('is_superuser')"))
            (row (pg-result res :tuple 0)))
       (insert (format "Connected as user %s (%ssuperuser)\n"
                       (cl-first row)
                       (if (cl-second row) "" "not "))))
-    (let* ((res (pg-exec con "SELECT current_setting('in_hot_standby')"))
+    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('in_hot_standby')"))
            (row (pg-result res :tuple 0)))
       (insert (apply #'format "In hot standby: %s\n" row)))
-    (let* ((res (pg-exec con "SELECT pg_postmaster_start_time()"))
+    (let* ((res (pg-exec con "SELECT pg_catalog.pg_postmaster_start_time()"))
            (dtime (car (pg-result res :tuple 0)))
            (fmt (funcall (pgmacs--value-formatter "timestamp") dtime)))
       (insert (format "PostgreSQL running since %s\n" fmt)))
-    (let* ((res (pg-exec con "SELECT current_setting('client_encoding')"))
+    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('client_encoding')"))
            (row (pg-result res :tuple 0)))
       (insert (apply #'format "Client encoding: %s\n" row)))
-    (let* ((res (pg-exec con "SELECT current_setting('server_encoding')"))
+    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('server_encoding')"))
            (row (pg-result res :tuple 0)))
       (insert (apply #'format "Server encoding: %s\n" row)))
-    (let* ((res (pg-exec con "SELECT current_setting('TimeZone')"))
+    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('TimeZone')"))
            (row (pg-result res :tuple 0)))
       (insert (apply #'format "Server timezone: %s\n" row)))
-    (let* ((res (pg-exec con "SELECT current_setting('shared_memory_size')"))
+    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('shared_memory_size')"))
            (row (pg-result res :tuple 0)))
       (insert (format "Server shared memory size: %s\n" (cl-first row))))
-    (let* ((res (pg-exec con "SELECT pg_listening_channels()"))
+    (let* ((res (pg-exec con "SELECT pg_catalog.pg_listening_channels()"))
            (channels (pg-result res :tuples)))
       (when channels
         (insert "Asynchronous notification channels for the current session:\n")
@@ -2007,7 +2012,7 @@ Prompt for the table name in the minibuffer."
 (defun pgmacs--display-stat-activity (&rest _ignore)
   "Display information from PostgreSQL's pg_stat_activity table."
   (let* ((cols (string-join pgmacs--stat-activity-columns ","))
-         (sql (format "SELECT %s FROM pg_stat_activity" cols)))
+         (sql (format "SELECT %s FROM pg_catalog.pg_stat_activity" cols)))
     (pgmacs-show-result pgmacs--con sql)))
 
 (defvar pgmacs--run-sql-history nil)
@@ -2294,6 +2299,30 @@ inlined vector SVG image that is encoded as a data URI."
         (when (file-exists-p out)
           (find-file out))))))
 
+(defun pgmacs--table-icon-svg ()
+  (let* ((icon (svg-create "1em" "1em" :viewBox "-0.4 -0.4 3.6 4.6" :fill "currentColor"))
+         (rect (svg-rectangle icon 0 0 3 3 :fill "none" :stroke "black" :stroke-width 0.3 :rx 0.1))
+         (hl1 (svg-line icon 0 1 3 1 :stroke "black" :stroke-width 0.2))
+         (hl2 (svg-line icon 0 2 3 2 :stroke "black" :stroke-width 0.2))
+         (hl3 (svg-line icon 0 0.3 3 0.3 :stroke "black" :stroke-width 0.2))
+         (vl1 (svg-line icon 1 0 1 3 :stroke "black" :stroke-width 0.2))
+         (vl2 (svg-line icon 2 0 2 3 :stroke "black" :stroke-width 0.2)))
+    (svg-image icon :margin 1)))
+
+;; This function generates the string used to display a table in the main table-list buffer. If the
+;; display is able to display SVG images, we prefix the name with a little SVG icon of a table.
+(defun pgmacs--display-table-name (name)
+  (let* ((name (pgmacs--display-identifier name))
+         (img (pgmacs--table-icon-svg))
+         (icon (propertize " "
+                           'display img
+                           'rear-nonsticky t
+                           'cursor-intangible t)))
+    (if (and (display-graphic-p)
+             (image-type-available-p 'svg))
+        (concat icon name)
+      name)))
+
 
 ;;;###autoload
 (defun pgmacs-open (con)
@@ -2326,7 +2355,7 @@ inlined vector SVG image that is encoded as a data URI."
                              :name (propertize "Table" 'face 'pgmacs-table-header)
                              :width 20
                              :primary t
-                             :align 'right)
+                             :align 'left)
                             (make-pgmacstbl-column
                              :name (propertize "Rows" 'face 'pgmacs-table-header)
                              :width 7 :align 'right)
@@ -2365,7 +2394,7 @@ inlined vector SVG image that is encoded as a data URI."
                              "q"  (lambda (&rest _ignored) (bury-buffer)))
                   :getter (lambda (object column pgmacstbl)
                             (pcase (pgmacstbl-column pgmacstbl column)
-                              ("Table" (pgmacs--display-identifier (cl-first object)))
+                              ("Table" (pgmacs--display-table-name (cl-first object)))
                               ("Rows" (cl-second object))
                               ("Size on disk" (cl-third object))
                               ("Owner" (cl-fourth object))
@@ -2377,7 +2406,7 @@ inlined vector SVG image that is encoded as a data URI."
                       (cl-first row)
                       (cl-second row)
                       (if (cl-third row) "RECOVERING" "PRIMARY"))))
-    (let* ((sql "SELECT pg_size_pretty(pg_database_size($1))")
+    (let* ((sql "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_database_size($1))")
            (res (pg-exec-prepared con sql `((,dbname . "text"))))
            (size (cl-first (pg-result res :tuple 0))))
       (insert (format "Total database size: %s\n" size)))
