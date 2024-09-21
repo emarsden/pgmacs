@@ -3,10 +3,11 @@
 ~~~admonish note title="Try it out before installing"
 If you want to get a quick feel for what PGmacs can do before installing it, you can try out our
 [prebuilt Podman/Docker container image](container.html) which includes a terminal-only build of
-Emacs and the necessary dependencies.
+Emacs and the necessary dependencies. This will allow you to run PGmacs safely sandboxed in a
+container.
 
-Because it's running in terminal mode, some functionality such as the SchemaSpy diagram support
-won't work in the container.
+Because it’s running in terminal mode, some functionality such as the SchemaSpy diagram support
+won’t work in the container.
 ~~~
 
 
@@ -15,21 +16,48 @@ won't work in the container.
 In your Emacs initialization file, include the following to check out the latest version of the code
 from the git repository, as well as the dependency [pg-el](https://github.com/emarsden/pg-el/):
 
-    ;; Requires Emacs 29 and git
-    (unless (package-installed-p 'pg)
-       (package-vc-install "https://github.com/emarsden/pg-el/" nil nil 'pg))
-    (unless (package-installed-p 'pgmacs)
-       (package-vc-install "https://github.com/emarsden/pgmacs/"))
+```lisp
+;; Requires Emacs 29 and git
+(unless (package-installed-p 'pg)
+   (package-vc-install "https://github.com/emarsden/pg-el/" nil nil 'pg))
+(unless (package-installed-p 'pgmacs)
+   (package-vc-install "https://github.com/emarsden/pgmacs/"))
 
-    (require 'pgmacs)
+(require 'pgmacs)
+```
 
 You can later upgrade PGmacs to the latest version with `M-x package-vc-upgrade RET pgmacs RET`.
 
 **With `use-package`**: if you prefer the `use-package` macro (which is integrated with Emacs 29),
 you can instead say
 
-    (use-package pg :vc (:url "https://github.com/emarsden/pg-el/"))
-    (use-package pgmacs :vc (:url "https://github.com/emarsden/pgmacs/"))
+```lisp
+(use-package pg :vc (:url "https://github.com/emarsden/pg-el/"))
+(use-package pgmacs :vc (:url "https://github.com/emarsden/pgmacs/"))
+```
+
+**With [quelpa](https://github.com/quelpa/quelpa)**: 
+
+```lisp
+(use-package pgmacs
+  :ensure nil
+  :defer t
+  :quelpa (pgmacs :fetcher github :repo "emarsden/pgmacs"))
+```
+
+
+## Setting up a PostgreSQL user with limited privileges
+
+You should be careful about giving random software you downloaded from the internet access to your
+PostgreSQL data. I would recommend you take a quick read through the source code (it’s quite short,
+only 2600 lines) before running it. Before taking the time to do this, you can also run PGmacs as a
+PostgreSQL user which is not allowed to insert or delete data. Here’s how to do this (using
+predefined roles that are available from PostgreSQL v14 onwards): 
+
+```sql
+CREATE USER pgmacs_readonly_user WITH PASSWORD 'changeme';
+GRANT pg_read_all_data TO pgmacs_readonly_user;
+```
 
 
 ## Connecting to a PostgreSQL database
