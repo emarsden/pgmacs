@@ -19,6 +19,12 @@
 # We go to the trouble of byte-compiling our Emacs Lisp files, but don't attempt native compilation,
 # because the Alpine emacs-nox package is built without support for native compilation.
 
+# The upstream location of csv-mode.el is
+#
+#    https://git.savannah.gnu.org/cgit/emacs/elpa.git/plain/csv-mode.el?h=externals/csv-mode
+#
+# but this server is often unable to serve requests.
+
 
 FROM docker.io/alpine:latest as builder
 LABEL stage=builder
@@ -27,7 +33,7 @@ RUN apk update && \
     apk upgrade && \
     apk add --no-cache git emacs-nox && \
     wget -q -O peg.el "https://git.savannah.gnu.org/cgit/emacs/elpa.git/plain/peg.el?h=externals/peg" && \
-    wget -q -O csv-mode.el "https://git.savannah.gnu.org/cgit/emacs/elpa.git/plain/csv-mode.el?h=externals/csv-mode" && \
+    wget -q -O csv-mode.el "https://github.com/emacsmirror/csv-mode/raw/refs/heads/master/csv-mode.el" && \
     git clone --depth 1 https://github.com/emarsden/pg-el.git && \
     git clone --depth 1 https://github.com/emarsden/pgmacs.git && \
     emacs -Q --batch -l /src/peg.el --eval '(byte-compile-file "/src/peg.el")' \
@@ -45,7 +51,7 @@ LABEL org.opencontainers.image.description "The Emacs-based browser/editor for P
 LABEL org.opencontainers.image.title "PGmacs"
 LABEL org.opencontainers.image.url "https://github.com/emarsden/pgmacs"
 LABEL org.opencontainers.image.source "https://github.com/emarsden/pgmacs"
-LABEL org.opencontainers.image.version "0.13"
+LABEL org.opencontainers.image.version "0.14"
 LABEL org.opencontainers.image.authors "eric.marsden@risk-engineering.org"
 LABEL org.opencontainers.image.licenses "GPLv3"
 

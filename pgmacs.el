@@ -129,10 +129,11 @@ concerning a specific table, rather than the entire database."
   :group 'pgmacs)
 
 
-(defun pgmacs--maybe-svg-icon (svg)
+(defun pgmacs--maybe-svg-icon (svg-fn)
   (if (and (display-graphic-p)
            (image-type-available-p 'svg))
-      (propertize " " 'display svg 'rear-nonsticky t 'cursor-intangible t)
+      (let ((svg (funcall svg-fun)))
+	(propertize " " 'display svg 'rear-nonsticky t 'cursor-intangible t))
     ""))
 
 (defcustom pgmacs-use-header-line t
@@ -149,7 +150,7 @@ concerning a specific table, rather than the entire database."
                        (tls (cl-first
                              (pg-result
                               (pg-exec pgmacs--con "SHOW ssl") :tuple 0)))
-                       (maybe-icon (pgmacs--maybe-svg-icon (pgmacs--svg-icon-user))))
+                       (maybe-icon (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user)))
                    (cl-case (cl-first ci)
                      (:tcp
                       (format "%s as %s%s on %s:%s (TLS: %s)"
@@ -1657,7 +1658,7 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
     ;; Place some initial content in the buffer early up.
     (let* ((inhibit-read-only t)
            (owner (pg-table-owner con table))
-           (maybe-icon (pgmacs--maybe-svg-icon (pgmacs--svg-icon-user)))
+           (maybe-icon (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user))
            (owner-displayed (concat maybe-icon owner))
            (header (format "PostgreSQL table %s, owned by %s\n" t-pretty owner-displayed)))
       (erase-buffer)
@@ -2352,11 +2353,12 @@ inlined vector SVG image that is encoded as a data URI."
         (message "Running cmd %s, output to %s" cmd out)
         (shell-command cmd)
         (when (file-exists-p out)
+          (pgmacs--rewrite-schemaspy-svg out)
           (find-file out))))))
 
 (defun pgmacs--svg-icon-database ()
   (let ((icon (svg-create "1.3em" "1.3em" :viewBox "0 0 16 16")))
-    (cl-flet ((ellipse (y) 
+    (cl-flet ((ellipse (y)
                 (svg-ellipse icon 8 y 5 1 :fill "purple")
                 (svg-ellipse icon 8 (+ y 1.8) 5 1 :fill "purple")
                 (svg-rectangle icon 3 y 10 1.8 :fill "purple")))
@@ -2385,7 +2387,7 @@ inlined vector SVG image that is encoded as a data URI."
 ;; display is able to display SVG images, we prefix the name with a little SVG icon of a table.
 (defun pgmacs--display-table-name (name)
   (let* ((name (pgmacs--display-identifier name))
-         (maybe-icon (pgmacs--maybe-svg-icon (pgmacs--svg-icon-table))))
+         (maybe-icon (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-table)))
     (concat maybe-icon name)))
 
 
@@ -2466,9 +2468,10 @@ inlined vector SVG image that is encoded as a data URI."
                               ("Comment" (cl-fifth object)))))))
     (let* ((res (pg-exec con "SELECT current_user, pg_backend_pid(), pg_is_in_recovery()"))
            (row (pg-result res :tuple 0)))
-      (insert (format "\nConnected to database %s%s as user %s (pid %d %s)\n"
-                      (pgmacs--maybe-svg-icon (pgmacs--svg-icon-database))
+      (insert (format "\nConnected to database %s%s as %s%s (pid %d %s)\n"
+                      (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-database)
                       dbname
+                      (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user)
                       (cl-first row)
                       (cl-second row)
                       (if (cl-third row) "RECOVERING" "PRIMARY"))))
