@@ -132,7 +132,7 @@ concerning a specific table, rather than the entire database."
 (defun pgmacs--maybe-svg-icon (svg-fn)
   (if (and (display-graphic-p)
            (image-type-available-p 'svg))
-      (let ((svg (funcall svg-fun)))
+      (let ((svg (funcall svg-fn)))
 	(propertize " " 'display svg 'rear-nonsticky t 'cursor-intangible t))
     ""))
 
