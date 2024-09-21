@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.14] - Unreleased
+## [0.14] - 2024-09-21
 
 - Run the SchemaSpy Podman/Docker container with the `--userns=keep-id` commandline option in order
   for generated files to be owned by the user running Emacs (when running in rootless mode).
@@ -9,8 +9,8 @@
   key columns. These external xlinked PNG files were not being displayed by the SVG support in
   Emacs. We inline a vector representation of the key icon encoded as an SVG data URL.
 
-- On graphical SVG-capable displays, show a little table icon next to the names of tables in the
-  table-list buffer.
+- On graphical SVG-capable displays, small SVG icons are displayed alongside the names of tables in
+  the table-list buffer, and user names and database names in the header line.
 
 
 ## [0.13] - 2024-08-24
