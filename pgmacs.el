@@ -128,6 +128,18 @@ concerning a specific table, rather than the entire database."
   :type 'string
   :group 'pgmacs)
 
+
+(defun pgmacs--maybe-svg-icon (svg)
+  (if (and (display-graphic-p)
+           (image-type-available-p 'svg))
+      (propertize " " 'display svg 'rear-nonsticky t 'cursor-intangible t)
+    ""))
+
+(defcustom pgmacs-use-header-line t
+  "If non-nil, use the header line to display information on the PostgreSQL connection."
+  :type 'boolean
+  :group 'pgmacs)
+
 (defcustom pgmacs-header-line
   (list (when (char-displayable-p ?🐘) " 🐘")
         (propertize " PGmacs " 'face 'bold)
@@ -136,21 +148,23 @@ concerning a specific table, rather than the entire database."
                  (let ((ci (pgcon-connect-info pgmacs--con))
                        (tls (cl-first
                              (pg-result
-                              (pg-exec pgmacs--con "SHOW ssl") :tuple 0))))
+                              (pg-exec pgmacs--con "SHOW ssl") :tuple 0)))
+                       (maybe-icon (pgmacs--maybe-svg-icon (pgmacs--svg-icon-user))))
                    (cl-case (cl-first ci)
                      (:tcp
-                      (format "%s as %s on %s:%s (TLS: %s)"
+                      (format "%s as %s%s on %s:%s (TLS: %s)"
                               (propertize (cl-fourth ci) 'face 'bold)
+                              maybe-icon
                               (cl-fifth ci)
                               (cl-second ci)
                               (cl-third ci)
                               tls))
                      (:local
-                      (format "%s as %s on Unix socket"
+                      (format "%s as %s%s on Unix socket"
                               (propertize (cl-fourth ci) 'face 'bold)
+                              maybe-icon
                               (cl-fifth ci))))))))
   "Header-line to use in PGmacs buffers. Nil to disable."
-  :type 'list
   :group 'pgmacs)
 
 (defcustom pgmacs-mode-hook nil
@@ -247,7 +261,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 "
   (setq major-mode 'pgmacs-mode
         mode-name "PGmacs")
-  (when pgmacs-header-line
+  (when (and pgmacs-use-header-line pgmacs-header-line)
     (setq header-line-format pgmacs-header-line))
   ;; Not appropriate for user to type stuff into our buffers.
   (put 'pgmacs-mode 'mode-class 'special)
@@ -826,8 +840,11 @@ has primary keys, named in the list PRIMARY-KEYS."
       (kill-all-local-variables)
       (setq-local pgmacs--con con
                   pgmacs--db-buffer db-buffer
-                  pgmacs--table table
-                  header-line-format (format "🐘 Update PostgreSQL column %s" col-name))
+                  pgmacs--table table)
+      (when pgmacs-use-header-line
+	(setq-local header-line-format (format "%sUpdate PostgreSQL column %s"
+                                               (if (char-displayable-p ?🐘) " 🐘" "")
+                                               col-name)))
       (pgmacs-mode)
       (widget-insert "\n")
       (let* ((column-info (pgmacs--column-info con table col-name))
@@ -1217,7 +1234,7 @@ Uses PostgreSQL connection CON."
 ;; Function pgmacs--column-info uses some moderately complex SQL queries to determine the
 ;; constraints of a column. These queries are called once per column for a row-list buffer. To avoid
 ;; redundant processing by PostgreSQL in parsing and preparing a query plan for these queries, we
-;; use PostgreSQL prepared statements.
+;; use PostgreSQL prepared statements via the `pg-ensure-prepared' function.
 (defun pgmacs--column-info (con table column)
   "Return a hashtable containing metainformation on COLUMN in TABLE.
 The metainformation includes the type name, whether the column is a PRIMARY KEY,
@@ -1479,6 +1496,17 @@ Table names are schema-qualified if the schema is non-default."
                     count
                     (if (> count 1) "s" ""))))
 
+(defvar pgmacs--where-filter-history nil)
+
+;; Bound to "W" in a table-row buffer.
+(defun pgmacs--add-where-filter (&rest _ignore)
+  (interactive)
+  (setq pgmacs--offset 0)
+  (let ((filter (read-from-minibuffer "WHERE clause (starting with WHERE): "
+                                      nil nil nil 'pgmacs--where-filter-history)))
+    (message "Using WHERE filter %s" filter)
+    (pgmacs--display-table pgmacs--table :where-filter filter)))
+
 (defun pgmacs--paginated-next (&rest _ignore)
   "Move to the next page of the paginated PostgreSQL table."
   (interactive)
@@ -1577,6 +1605,14 @@ Table names are schema-qualified if the schema is non-default."
   (let ((sql (format "SELECT * FROM %s OFFSET %s" table offset)))
     (pg-exec-prepared con sql (list) :max-rows row-count)))
 
+(defun pgmacs--select-rows-where (con table where-filter row-count)
+  (unless (string-match "\s*WHERE " where-filter)
+    (error "WHERE filter doesn't start with WHERE: %s" where-filter))
+  (when (cl-search ";" where-filter)
+    (error "WHERE filter must not contain end-of-statement marker ';'"))
+  (let ((sql (format "SELECT * FROM %s %s" table where-filter)))
+    (pg-exec-prepared con sql (list) :max-rows row-count)))
+
 
 ;; TODO: add additional information as per psql
 ;; Table « public.books »
@@ -1593,13 +1629,24 @@ Table names are schema-qualified if the schema is non-default."
 ;; Référencé par :
 ;; TABLE "book_author" CONSTRAINT "book_author_book_id_fkey" FOREIGN KEY (book_id) REFERENCES books(id)
 
-(defun pgmacs--display-table (table &optional center-on)
+(cl-defun pgmacs--display-table (table &key center-on where-filter)
   "Open a row-list buffer to display TABLE in PGmacs.
 TABLE may be specified as a string or as a schema-qualified pg-qualified-name
-object. Optional argument CENTER-ON of the form (pk-name pk-value pk-type)
-specifies the name, value and type of a primary key which we wish to have centered
-in the display (rows will be shown for values smaller than and larger than this
-value, in the limit of pgmacs-row-limit."
+object.
+
+Keyword argument CENTER-ON of the form (pk-name pk-value pk-type)
+specifies the name, value and type of a primary key which we wish
+to have centered in the display (rows will be shown for values
+smaller than and larger than this value, in the limit of
+pgmacs-row-limit.
+
+Keyword argument WHERE-FILTER is an SQL WHERE clause which filters the
+rows to display in the table. It must start with the keyword
+WHERE.
+
+The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
+  (when (and center-on where-filter)
+    (error "CENTER-ON and WHERE-FILTER arguments are mutually exclusive"))
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
          (t-id (pg-escape-identifier table))
@@ -1608,17 +1655,23 @@ value, in the limit of pgmacs-row-limit."
     (setq-local pgmacs--db-buffer db-buffer)
     (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
     ;; Place some initial content in the buffer early up.
-    (let ((inhibit-read-only t)
-          (owner (pg-table-owner con table)))
+    (let* ((inhibit-read-only t)
+           (owner (pg-table-owner con table))
+           (maybe-icon (pgmacs--maybe-svg-icon (pgmacs--svg-icon-user)))
+           (owner-displayed (concat maybe-icon owner))
+           (header (format "PostgreSQL table %s, owned by %s\n" t-pretty owner-displayed)))
       (erase-buffer)
-      (insert (propertize (format "PostgreSQL table %s, owned by %s\n" t-pretty owner) 'face 'bold)))
+      (insert (propertize header 'face 'bold)))
     (let* ((primary-keys (pgmacs--table-primary-keys con table))
            (comment (pg-table-comment con table))
            (indexes (pgmacs--table-indexes con table))
            (offset (or pgmacs--offset 0))
-           (res (if center-on
-                    (pgmacs--select-rows-around con t-id center-on pgmacs-row-limit)
-                  (pgmacs--select-rows-offset con t-id offset pgmacs-row-limit)))
+           (res (cond (center-on
+                       (pgmacs--select-rows-around con t-id center-on pgmacs-row-limit))
+                      (where-filter
+                       (pgmacs--select-rows-where con t-id where-filter pgmacs-row-limit))
+                      (t
+                       (pgmacs--select-rows-offset con t-id offset pgmacs-row-limit))))
            (rows (pg-result res :tuples))
            (column-names (mapcar #'cl-first (pg-result res :attributes)))
            (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
@@ -1689,6 +1742,7 @@ value, in the limit of pgmacs-row-limit."
                                   "e" pgmacs-run-sql
                                   "E" pgmacs-run-buffer-sql
                                   "S" pgmacs--schemaspy-table
+                                  "W" pgmacs--add-where-filter
                                   "=" pgmacs--shrink-columns
                                   "r" pgmacs--redraw-pgmacstbl
                                   "j" pgmacs--row-as-json
@@ -1887,7 +1941,7 @@ value, in the limit of pgmacs-row-limit."
                (pk-col-type (aref pgmacs--column-type-names pk-col-id))
                (pk-val (nth pk-col-id row))
                (center-on (list pk pk-val pk-col-type)))
-          (pgmacs--display-table table center-on))
+          (pgmacs--display-table table :center-on center-on))
       (pgmacs--edit-value-minibuffer row primary-keys))))
 
 ;; bound to "o". We make sure here to retain a schema-qualified name for a table, because
@@ -2127,11 +2181,12 @@ Uses PostgreSQL connection CON."
   (let* ((tbl (pgmacstbl-current-table))
          (col-id (pgmacstbl-current-column))
          (col (nth col-id (pgmacstbl-columns tbl)))
-         (col-name (pgmacstbl-column-name col)))
+         (col-name (pgmacstbl-column-name col))
+         (table (cl-first table-row)))
     (cond ((string= "Comment" col-name)
            (let ((comment (read-from-minibuffer "New table comment: "))
                  (new-row (copy-sequence table-row)))
-             (setf (pg-table-comment pgmacs--con (car table-row)) comment)
+             (setf (pg-table-comment pgmacs--con table) comment)
              (setf (nth col-id new-row) comment)
              ;; pgmacstbl-update-object doesn't work, so insert then delete old row
              (pgmacstbl-insert-object tbl new-row table-row)
@@ -2139,7 +2194,7 @@ Uses PostgreSQL connection CON."
              (pgmacs--redraw-pgmacstbl)))
           ;; TODO perhaps change owner (if we are superuser)
           (t
-           (pgmacs--display-table (car table-row))))))
+           (pgmacs--display-table table)))))
 
 (defun pgmacs--table-list-delete (table-row)
   "Delete (drop) the PostgreSQL table specified by TABLE-ROW."
@@ -2299,29 +2354,39 @@ inlined vector SVG image that is encoded as a data URI."
         (when (file-exists-p out)
           (find-file out))))))
 
-(defun pgmacs--table-icon-svg ()
-  (let* ((icon (svg-create "1em" "1em" :viewBox "-0.4 -0.4 3.6 4.6" :fill "currentColor"))
-         (rect (svg-rectangle icon 0 0 3 3 :fill "none" :stroke "black" :stroke-width 0.3 :rx 0.1))
-         (hl1 (svg-line icon 0 1 3 1 :stroke "black" :stroke-width 0.2))
-         (hl2 (svg-line icon 0 2 3 2 :stroke "black" :stroke-width 0.2))
-         (hl3 (svg-line icon 0 0.3 3 0.3 :stroke "black" :stroke-width 0.2))
-         (vl1 (svg-line icon 1 0 1 3 :stroke "black" :stroke-width 0.2))
-         (vl2 (svg-line icon 2 0 2 3 :stroke "black" :stroke-width 0.2)))
-    (svg-image icon :margin 1)))
+(defun pgmacs--svg-icon-database ()
+  (let ((icon (svg-create "1.3em" "1.3em" :viewBox "0 0 16 16")))
+    (cl-flet ((ellipse (y) 
+                (svg-ellipse icon 8 y 5 1 :fill "purple")
+                (svg-ellipse icon 8 (+ y 1.8) 5 1 :fill "purple")
+                (svg-rectangle icon 3 y 10 1.8 :fill "purple")))
+      (ellipse 9)
+      (ellipse 6)
+      (ellipse 3)
+      (svg-image icon :margin 2 :ascent 'center))))
+
+(defun pgmacs--svg-icon-user ()
+  (let ((icon (svg-create "0.7em" "0.7em" :viewBox "0 0 16 16")))
+    (svg-circle icon 8 4 3.8 :fill "black" :opacity 0.5)
+    (svg-rectangle icon 1 9 15 20 :fill "black" :opacity 0.5 :rx 3)
+    (svg-image icon :margin 2 :ascent 'center)))
+
+(defun pgmacs--svg-icon-table ()
+  (let ((icon (svg-create "1em" "1em" :viewBox "-0.4 -0.4 3.6 4.6" :fill "currentColor")))
+    (svg-rectangle icon 0 0 3 3 :fill "none" :stroke "black" :stroke-width 0.3 :rx 0.1)
+    (svg-line icon 0 1 3 1 :stroke "black" :stroke-width 0.2)
+    (svg-line icon 0 2 3 2 :stroke "black" :stroke-width 0.2)
+    (svg-line icon 0 0.3 3 0.3 :stroke "black" :stroke-width 0.2)
+    (svg-line icon 1 0 1 3 :stroke "black" :stroke-width 0.2)
+    (svg-line icon 2 0 2 3 :stroke "black" :stroke-width 0.2)
+    (svg-image icon :margin 2 :ascent 'center)))
 
 ;; This function generates the string used to display a table in the main table-list buffer. If the
 ;; display is able to display SVG images, we prefix the name with a little SVG icon of a table.
 (defun pgmacs--display-table-name (name)
   (let* ((name (pgmacs--display-identifier name))
-         (img (pgmacs--table-icon-svg))
-         (icon (propertize " "
-                           'display img
-                           'rear-nonsticky t
-                           'cursor-intangible t)))
-    (if (and (display-graphic-p)
-             (image-type-available-p 'svg))
-        (concat icon name)
-      name)))
+         (maybe-icon (pgmacs--maybe-svg-icon (pgmacs--svg-icon-table))))
+    (concat maybe-icon name)))
 
 
 ;;;###autoload
@@ -2401,7 +2466,8 @@ inlined vector SVG image that is encoded as a data URI."
                               ("Comment" (cl-fifth object)))))))
     (let* ((res (pg-exec con "SELECT current_user, pg_backend_pid(), pg_is_in_recovery()"))
            (row (pg-result res :tuple 0)))
-      (insert (format "\nConnected to database %s as user %s (pid %d %s)\n"
+      (insert (format "\nConnected to database %s%s as user %s (pid %d %s)\n"
+                      (pgmacs--maybe-svg-icon (pgmacs--svg-icon-database))
                       dbname
                       (cl-first row)
                       (cl-second row)
