@@ -1364,13 +1364,20 @@ Table names are schema-qualified if the schema is non-default."
   (let ((entries (list)))
     (dolist (table (pg-tables pgmacs--con))
       (let* ((tname (pg-escape-identifier table))
-             (sql (format "SELECT COUNT(*), pg_size_pretty(pg_total_relation_size($1)) FROM %s"
+             (sql (format "SELECT
+                            COUNT(*),
+                            pg_size_pretty(pg_total_relation_size($1)),
+                            obj_description($1::regclass::oid, 'pg_class')
+                           FROM %s"
                           tname))
              (res (pg-exec-prepared pgmacs--con sql `((,tname . "text"))))
-             (rows (cl-first (pg-result res :tuple 0)))
-             (size (cl-second (pg-result res :tuple 0)))
-             (owner (pg-table-owner pgmacs--con table))
-             (comment (pg-table-comment pgmacs--con table)))
+             (tuple (pg-result res :tuple 0))
+             (rows (cl-first tuple))
+             (size (cl-second tuple))
+             ;; We could use function `pg-table-comment', but that would imply an additional SQL
+             ;; query and this function is speed critical.
+             (comment (cl-third tuple))
+             (owner (pg-table-owner pgmacs--con table)))
         (push (list table rows size owner (or comment "")) entries)))
     entries))
 
