@@ -45,7 +45,7 @@ it to modify real PostgreSQL databases used in production.
 pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
 Windows and MacOS. It works both in graphical mode and in the terminal.
 
-**PostgreSQL version**: PGmacs has been tested with PostgreSQL versions 16.4 and 17beta2, but should
+**PostgreSQL version**: PGmacs is mostly tested with PostgreSQL versions 17.0 and 16.4, but should
 work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate with
 PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
@@ -55,17 +55,47 @@ list of tables available, and these tables are not always present in PostgreSQL-
 databases. PGmacs also uses some PostgreSQL-specific functions to display information such as the
 on-disk size of tables, and these functions are not always implemented. What we have tested so far:
 
-- ParadeDB v0.7.3 sees to work fine in limited testing (it's more a PostgreSQL extension than a
-  fully separate product).
+- [Neon](https://neon.tech/) “serverless PostgreSQL” works perfectly.
+
+- [ParadeDB](https://www.paradedb.com/) v0.9.1 seems to work fine in limited testing (it’s really a
+  PostgreSQL extension rather than a fully separate product).
   
-- YugabyteDB v2.21 works to a limited extent: we are not able to run the SQL command that adds a
-  PRIMARY KEY to an existing table, nor to display total database size on disk, for example. 
+- The [Timescale DB](https://www.timescale.com/) extension for time series data works perfectly
+  (tested with version 2.16.1).
+
+- [Xata](https://xata.io/) “serverless PostgreSQL” has many limitations including lack of support
+  for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
+  for `EXPLAIN`, for `CREATE EXTENSION`, for functions such as `pg_notify`.
+
+- [YugabyteDB](https://yugabyte.com/) v2.23 works to a limited extent: we are not able to run the
+  SQL command that adds a PRIMARY KEY to an existing table, nor to display total database size on
+  disk, for example.
   
-- CrateDB v5.7 does not currently work; it does not implement PostgreSQL functions that we use to
-  query table metainformation.
+- [CrateDB](https://crate.io/) v5.8.3 does not currently work; it does not implement PostgreSQL
+  functions that we use to query table metainformation.
+
+- [CockroachDB](https://github.com/cockroachdb/cockroach) version 24.2 does not work with PGmacs:
+  our query for `pg-table-owner` triggers an internal error, there is no implementation of the
+  function `pg_size_pretty`, and the database fails on basic SQL such as the boolean vector syntax
+  `b'1001000'`.
+
+- [QuestDB](https://questdb.io/): tested against version 6.5.4. This has very limited PostgreSQL
+  support, and does not support the `integer` type for example.
+
+- [Google Spanner](https://cloud.google.com/spanner), or at least the Spanner emulator (that reports
+  itself as `PostgreSQL 14.1`) and the PGAdapter library that enables support for the PostgreSQL
+  wire protocol, do not work with PGmacs. Spanner has only limited PostgreSQL compatibility, for
+  example refusing to create tables that do not have a primary key. It does not implement some
+  functions we use to query the current user and database status, such as `current_user`,
+  `pg_backend_pid`, `pg_is_in_recovery`.
+
+- [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) version 23-4 has very limited
+  PostgreSQL compatibility and does not work with PGmacs. The system tables that we query to obtain
+  the list of tables in the current database are not implemented.
 
 - ClickHouse v24.5 does not work: its implementation of the wire protocol is very limited, with no
-  support for the `pg_type` metadata.
+  support for the `pg_type` metadata and no support for basic PostgreSQL-flavoured SQL commands such
+  as `SET`.
 
 
 ## License

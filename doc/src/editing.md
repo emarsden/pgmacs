@@ -16,7 +16,7 @@ update operation.
 
 Note that PGmacs tells you the column type when prompting for the new value. You must specify a
 value in the format accepted by PostgreSQL for that type (check the current value as displayed in the
-minibuffer if you’re unsure of the exepcted format).
+minibuffer if you’re unsure of the expected format).
 
 For certain column types and very long column values, it may be more convenient to use the
 **widget-based editing interface** to edit a column value. Move the cursor to the relevant column value
@@ -44,7 +44,7 @@ column specified as `PRIMARY KEY`, or a constraint across a group of columns).
 To copy/paste rows, press `k` to copy the row to the PGmacs kill buffer (this only copies, without
 deleting the row), then `y` to insert a new row with the same values. Any columns that have a
 default value specified (for example, primary key rows that pull a value from an integer sequence,
-or are specified as `SERIAL`, or timestap values that default to `now`) will be inserted with a new
+or are specified as `SERIAL`, or timestamp values that default to `now`) will be inserted with a new
 generated value, rather than the value in the copied row.
 
 All updates, insertions and deletions are immediately made on the PostgreSQL server by sending it
