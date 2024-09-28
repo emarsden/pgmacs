@@ -141,7 +141,8 @@ concerning a specific table, rather than the entire database."
   :type 'boolean
   :group 'pgmacs)
 
-(defcustom pgmacs-header-line
+(defvar pgmacs-header-line
+  "Header-line to use in PGmacs buffers. Nil to disable."
   (list (when (char-displayable-p ?🐘) " 🐘")
         (propertize " PGmacs " 'face 'bold)
         '(:eval (when pgmacs--con
@@ -164,9 +165,7 @@ concerning a specific table, rather than the entire database."
                       (format "%s as %s%s on Unix socket"
                               (propertize (cl-fourth ci) 'face 'bold)
                               maybe-icon
-                              (cl-fifth ci))))))))
-  "Header-line to use in PGmacs buffers. Nil to disable."
-  :group 'pgmacs)
+                              (cl-fifth ci)))))))))
 
 (defcustom pgmacs-mode-hook nil
   "Mode hook for `pgmacs-mode'."
@@ -523,10 +522,7 @@ Use PROMPT in the minibuffer and show the current value CURRENT-VALUE."
 (defun pgmacs-funcall-cell (function)
   "Call FUNCTION on the content of current cell. Does not modify database.
 FUNCTION takes a single argument which is the value of the cell at point."
-  (let* ((pgmacstbl (or (pgmacstbl-current-table)
-                        (error "Cursor is not in a pgmacstbl")))
-         (cols (pgmacstbl-columns pgmacstbl))
-         (col-id (or (pgmacstbl-current-column)
+  (let* ((col-id (or (pgmacstbl-current-column)
                      (error "Not on a pgmacstbl column")))
          (current-row (or (pgmacstbl-current-object)
                           (error "Cursor is not on a pgmacstbl row")))
@@ -554,28 +550,27 @@ FUNCTION is called on (old-value col-name col-type) and returns the new value."
     (let* ((current (funcall (pgmacstbl-column-formatter col)
                              (nth col-id current-row)))
            (new-value (funcall function current col-name col-type)))
-      (when update-db
-        (when (null primary-keys)
-          (error "Can't edit content of a table that has no PRIMARY KEY"))
-        (unless pk-value
-          (error "Can't find value for primary key %s" pk))
-        (let* ((sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
-                            (pg-escape-identifier pgmacs--table)
-                            (pg-escape-identifier col-name)
-                            (pg-escape-identifier pk)))
-               (res (pg-exec-prepared pgmacs--con sql
-                                      `((,new-value . ,col-type)
-                                        (,pk-value . ,pk-col-type)))))
-          (pgmacs--notify "%s" (pg-result res :status)))
-        (let ((new-row (copy-sequence current-row)))
-          (setf (nth col-id new-row) new-value)
-          ;; pgmacstbl-update-object doesn't work, so insert then delete old row
-          (pgmacstbl-insert-object pgmacstbl new-row current-row)
-          (pgmacstbl-remove-object pgmacstbl current-row)
-          ;; redrawing is necessary to ensure that all keybindings are present for the newly inserted
-          ;; row.
-          (forward-line -1)
-          (pgmacs--redraw-pgmacstbl)))
+      (when (null primary-keys)
+        (error "Can't edit content of a table that has no PRIMARY KEY"))
+      (unless pk-value
+        (error "Can't find value for primary key %s" pk))
+      (let* ((sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
+                          (pg-escape-identifier pgmacs--table)
+                          (pg-escape-identifier col-name)
+                          (pg-escape-identifier pk)))
+             (res (pg-exec-prepared pgmacs--con sql
+                                    `((,new-value . ,col-type)
+                                      (,pk-value . ,pk-col-type)))))
+        (pgmacs--notify "%s" (pg-result res :status)))
+      (let ((new-row (copy-sequence current-row)))
+        (setf (nth col-id new-row) new-value)
+        ;; pgmacstbl-update-object doesn't work, so insert then delete old row
+        (pgmacstbl-insert-object pgmacstbl new-row current-row)
+        (pgmacstbl-remove-object pgmacstbl current-row)
+        ;; redrawing is necessary to ensure that all keybindings are present for the newly inserted
+        ;; row.
+        (forward-line -1)
+        (pgmacs--redraw-pgmacstbl))
       new-value)))
 
 (defun pgmacs--edit-value-minibuffer (row primary-keys)
