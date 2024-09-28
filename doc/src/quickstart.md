@@ -28,8 +28,8 @@ from the git repository, as well as the dependency [pg-el](https://github.com/em
 
 You can later upgrade PGmacs to the latest version with `M-x package-vc-upgrade RET pgmacs RET`.
 
-**With `use-package`**: if you prefer the `use-package` macro (which is integrated with Emacs 29),
-you can instead say
+**With `use-package`**: with the vc support in the `use-package` macro (available from Emacs 29),
+you can say
 
 ```lisp
 (use-package pg :vc (:url "https://github.com/emarsden/pg-el/"))
@@ -43,6 +43,15 @@ you can instead say
   :ensure nil
   :defer t
   :quelpa (pgmacs :fetcher github :repo "emarsden/pgmacs"))
+```
+
+**Manual installation**:
+
+Clone this repository, ensure that directory is on your load path, as [described on
+EmacsWiki](https://www.emacswiki.org/emacs/LoadPath), and say `(require 'pgmacs)`.
+
+```shell
+git clone https://github.com/emarsden/pgmacs/
 ```
 
 
