@@ -486,8 +486,7 @@ Applies format string FMT to ARGS."
                 (cl-typecase val
                   (number t)
                   (string t)
-                  (vector
-                   (cl-every #'jsonable-p val))
+                  (vector (cl-every #'jsonable-p val))
                   (hash-table t)
                   (t nil))))
     (let* ((tbl (pgmacstbl-current-table))
@@ -521,9 +520,22 @@ Use PROMPT in the minibuffer and show the current value CURRENT-VALUE."
          (ce (pgcon-client-encoding pgmacs--con)))
     (if parser (funcall parser user-provided ce) user-provided)))
 
+(defun pgmacs-funcall-cell (function)
+  "Call FUNCTION on the content of current cell. Does not modify database.
+FUNCTION takes a single argument which is the value of the cell at point."
+  (let* ((pgmacstbl (or (pgmacstbl-current-table)
+                        (error "Cursor is not in a pgmacstbl")))
+         (cols (pgmacstbl-columns pgmacstbl))
+         (col-id (or (pgmacstbl-current-column)
+                     (error "Not on a pgmacstbl column")))
+         (current-row (or (pgmacstbl-current-object)
+                          (error "Cursor is not on a pgmacstbl row")))
+         (current (nth col-id current-row)))
+    (funcall function current)))
 
-;; FUNCTION is called on (old-value col-name col-type) and returns the new value.
-(defun pgmacs--funcall-cell (row primary-keys function update-db)
+(defun pgmacs--setf-cell (row primary-keys function)
+  "Call FUNCTION on current cell and update the database.
+FUNCTION is called on (old-value col-name col-type) and returns the new value."
   (let* ((pgmacstbl (or (pgmacstbl-current-table)
                         (error "Cursor is not in a pgmacstbl")))
          (current-row (or (pgmacstbl-current-object)
@@ -576,7 +588,7 @@ PRIMARY-KEYS."
                                          (substring-no-properties col-type)
                                          "Change %s (%s) to: "
                                          old-value))))
-  (pgmacs--funcall-cell row primary-keys get-value t)))
+  (pgmacs--setf-cell row primary-keys get-value)))
 
 
 (defvar pgmacs--shell-command-history nil)
@@ -601,7 +613,7 @@ the database), use
 
 Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
   (let ((get-value
-         (lambda (old-value _col-name _col-type)
+         (lambda (old-value &rest _ignore)
            (let* ((prompt "Shell command: ")
                   (cmd (read-string prompt nil 'pgmacs--shell-command-history))
                   (new-value (with-temp-buffer
@@ -615,11 +627,11 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
                (error "Shell command failed: check *PGmacs shell command error* buffer"))
              new-value))))
     (if (not current-prefix-arg)
-        (let ((new-value (pgmacs--funcall-cell current-row primary-keys get-value nil)))
-          (message "PostgreSQL shell: %s" new-value))
+        (let ((result (pgmacs-funcall-cell get-value)))
+          (message "PostgreSQL shell: %s" result))
       ;; With a prefix argument, we update the value in the PostgreSQL database and in the
       ;; displayed pgmacstbl.
-      (pgmacs--funcall-cell current-row primary-keys get-value t))))
+      (pgmacs--setf-cell current-row primary-keys get-value))))
 
 (defun pgmacs--downcase-value (current-row primary-keys)
   "Downcase the value in the cell at point and update PostgreSQL.
@@ -634,7 +646,7 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
              (insert old-value)
              (downcase-region (point-min) (point-max))
              (buffer-substring-no-properties (point-min) (point-max))))))
-    (pgmacs--funcall-cell current-row primary-keys get-value t)))
+    (pgmacs--setf-cell current-row primary-keys get-value)))
 
 (defun pgmacs--upcase-value (current-row primary-keys)
   "Upcase the value in the cell at point and update PostgreSQL.
@@ -649,7 +661,7 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
             (insert old-value)
             (upcase-region (point-min) (point-max))
             (buffer-substring-no-properties (point-min) (point-max))))))
-    (pgmacs--funcall-cell current-row primary-keys get-value t)))
+    (pgmacs--setf-cell current-row primary-keys get-value)))
 
 (defun pgmacs--capitalize-value (current-row primary-keys)
   "Capitalize the value in the cell at point and update PostgreSQL.
@@ -664,7 +676,7 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
              (insert old-value)
              (capitalize-region (point-min) (point-max))
              (buffer-substring-no-properties (point-min) (point-max))))))
-    (pgmacs--funcall-cell current-row primary-keys get-value t)))
+    (pgmacs--setf-cell current-row primary-keys get-value)))
 
 
 (define-widget 'pgmacs-hstore-widget 'list
@@ -1358,6 +1370,8 @@ Uses PostgreSQL connection CON."
 ;;    SELECT reltuples::bigint FROM pg_class WHERE oid=$1::regclass (returns -1)
 ;;
 ;;    SELECT n_live_tup FROM pg_stat_user_tables (zero for non-VACUUMed tables)
+;;
+;; We could perhaps fill in the row count column in a lazy manner to improve query speed.
 (defun pgmacs--list-tables ()
   "Return a list of table-names and associated metadata for the current database.
 Table names are schema-qualified if the schema is non-default."
@@ -1909,7 +1923,8 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
          (cols (pgmacstbl-columns pgmacstbl))
          (col-id (pgmacstbl-current-column))
          (col (elt cols col-id))
-         (max-width 0))
+         (col-name (pgmacstbl-column-name col))
+         (max-width (1+ (string-width col-name))))
     (dolist (row (pgmacstbl-objects pgmacstbl))
       (let* ((val (nth col-id row))
              ;; FIXME perhaps should call the column display-function here
@@ -1926,7 +1941,9 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
          (widths (pgmacstbl--widths pgmacstbl))
          (cols (pgmacstbl-columns pgmacstbl)))
     (dotimes (col-id (length cols))
-      (let ((max-width 0))
+      (let* ((col (elt cols col-id))
+             (col-name (pgmacstbl-column-name col))
+             (max-width (1+ (string-width col-name))))
         (dolist (row (pgmacstbl-objects pgmacstbl))
           (let* ((val (nth col-id row))
                  ;; FIXME perhaps should call the column display-function here
@@ -2086,7 +2103,8 @@ Prompt for the table name in the minibuffer."
     (pgmacs-show-result pgmacs--con sql)))
 
 (defun pgmacs-run-buffer-sql (&rest _ignore)
-  "Execute the SQL in BUFFFER and display the output in a dedicated buffer."
+  "Execute the SQL query in a user-specified buffer.
+The output is displayed in a dedicated buffer."
   (interactive)
   (let* ((con pgmacs--con)
          (buffers (mapcar #'buffer-name (buffer-list)))
@@ -2341,8 +2359,8 @@ inlined vector SVG image that is encoded as a data URI."
          (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
     (when (file-directory-p schemaspy-dir)
       (delete-directory schemaspy-dir t))
-    ;; The Docker image for schemaspy runs as user "java" for an obscure reason, so ensure that the
-    ;; temporary schemaspy-dir is writable for all.
+    ;; The Docker image for schemaspy runs as user "java" for an obscure reason, so we need to
+    ;; ensure that the temporary schemaspy-dir is writable for all.
     (with-file-modes #o777
       (make-directory schemaspy-dir t))
     (let ((ci (pgcon-connect-info pgmacs--con)))
@@ -2367,8 +2385,8 @@ inlined vector SVG image that is encoded as a data URI."
   (let ((icon (svg-create "1.3em" "1.3em" :viewBox "0 0 16 16")))
     (cl-flet ((ellipse (y)
                 (svg-ellipse icon 8 y 5 1 :fill "purple")
-                (svg-ellipse icon 8 (+ y 1.8) 5 1 :fill "purple")
-                (svg-rectangle icon 3 y 10 1.8 :fill "purple")))
+                (svg-ellipse icon 8 (+ y 1.8) 5 1 :fill "purple" :stroke "white" :stroke-width 0.3)
+                (svg-rectangle icon 3 y 10 1.5 :fill "purple")))
       (ellipse 9)
       (ellipse 6)
       (ellipse 3)

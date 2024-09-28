@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15] - Unreleased
+
+- New function `pgmacs-funcall-cell` that allows the user to call a function on a cell value,
+  without updating the database. This can be used to implement custom user-specified functions that
+  operate on the database value at point (dictionary lookup, web search, elisp evaluation, etc.).
+  The existing internal function `pgmacs--funcall-cell` is renamed to `pgmacs--setf-cell` and
+  modified always to  update the database with the result of the function call.
+
+
 ## [0.14] - 2024-09-21
 
 - Run the SchemaSpy Podman/Docker container with the `--userns=keep-id` commandline option in order
