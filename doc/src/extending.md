@@ -34,4 +34,8 @@ a keybinding for it in the `pgmacs-row-list-map` keymap which is active in a row
 This is what the functionality looks like once you’ve included this code in your Emacs
 initialization file: 
 
-<video src="https://github.com/user-attachments/assets/4c2c7417-5356-409d-a0d8-a3cb42889575" width="80%"/>
+
+<video width="80%" autoplay loop>
+  <source
+  src="https://github.com/emarsden/emarsden.github.io/raw/refs/heads/main/assets/pgmacs-extend-ddg.mp4">
+</video>
