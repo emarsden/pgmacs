@@ -8,6 +8,10 @@
   The existing internal function `pgmacs--funcall-cell` is renamed to `pgmacs--setf-cell` and
   modified always to  update the database with the result of the function call.
 
+- Modify keybindings in row-list buffers: `r` now redraws only the pgmacstbl, without refetching
+  data from PostgreSQL, and `g` refetches data from PostgreSQL and does a full redraw (as in the
+  main table-list buffer).
+
 
 ## [0.14] - 2024-09-21
 
