@@ -1579,6 +1579,7 @@ Table names are schema-qualified if the schema is non-default."
       (shw "{" "Shrink the horizontal space used by the current column")
       (shw "}" "Grow the horizontal space used by the current column")
       (shw "o" "Prompt for a table name and open a new buffer displaying that table's data")
+      (shw "r" "Redraw the table without refetching data from PostgreSQL")
       (shw "g" "Redraw the table (refetches data from PostgreSQL)")
       (shw "T" "Switch to the main table-list buffer for this database")
       (shw "q" "Bury this buffer")
@@ -1766,7 +1767,8 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
                                   "S" pgmacs--schemaspy-table
                                   "W" pgmacs--add-where-filter
                                   "=" pgmacs--shrink-columns
-                                  ;; pgmacs--redraw-pgmacstbl does not refetch data from PostgreSQL
+                                  ;; pgmacs--redraw-pgmacstbl does not refetch data from PostgreSQL;
+                                  ;; pgmacs--row-list-redraw does refetch.
                                   "r" pgmacs--redraw-pgmacstbl
                                   "g" pgmacs--row-list-redraw
                                   "j" pgmacs--row-as-json
@@ -1824,13 +1826,13 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
         (let ((last (pop colinfo)))
           (dolist (c (reverse colinfo))
             (if (char-displayable-p ?├)
-                (insert "├ ")
-              (insert "| "))
+                (insert (propertize "├ " 'face 'shadow))
+              (insert (propertize "| " 'face 'shadow)))
             (insert c)
             (insert "\n"))
           (if (char-displayable-p ?└)
-              (insert "└ ")
-            (insert "` "))
+              (insert (propertize "└ " 'face 'shadow))
+            (insert (propertize "` " 'face 'shadow)))
           (insert last)
           (insert "\n")))
       (when indexes
