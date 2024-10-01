@@ -142,7 +142,6 @@ concerning a specific table, rather than the entire database."
   :group 'pgmacs)
 
 (defvar pgmacs-header-line
-  "Header-line to use in PGmacs buffers. Nil to disable."
   (list (when (char-displayable-p ?🐘) " 🐘")
         (propertize " PGmacs " 'face 'bold)
         '(:eval (when pgmacs--con
@@ -165,7 +164,8 @@ concerning a specific table, rather than the entire database."
                       (format "%s as %s%s on Unix socket"
                               (propertize (cl-fourth ci) 'face 'bold)
                               maybe-icon
-                              (cl-fifth ci)))))))))
+                              (cl-fifth ci))))))))
+  "Header-line to use in PGmacs buffers. Nil to disable.")
 
 (defcustom pgmacs-mode-hook nil
   "Mode hook for `pgmacs-mode'."
@@ -192,7 +192,7 @@ Uses customizations implemented in Emacs' customize support."
   (kbd "q") #'bury-buffer
   (kbd "h") #'pgmacs--table-list-help
   (kbd "?") #'pgmacs--table-list-help
-  (kbd "r") #'pgmacs--table-list-redraw
+  (kbd "g") #'pgmacs--table-list-redraw
   (kbd "o") #'pgmacs-open-table
   (kbd "e") #'pgmacs-run-sql
   (kbd "E") #'pgmacs-run-buffer-sql
@@ -224,6 +224,8 @@ database backend allows you to:
  - modify the SQL comment on a table (type `RET' in the `comment' column)
  - show the output from an SQL query in table mode (type `e' to enter the
    SQL query in the minibuffer)
+ - run SchemaSpy on the database to view its structure (type `S', only
+   available in graphical mode)
  - type `h' to show buffer-specific help and keybindings
 
 In a row-list buffer, which displays the rows of data in a
@@ -247,7 +249,7 @@ you can:
  - delete a row (type `DEL' on the row you wish to delete)
  - copy/paste rows of a database table (type `k' to copy, `y' to paste)
  - export the contents of a table to CSV using a dedicated button
- - type `S' to run SchemaSpy on current database and display its structure
+ - type `S' to run SchemaSpy on the current table and display its structure
  - type `o' to open a new row-list buffer for another table
  - type `T' to jump back to the main table-list buffer
  - type `h' to show buffer-specific help and keybindings
@@ -275,7 +277,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (kbd "q") #'bury-buffer
   (kbd "h") #'pgmacs--row-list-help
   (kbd "?") #'pgmacs--row-list-help
-  (kbd "r") #'pgmacs--row-list-redraw
+  (kbd "g") #'pgmacs--row-list-redraw
   (kbd "i") #'pgmacs--insert-row-empty
   (kbd "o") #'pgmacs-open-table
   (kbd "e") #'pgmacs-run-sql
@@ -309,6 +311,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 
 
 ;; Used for updating on progress retrieving information from PostgreSQL.
+;; FIXME: these should be per-PostgreSQL-connection rather than per-Emacs-instance.
 (defvar pgmacs--progress nil)
 (defvar pgmacs--progress-timer nil)
 
@@ -340,6 +343,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
     "Used for copying and pasting rows in a buffer's table."
   nil)
 
+;; TODO: it would be cleaner to hold these all in a pgmacs-connection object.
 (defvar-local pgmacs--con nil)
 (defvar-local pgmacs--table nil)
 (defvar-local pgmacs--column-type-names nil)
@@ -1349,8 +1353,9 @@ over the PostgreSQL connection CON."
   "Is row-level access control active for PostgreSQL TABLE?
 Uses PostgreSQL connection CON."
   (let* ((sql "SELECT row_security_active($1)")
+         (tid (pg-escape-identifier table))
          (res (ignore-errors
-                (pg-exec-prepared con sql `((,(pg-escape-identifier table) . "text"))))))
+                (pg-exec-prepared con sql `((,tid . "text"))))))
     (when res (cl-first (pg-result res :tuple 0)))))
 
 
@@ -1372,14 +1377,14 @@ Uses PostgreSQL connection CON."
 Table names are schema-qualified if the schema is non-default."
   (let ((entries (list)))
     (dolist (table (pg-tables pgmacs--con))
-      (let* ((tname (pg-escape-identifier table))
+      (let* ((tid (pg-escape-identifier table))
              (sql (format "SELECT
                             COUNT(*),
-                            pg_size_pretty(pg_total_relation_size($1)),
+                            pg_catalog.pg_size_pretty(pg_catalog.pg_total_relation_size($1)),
                             obj_description($1::regclass::oid, 'pg_class')
                            FROM %s"
-                          tname))
-             (res (pg-exec-prepared pgmacs--con sql `((,tname . "text"))))
+                          tid))
+             (res (pg-exec-prepared pgmacs--con sql `((,tid . "text"))))
              (tuple (pg-result res :tuple 0))
              (rows (cl-first tuple))
              (size (cl-second tuple))
@@ -1574,7 +1579,7 @@ Table names are schema-qualified if the schema is non-default."
       (shw "{" "Shrink the horizontal space used by the current column")
       (shw "}" "Grow the horizontal space used by the current column")
       (shw "o" "Prompt for a table name and open a new buffer displaying that table's data")
-      (shw "r" "Redraw the table (does not refetch data from PostgreSQL)")
+      (shw "g" "Redraw the table (refetches data from PostgreSQL)")
       (shw "T" "Switch to the main table-list buffer for this database")
       (shw "q" "Bury this buffer")
       (shrink-window-if-larger-than-buffer)
@@ -1597,7 +1602,7 @@ Table names are schema-qualified if the schema is non-default."
 
 ;; Select row-count values from table "around" (ordered by pk) the row where pk=value.
 ;; center-on is a list of the form (pk pk-value pk-type)
-(defun pgmacs--select-rows-around (con table center-on row-count)
+(defun pgmacs--select-rows-around (con table-name-escaped center-on row-count)
   (let* ((pk-id (pg-escape-identifier (cl-first center-on)))
          (pk-val (cl-second center-on))
          (pk-type (cl-third center-on))
@@ -1610,24 +1615,24 @@ Table names are schema-qualified if the schema is non-default."
                        UNION ALL
                        SELECT * FROM rows_after
                        ORDER BY %s"
-                      table pk-id
-                      table pk-id pk-id
-                      table pk-id pk-id
+                      table-name-escaped pk-id
+                      table-name-escaped pk-id pk-id
+                      table-name-escaped pk-id pk-id
                       pk-id))
          (params `((,pk-val . ,pk-type) (,(/ row-count 2) . "int4"))))
     (pg-exec-prepared con sql params)))
 
 ;; Used to retrieve rows in a row-list buffer.
-(defun pgmacs--select-rows-offset (con table offset row-count)
-  (let ((sql (format "SELECT * FROM %s OFFSET %s" table offset)))
+(defun pgmacs--select-rows-offset (con table-name-escaped offset row-count)
+  (let ((sql (format "SELECT * FROM %s OFFSET %s" table-name-escaped offset)))
     (pg-exec-prepared con sql (list) :max-rows row-count)))
 
-(defun pgmacs--select-rows-where (con table where-filter row-count)
+(defun pgmacs--select-rows-where (con table-name-escaped where-filter row-count)
   (unless (string-match "\s*WHERE " where-filter)
     (error "WHERE filter doesn't start with WHERE: %s" where-filter))
   (when (cl-search ";" where-filter)
     (error "WHERE filter must not contain end-of-statement marker ';'"))
-  (let ((sql (format "SELECT * FROM %s %s" table where-filter)))
+  (let ((sql (format "SELECT * FROM %s %s" table-name-escaped where-filter)))
     (pg-exec-prepared con sql (list) :max-rows row-count)))
 
 
@@ -1761,7 +1766,9 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
                                   "S" pgmacs--schemaspy-table
                                   "W" pgmacs--add-where-filter
                                   "=" pgmacs--shrink-columns
+                                  ;; pgmacs--redraw-pgmacstbl does not refetch data from PostgreSQL
                                   "r" pgmacs--redraw-pgmacstbl
+                                  "g" pgmacs--row-list-redraw
                                   "j" pgmacs--row-as-json
                                   ;; "n" and "p" are bound when table is paginated to next/prev page
                                   "<" (lambda (&rest _ignored)
@@ -1904,12 +1911,15 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
   "Refresh a PostgreSQL row-list buffer."
   (interactive)
   (let ((table pgmacs--table)
-        (_offset pgmacs--offset))
-    ;; FIXME actually we lose the current offset with this implementation. Do we need to switch back
-    ;; to the main PGmacs buffer before recreating the row-list buffer, in case the second buffer we
-    ;; fall back to is not a PGmacs buffer?
+        (_offset pgmacs--offset)
+        (parent-buffer pgmacs--db-buffer))
+    ;; FIXME actually we lose the current offset with this implementation.
     (kill-buffer)
-    (pgmacs--display-table table)))
+    ;; Make sure we switch back to the main PGmacs buffer before recreating the row-list buffer,
+    ;; because this "parent" buffer holds buffer-local variables that we need to connect to
+    ;; PostgreSQL.
+    (with-current-buffer parent-buffer
+      (pgmacs--display-table table))))
 
 ;; Shrink the current column size to the smallest possible for the values that are currently visible.
 (defun pgmacs--shrink-column (&rest _ignore)
@@ -2213,7 +2223,7 @@ Uses PostgreSQL connection CON."
              (pgmacstbl-insert-object tbl new-row table-row)
              (pgmacstbl-remove-object tbl table-row)
              (pgmacs--redraw-pgmacstbl)))
-          ;; TODO perhaps change owner (if we are superuser)
+          ;; TODO perhaps allow changes to table owner (if we are superuser)
           (t
            (pgmacs--display-table table)))))
 
