@@ -30,7 +30,7 @@ If you wish to abort editing, simply kill this editing buffer.
 
 ## Inserting, copying and deleting rows
 
-To insert a new row into a table, press `+` in the table buffer. You will be prompted for the values
+To insert a new row into a table, press `+` in the row-list buffer. You will be prompted for the values
 of each column for which a default value is not specified (in the minibuffer), then the new row will
 be inserted. You can also insert a new row by entering new values in a widget-based buffer by
 pressing `i` (this may be more convenient if the table contains many rows, or the values to enter
@@ -47,7 +47,7 @@ default value specified (for example, primary key rows that pull a value from an
 or are specified as `SERIAL`, or timestamp values that default to `now`) will be inserted with a new
 generated value, rather than the value in the copied row.
 
-All updates, insertions and deletions are immediately made on the PostgreSQL server by sending it
+All updates, insertions and deletions are immediately synced with the PostgreSQL server by sending it
 the appropriate SQL `UPDATE TABLE`, `DELETE FROM` or `INSERT INTO` commands.
 
 
