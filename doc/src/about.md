@@ -21,11 +21,12 @@ It allows you to:
 
 - browse the contents of a table, row by row, in paginated mode for large tables
 
-- edit the value of a column (type `RET` on the value you want to modify)
+- edit the value of a column (type <kbd>RET</kbd> on the value you want to modify)
 
-- delete a row (type `DEL` on the row you wish to delete)
+- delete a row (type <kbd>DEL</kbd> on the row you wish to delete)
 
-- copy/paste rows of a database table (type `k` to copy, `y` to paste in a table display buffer)
+- copy/paste rows of a database table (type <kbd>k</kbd> to copy, <kbd>y</kbd> to paste in a table
+  display buffer)
 
 - export the contents of a table to CSV or TSV format
 
