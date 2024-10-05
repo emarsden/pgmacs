@@ -145,10 +145,15 @@ See info node `(pgmacstbl)Top' for pgmacstbl documentation."
                   columns))
     ;; Compute missing column data.
     (setf (pgmacstbl-columns table) (pgmacstbl--compute-columns table))
-    ;; Compute the colors.
-    (when (or row-colors column-colors)
-      (setf (slot-value table '-cached-colors)
-            (pgmacstbl--compute-colors row-colors column-colors)))
+    ;; Compute the colors. We are now ignoring column-colors.
+    (when row-colors
+      (let* ((size (if objects (length objects) 0))
+             (colors (make-vector size nil))
+             (row-faces (mapcar #'pgmacstbl--make-color-face row-colors))
+             (row-face-count (length row-faces)))
+        (dotimes (i size)
+         (setf (aref colors i) (elt row-faces (mod i row-face-count))))
+        (setf (slot-value table '-cached-colors) colors)))
     ;; Compute the divider.
     (when (or divider divider-width)
       (setf (pgmacstbl-divider table)
@@ -489,12 +494,6 @@ This also updates the displayed table."
                                   &optional ellipsis ellipsis-width)
   (let ((start (point))
         (columns (pgmacstbl-columns table))
-        (column-colors
-         (and (pgmacstbl-column-colors table)
-              (if (pgmacstbl-row-colors table)
-                  (elt (slot-value table '-cached-colors)
-                       (mod line-number (length (pgmacstbl-row-colors table))))
-                (slot-value table '-cached-colors))))
         (divider (pgmacstbl-divider table))
         (keymap (slot-value table '-cached-keymap)))
     (seq-do-indexed
@@ -565,21 +564,15 @@ This also updates the displayed table."
                                          :width (list spacer))))))
            (put-text-property start (point) 'pgmacstbl-column index)
            (put-text-property start (point) 'keymap keymap)
-           (when column-colors
-             (add-face-text-property
-              start (point)
-              (elt column-colors (mod index (length column-colors)))))
            (when divider
              (insert divider)
              (setq start (point))))))
      (cdr line))
     (insert "\n")
     (put-text-property start (point) 'pgmacstbl-object (car line))
-    (unless column-colors
-      (when-let ((row-colors (slot-value table '-cached-colors)))
-        (add-face-text-property
-         start (point)
-         (elt row-colors (mod line-number (length row-colors))))))))
+    (put-text-property start (point) 'pgmacstbl-line-number line-number)
+    (let ((colors (slot-value table '-cached-colors)))
+      (add-face-text-property start (point) (aref colors line-number)))))
 
 (defun pgmacstbl--cache-key ()
   (cons (frame-terminal) (window-width)))
