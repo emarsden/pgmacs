@@ -9,12 +9,12 @@ inform you if these conditions are not met.
 
 SchemaSpy is free software distributed under the terms of the GNU LGPL version 3.
 
-In the main table-list buffer, type `S` to run SchemaSpy on the current database and display the
-relationships between the tables in a dedicated buffer.
+In the main table-list buffer, type <kbd>S</kbd> to run SchemaSpy on the current database and
+display the relationships between the tables in a dedicated buffer.
 
 ![Screenshot table](img/screenshot-schemaspy-database.png)
 
-In a row-list buffer, type `S` to run SchemaSpy the on the current table and view the table
+In a row-list buffer, type <kbd>S</kbd> to run SchemaSpy the on the current table and view the table
 structure diagram in a dedicated buffer.
 
 ![Screenshot table](img/screenshot-schemaspy-table.png)

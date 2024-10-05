@@ -19,9 +19,9 @@ value in the format accepted by PostgreSQL for that type (check the current valu
 minibuffer if you’re unsure of the expected format).
 
 For certain column types and very long column values, it may be more convenient to use the
-**widget-based editing interface** to edit a column value. Move the cursor to the relevant column value
-and type `w`. This will open a dedicated buffer with an editing widget suitable for that column’s
-type, as illustrated below for an HSTORE key->value map.
+**widget-based editing interface** to edit a column value. Move the cursor to the relevant column
+value and type <kbd>w</kbd>. This will open a dedicated buffer with an editing widget suitable for
+that column’s type, as illustrated below for an HSTORE key->value map.
 
 ![Screenshot of hstore editing widget](img/screenshot-widget-hstore.png)
 
