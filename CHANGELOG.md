@@ -2,6 +2,10 @@
 
 ## [0.15] - Unreleased
 
+- New functionality: in a row-list buffer, pressing `d` marks the current row for deletion. It will
+  be displayed in red. You can select multiple rows. Pressing `d` in a row-list buffer will delete
+  the selected rows from PostgreSQL and from the current row-list.
+
 - New function `pgmacs-funcall-cell` that allows the user to call a function on a cell value,
   without updating the database. This can be used to implement custom user-specified functions that
   operate on the database value at point (dictionary lookup, web search, elisp evaluation, etc.).

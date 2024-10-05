@@ -349,6 +349,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 (defvar-local pgmacs--column-type-names nil)
 (defvar-local pgmacs--offset nil)
 (defvar-local pgmacs--db-buffer nil)
+(defvar-local pgmacs--marked-rows (list))
 
 (defvar pgmacs--column-display-functions (make-hash-table :test #'equal))
 
@@ -1586,6 +1587,72 @@ Table names are schema-qualified if the schema is non-default."
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min)))))
 
+;; Bound to "d" in a row-list buffer.
+(defun pgmacs--row-list-mark-row (current-row)
+  "Mark the current row for deletion."
+  ;; Note: this line number is zero-based
+  (when-let ((line (get-text-property (point) 'pgmacstbl-line-number)))
+    (cl-pushnew line pgmacs--marked-rows)
+    (message "Lines marked for deletion: %s" pgmacs--marked-rows)
+    (let* ((table (pgmacstbl-current-table))
+           (colors (slot-value table '-cached-colors))
+           (buffer-read-only nil))
+      (setf (aref colors line) 'pgmacs-marked-row)
+      (add-face-text-property (pos-bol) (pos-eol) '(:background "red")))
+    (forward-line 1)))
+
+;; Bound to "x" in a row-list buffer.
+(defun pgmacs--row-list-delete-marked (primary-keys)
+  "Delete rows in the current table marked for deletion using `d'."
+  (when (null pgmacs--marked-rows)
+    (error "No rows are marked for deletion"))
+  (when (null primary-keys)
+    (error "Can't delete from a table that has no PRIMARY KEY"))
+  (when (y-or-n-p (format "Really delete %d PostgreSQL rows?" (length pgmacs--marked-rows)))
+    (let* ((pgmacstbl (pgmacstbl-current-table))
+           (cols (pgmacstbl-columns pgmacstbl))
+           (counter 0)
+           (where-clauses-all (list))
+           (where-values-all (list)))
+      (dolist (line-number pgmacs--marked-rows)
+        (let ((where-clauses-line (list))
+              (where-values-line (list)))
+          (dolist (pk primary-keys)
+            (let* ((col-name (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=))
+                   (col-type (and col-name (aref pgmacs--column-type-names col-name)))
+                   (row (nth line-number (pgmacstbl-objects pgmacstbl)))
+                   (value (and col-name (nth col-name row))))
+              (unless value
+                (error "Can't find value for primary key %s" pk))
+              (push (format "%s = $%d" (pg-escape-identifier pk) (cl-incf counter)) where-clauses-line)
+              (push (cons value col-type) where-values-line)))
+          (push (concat "(" (string-join (reverse where-clauses-line) " AND ") ")") where-clauses-all)
+          (setf where-values-all (append where-values-all (reverse where-values-line)))))
+      ;;  WHERE (fooid=42 AND foobles='bizzles') OR (fooid=33 AND fooobles='qdsfsd') OR (...)
+      (let* ((sql (format "DELETE FROM %s WHERE %s"
+                          (pg-escape-identifier pgmacs--table)
+                          (string-join where-clauses-all " OR ")))
+             (_ (pg-exec pgmacs--con "START TRANSACTION"))
+             (res (pg-exec-prepared pgmacs--con sql where-values-all))
+             (status (pg-result res :status)))
+        (pgmacs--notify "%s" status)
+        (unless (string= "DELETE " (substring status 0 7))
+          (error "Unexpected status %s for PostgreSQL DELETE command" status))
+        (let ((rows-affected (cl-parse-integer (substring status 7))))
+          (cond ((eql 0 rows-affected)
+                 (warn "Could not delete PostgreSQL rows")
+                 (pg-exec pgmacs--con "COMMIT TRANSACTION"))
+                ((eql (length pgmacs--marked-rows) rows-affected)
+                 (pg-exec pgmacs--con "COMMIT TRANSACTION")
+                 (dolist (line-number pgmacs--marked-rows)
+                   (let ((row (nth line-number (pgmacstbl-objects pgmacstbl))))
+                     (pgmacstbl-remove-object pgmacstbl row)))
+                 (pgmacs--redraw-pgmacstbl))
+                (t
+                 (warn "Deletion affected more than 1 row; rolling back")
+                 (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))
+    (setq pgmacs--marked-rows (list))))
+
 (defun pgmacs--row-list-rename-column (&rest _ignore)
   "Rename the current PostgreSQL column."
   (let* ((col-id (pgmacstbl-current-column))
@@ -1772,6 +1839,8 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
                                   "r" pgmacs--redraw-pgmacstbl
                                   "g" pgmacs--row-list-redraw
                                   "j" pgmacs--row-as-json
+                                  "d" pgmacs--row-list-mark-row
+                                  "x" (lambda (&rest _ignored) (pgmacs--row-list-delete-marked ',primary-keys))
                                   ;; "n" and "p" are bound when table is paginated to next/prev page
                                   "<" (lambda (&rest _ignored)
                                         (text-property-search-backward 'pgmacstbl)
