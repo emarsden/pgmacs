@@ -282,6 +282,8 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (kbd "o") #'pgmacs-open-table
   (kbd "e") #'pgmacs-run-sql
   (kbd "E") #'pgmacs-run-buffer-sql
+  (kbd "W") #'pgmacs--add-where-filter
+  (kbd "S") #'pgmacs--schemaspy-table
   (kbd "T") #'pgmacs--switch-to-database-buffer)
 
 (defvar-keymap pgmacs-transient-map
@@ -485,7 +487,8 @@ Applies format string FMT to ARGS."
 (defun pgmacs--row-as-json (current-row)
   "Copy the CURRENT-ROW as JSON to the kill ring."
   (unless (json-available-p)
-    (error "Emacs is not compiled with JSON support"))
+    (message "Emacs is not compiled with JSON support")
+    (cl-return-from pgmacs--row-as-json))
   (cl-labels ((jsonable-p (val)
                 (cl-typecase val
                   (number t)
@@ -528,9 +531,9 @@ Use PROMPT in the minibuffer and show the current value CURRENT-VALUE."
   "Call FUNCTION on the content of current cell. Does not modify database.
 FUNCTION takes a single argument which is the value of the cell at point."
   (let* ((col-id (or (pgmacstbl-current-column)
-                     (error "Not on a pgmacstbl column")))
+                     (user-error "Not on a pgmacstbl column")))
          (current-row (or (pgmacstbl-current-object)
-                          (error "Cursor is not on a pgmacstbl row")))
+                          (user-error "Cursor is not on a pgmacstbl row")))
          (current (nth col-id current-row)))
     (funcall function current)))
 
@@ -538,12 +541,12 @@ FUNCTION takes a single argument which is the value of the cell at point."
   "Call FUNCTION on current cell and update the database.
 FUNCTION is called on (old-value col-name col-type) and returns the new value."
   (let* ((pgmacstbl (or (pgmacstbl-current-table)
-                        (error "Cursor is not in a pgmacstbl")))
+                        (user-error "Cursor is not in a pgmacstbl")))
          (current-row (or (pgmacstbl-current-object)
-                          (error "Cursor is not on a pgmacstbl row")))
+                          (user-error "Cursor is not on a pgmacstbl row")))
          (cols (pgmacstbl-columns pgmacstbl))
          (col-id (or (pgmacstbl-current-column)
-                     (error "Not on a pgmacstbl column")))
+                     (user-error "Not on a pgmacstbl column")))
          (col (nth col-id cols))
          (col-name (pgmacstbl-column-name col))
          (col-type (aref pgmacs--column-type-names col-id))
@@ -556,7 +559,7 @@ FUNCTION is called on (old-value col-name col-type) and returns the new value."
                              (nth col-id current-row)))
            (new-value (funcall function current col-name col-type)))
       (when (null primary-keys)
-        (error "Can't edit content of a table that has no PRIMARY KEY"))
+        (user-error "Can't edit content of a table that has no PRIMARY KEY"))
       (unless pk-value
         (error "Can't find value for primary key %s" pk))
       (let* ((sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
@@ -641,7 +644,7 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
            (unless (or (string= "text" col-type)
                        (string= "varchar" col-type)
                        (string= "name" col-type))
-             (error "Can only downcase text values"))
+             (user-error "Can only downcase text values"))
            (with-temp-buffer
              (insert old-value)
              (downcase-region (point-min) (point-max))
@@ -656,7 +659,7 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
            (unless (or (string= "text" col-type)
                        (string= "varchar" col-type)
                        (string= "name" col-type))
-             (error "Can only upcase text values"))
+             (user-error "Can only upcase text values"))
            (with-temp-buffer
             (insert old-value)
             (upcase-region (point-min) (point-max))
@@ -671,7 +674,7 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
            (unless (or (string= "text" col-type)
                        (string= "varchar" col-type)
                        (string= "name" col-type))
-             (error "Can only capitalize text values"))
+             (user-error "Can only capitalize text values"))
            (with-temp-buffer
              (insert old-value)
              (capitalize-region (point-min) (point-max))
@@ -794,7 +797,7 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
          (widget-create 'pgmacs-uuid-widget :value current-value
                         :action (lambda (wid &rest _ignore)
                                   (if (widget-apply wid :validate)
-                                      (error "Invalid UUID: %s" (widget-get wid :error))
+                                      (user-error "Invalid UUID: %s" (widget-get wid :error))
                                     (message "%s is ok" (widget-value wid))))))
         (t
          (widget-create 'editable-field
@@ -806,7 +809,7 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
 Uses a dedicated widget buffer.  Editing is only possible if the current table
 has primary keys, named in the list PRIMARY-KEYS."
   (when (null primary-keys)
-    (error "Can't edit content of a table that has no PRIMARY KEY"))
+    (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
          (table pgmacs--table)
@@ -924,7 +927,7 @@ Point is located in CURRENT-ROW."
 Deletion is only possible when the current table has primary
 keys, whose names are given by the list PRIMARY-KEYS."
   (when (null primary-keys)
-    (error "Can't edit content of a table that has no PRIMARY KEY"))
+    (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
     (let* ((pgmacstbl (pgmacstbl-current-table))
            (cols (pgmacstbl-columns pgmacstbl))
@@ -996,6 +999,7 @@ keys, whose names are given by the list PRIMARY-KEYS."
       ;; However, we don't know what values were chosen for any columns that have a default, so we
       ;; need to refetch the data from PostgreSQL.
       (pgmacs--display-table pgmacs--table))))
+
 
 (defun pgmacs--insert-row (current-row)
   "Insert a new row of data into the current table after CURRENT-ROW.
@@ -1125,9 +1129,9 @@ a default SQL value is defined (such as a SERIAL type) will take the
 default value instead of the last copied value.
 Updates the PostgreSQL database."
   (unless pgmacs--kill-ring
-    (error "PGmacs kill ring is empty"))
+    (user-error "PGmacs kill ring is empty"))
   (unless (eq (car pgmacs--kill-ring) pgmacs--table)
-    (error "Can't paste into a different PostgreSQL table"))
+    (user-error "Can't paste into a different PostgreSQL table"))
   (message "Pasting row from PGmacs kill ring")
   ;; Insert a new row based on the copied row, but without specifying values for the columns that
   ;; have a default value
@@ -1450,7 +1454,7 @@ Table names are schema-qualified if the schema is non-default."
   "Add a PRIMARY KEY to the current PostgreSQL table."
   (let ((pk (pgmacs--table-primary-keys pgmacs--con pgmacs--table)))
     (when pk
-      (error "Table %s already has a primary key %s" (pgmacs--display-identifier pgmacs--table) pk)))
+      (user-error "Table %s already has a primary key %s" (pgmacs--display-identifier pgmacs--table) pk)))
   (cl-flet ((exists (name) (cl-find name (pg-columns pgmacs--con pgmacs--table) :test #'string=)))
     (let* ((colname (or (cl-find-if-not #'exists (list "id" "idpk" "idcol" "pk" "_id" "newpk"))
                         (error "Can't autogenerate a name for primary key")))
@@ -1460,7 +1464,9 @@ Table names are schema-qualified if the schema is non-default."
       (when (y-or-n-p (format "Really run SQL '%s'?" sql))
         (let ((res (pg-exec pgmacs--con sql)))
           (pgmacs--notify "%s" (pg-result res :status))))))
-  (pgmacs--display-table pgmacs--table))
+  (pgmacs--display-table pgmacs--table)
+  (pgmacs--update-row-markings))
+
 
 (defun pgmacs--display-procedures (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
@@ -1521,14 +1527,21 @@ Table names are schema-qualified if the schema is non-default."
 
 (defvar pgmacs--where-filter-history nil)
 
-;; Bound to "W" in a table-row buffer.
+;; Bound to "W" in a row-list buffer.
 (defun pgmacs--add-where-filter (&rest _ignore)
   (interactive)
+  (unless (zerop pgmacs--offset)
+    (message "Resetting table OFFSET")
+    (sit-for 0.5))
   (setq pgmacs--offset 0)
-  (let ((filter (read-from-minibuffer "WHERE clause (starting with WHERE): "
+  (let ((filter (read-from-minibuffer "WHERE clause (not including WHERE, empty to cancel): "
                                       nil nil nil 'pgmacs--where-filter-history)))
-    (message "Using WHERE filter %s" filter)
-    (pgmacs--display-table pgmacs--table :where-filter filter)))
+    (cond ((zerop (length filter))
+           (message "Cancelling WHERE filter")
+           (pgmacs--display-table pgmacs--table))
+          (t
+           (message "Using WHERE filter %s" filter)
+           (pgmacs--display-table pgmacs--table :where-filter filter)))))
 
 (defun pgmacs--paginated-next (&rest _ignore)
   "Move to the next page of the paginated PostgreSQL table."
@@ -1564,6 +1577,9 @@ Table names are schema-qualified if the schema is non-default."
       (shw "k" "Copy the row at point")
       (shw "y" "Yank the previously copied row and insert into the table")
       (shw "j" "Copy the current row to the kill-ring in JSON format")
+      (shw "d" "Mark the current row for deletion")
+      (shw "u" "Unmark the current row (deselect for deletion)")
+      (shw "x" "Delete marked rows")
       (shw "R" "Rename the current column")
       (shw "!" "Run a shell command on the value of the current cell")
       (shw "M-u" "Upcase the value of the current cell")
@@ -1588,26 +1604,65 @@ Table names are schema-qualified if the schema is non-default."
       (goto-char (point-min)))))
 
 ;; Bound to "d" in a row-list buffer.
-(defun pgmacs--row-list-mark-row (current-row)
+;;
+;; How to add a face attribute (such as :background "red") to the entire line? It won't work to look
+;; at the face at one point in the line and simply add (or replace) a component to that, because
+;; some columns are using special face features such as bold (primary key) and blue foreground
+;; (foreign key references). So we need to be "adding" an attribute, using add-face-text-property.
+;; But deleting that later is tricky...
+(cl-defun pgmacs--row-list-mark-row (primary-keys)
   "Mark the current row for deletion."
+  (when (null primary-keys)
+    (message "Can't delete from a table that has no PRIMARY KEY")
+    (cl-return-from pgmacs--row-list-mark-row))
   ;; Note: this line number is zero-based
-  (when-let ((line (get-text-property (point) 'pgmacstbl-line-number)))
-    (cl-pushnew line pgmacs--marked-rows)
-    (message "Lines marked for deletion: %s" pgmacs--marked-rows)
+  (when-let ((line-number (get-text-property (point) 'pgmacstbl-line-number)))
+    (cl-pushnew line-number pgmacs--marked-rows)
     (let* ((table (pgmacstbl-current-table))
-           (colors (slot-value table '-cached-colors))
            (buffer-read-only nil))
-      (setf (aref colors line) 'pgmacs-marked-row)
-      (add-face-text-property (pos-bol) (pos-eol) '(:background "red")))
-    (forward-line 1)))
+      (pgmacstbl-mark-row table line-number :marked-for-deletion)
+      (add-face-text-property (pos-bol) (pos-eol) '(:background "red"))
+      (forward-line 1))))
+
+;; Bound to "u" in a row-list buffer.
+(cl-defun pgmacs--row-list-unmark-row (&rest _ignore)
+  "Unmark the current row for deletion."
+  (cl-labels ((face-prop-delete (face property)
+                (let (p)
+                  (while plist
+                    (if (not (eq property (car plist)))
+	                (setq p (plist-put p (car plist) (nth 1 plist))))
+                    (setq plist (cddr plist)))
+                  p)))
+    ;; Note: this line number is zero-based
+    (when-let ((line-number (get-text-property (point) 'pgmacstbl-line-number)))
+      (cond ((member line-number pgmacs--marked-rows)
+             (setq pgmacs--marked-rows (cl-delete line-number pgmacs--marked-rows))
+             (let* ((table (pgmacstbl-current-table))
+                    (buffer-read-only nil))
+               (pgmacstbl-unmark-row table line-number)
+               ;; We are redrawing the whole table here instead of only redrawing the current line.
+               ;; This appears wasteful but seems necessary: when we mark a row in
+               ;; `pgmacs--row-list-mark-row', we can use the `add-face-text-property' function to
+               ;; add a face component (such as a particular background color) to the whole line,
+               ;; preserving other aspects of the face (eg. bolds and foreground colors on certain
+               ;; columns). However, there is no `remove-face-text-property' that reverses the
+               ;; addition, so we need to recalculate all the faces from scratch.
+               (pgmacs--redraw-pgmacstbl)
+               (forward-line 1)))
+            (t
+             (message "Current row is not marked"))))))
 
 ;; Bound to "x" in a row-list buffer.
-(defun pgmacs--row-list-delete-marked (primary-keys)
-  "Delete rows in the current table marked for deletion using `d'."
+(cl-defun pgmacs--row-list-delete-marked (primary-keys)
+  "Delete rows in the current table marked for deletion using `d'.
+Deletion is only possible for tables with a (possibly multicolumn) primary key,
+specied by PRIMARY-KEYS."
   (when (null pgmacs--marked-rows)
-    (error "No rows are marked for deletion"))
+    (message "No rows are marked for deletion")
+    (cl-return-from pgmacs--row-list-delete-marked))
   (when (null primary-keys)
-    (error "Can't delete from a table that has no PRIMARY KEY"))
+    (user-error "Can't delete from a table that has no PRIMARY KEY"))
   (when (y-or-n-p (format "Really delete %d PostgreSQL rows?" (length pgmacs--marked-rows)))
     (let* ((pgmacstbl (pgmacstbl-current-table))
            (cols (pgmacstbl-columns pgmacstbl))
@@ -1696,11 +1751,9 @@ Table names are schema-qualified if the schema is non-default."
     (pg-exec-prepared con sql (list) :max-rows row-count)))
 
 (defun pgmacs--select-rows-where (con table-name-escaped where-filter row-count)
-  (unless (string-match "\s*WHERE " where-filter)
-    (error "WHERE filter doesn't start with WHERE: %s" where-filter))
   (when (cl-search ";" where-filter)
-    (error "WHERE filter must not contain end-of-statement marker ';'"))
-  (let ((sql (format "SELECT * FROM %s %s" table-name-escaped where-filter)))
+    (user-error "WHERE filter must not contain end-of-statement marker ';'"))
+  (let ((sql (format "SELECT * FROM %s WHERE %s" table-name-escaped where-filter)))
     (pg-exec-prepared con sql (list) :max-rows row-count)))
 
 
@@ -1736,7 +1789,7 @@ WHERE.
 
 The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
   (when (and center-on where-filter)
-    (error "CENTER-ON and WHERE-FILTER arguments are mutually exclusive"))
+    (user-error "CENTER-ON and WHERE-FILTER arguments are mutually exclusive"))
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
          (t-id (pg-escape-identifier table))
@@ -1839,7 +1892,8 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
                                   "r" pgmacs--redraw-pgmacstbl
                                   "g" pgmacs--row-list-redraw
                                   "j" pgmacs--row-as-json
-                                  "d" pgmacs--row-list-mark-row
+                                  "d" (lambda (&rest _ignore) (pgmacs--row-list-mark-row ',primary-keys))
+                                  "u" pgmacs--row-list-unmark-row
                                   "x" (lambda (&rest _ignored) (pgmacs--row-list-delete-marked ',primary-keys))
                                   ;; "n" and "p" are bound when table is paginated to next/prev page
                                   "<" (lambda (&rest _ignored)
@@ -1946,6 +2000,12 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
                                       (pgmacs--display-table table))
                             'help-echo "Add an SQL comment to the table"))
       (insert "\n\n")
+      ;; Make it visually clear to the user that a WHERE filter is active
+      (when where-filter
+        (insert (propertize "WHERE filter" 'face 'bold))
+        (insert ": ")
+        (insert (propertize where-filter 'face '(:background "#E6E6FA")))
+        (insert "\n\n"))
       (when (pg-result res :incomplete)
         (pgmacs-paginated-mode)
         (when (> pgmacs--offset pgmacs-row-limit)
@@ -1960,6 +2020,16 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
       (if (null rows)
           (insert "(no rows in table)")
         (pgmacstbl-insert pgmacstbl))
+      ;; Recreate the row markings from the line numbers stored in pgmacs--marked-rows, if necessary
+      ;; (this function make be called to update a pgmacstbl after a modification, in which case
+      ;; pgmacs--marked-rows may be non-nil).
+      (let* ((buffer-read-only nil))
+        (dolist (line-number pgmacs--marked-rows)
+          (pgmacstbl-mark-row pgmacstbl line-number :marked-for-deletion)
+          (save-excursion
+            (let ((object (elt (pgmacstbl-objects pgmacstbl) line-number)))
+              (pgmacstbl-goto-object object)
+              (add-face-text-property (pos-bol) (pos-eol) '(:background "red"))))))
       (pgmacs--stop-progress-reporter)
       ;; if asked to center-on a particular pk value, search for it and move point to that row
       (when center-on
@@ -1979,18 +2049,21 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
            finally do (message "Didn't find row matching %s" pk-val)))))))
 
 (defun pgmacs--row-list-redraw (&rest _ignore)
-  "Refresh a PostgreSQL row-list buffer."
+  "Refresh a PostgreSQL row-list buffer.
+This refetches data from PostgreSQL."
   (interactive)
   (let ((table pgmacs--table)
-        (_offset pgmacs--offset)
+        (offset pgmacs--offset)
+        (marked-rows pgmacs--marked-rows)
         (parent-buffer pgmacs--db-buffer))
-    ;; FIXME actually we lose the current offset with this implementation.
     (kill-buffer)
     ;; Make sure we switch back to the main PGmacs buffer before recreating the row-list buffer,
     ;; because this "parent" buffer holds buffer-local variables that we need to connect to
     ;; PostgreSQL.
     (with-current-buffer parent-buffer
-      (pgmacs--display-table table))))
+      (pgmacs--display-table table)
+      (setq pgmacs--offset offset
+            pgmacs--marked-rows marked-rows))))
 
 ;; Shrink the current column size to the smallest possible for the values that are currently visible.
 (defun pgmacs--shrink-column (&rest _ignore)
@@ -2381,9 +2454,9 @@ inlined vector SVG image that is encoded as a data URI."
   "Run SchemaSpy on current table and display the SVG describing the schema."
   (interactive)
   (unless (display-graphic-p)
-    (error "SchemaSpy will only work on a graphical terminal"))
+    (user-error "SchemaSpy will only work on a graphical terminal"))
   (unless (image-type-available-p 'svg)
-    (error "SchemaSpy support needs SVG support in your Emacs"))
+    (user-error "SchemaSpy support needs SVG support in your Emacs"))
   (let* ((tmpdir (temporary-file-directory))
          (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
     (when (file-directory-p schemaspy-dir)
@@ -2428,9 +2501,9 @@ inlined vector SVG image that is encoded as a data URI."
 (defun pgmacs--schemaspy-database (&rest _ignore)
   (interactive)
   (unless (display-graphic-p)
-    (error "SchemaSpy will only work on a graphical terminal"))
+    (user-error "SchemaSpy will only work on a graphical terminal"))
   (unless (image-type-available-p 'svg)
-    (error "SchemaSpy support needs SVG support in your Emacs"))
+    (user-error "SchemaSpy support needs SVG support in your Emacs"))
   (let* ((tmpdir (temporary-file-directory))
          (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
     (when (file-directory-p schemaspy-dir)
@@ -2743,6 +2816,9 @@ enviroment variables, if set:
     (widget-setup)
     (goto-char (point-min))
     (widget-forward 1)))
+
+
+(pgmacstbl-register-mark-face :marked-for-deletion '(:background "red"))
 
 
 (provide 'pgmacs)

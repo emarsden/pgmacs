@@ -44,6 +44,9 @@
   displayer
   -numerical)
 
+
+(defvar pgmacstbl--registered-mark-faces nil)
+
 (defclass pgmacstbl ()
   ((columns :initarg :columns :accessor pgmacstbl-columns)
    (objects :initarg :objects :accessor pgmacstbl-objects)
@@ -64,6 +67,7 @@
    (column-colors :initarg :column-colors :accessor pgmacstbl-column-colors)
    (row-colors :initarg :row-colors :accessor pgmacstbl-row-colors)
    (-cached-colors :initform nil)
+   (-row-marks :initform nil)
    (-cache :initform (make-hash-table :test #'equal))
    (-cached-keymap :initform nil)
    (-has-column-spec :initform nil))
@@ -149,11 +153,13 @@ See info node `(pgmacstbl)Top' for pgmacstbl documentation."
     (when row-colors
       (let* ((size (if objects (length objects) 0))
              (colors (make-vector size nil))
+             (row-marks (make-vector size nil))
              (row-faces (mapcar #'pgmacstbl--make-color-face row-colors))
              (row-face-count (length row-faces)))
         (dotimes (i size)
-         (setf (aref colors i) (elt row-faces (mod i row-face-count))))
-        (setf (slot-value table '-cached-colors) colors)))
+          (setf (aref colors i) (elt row-faces (mod i row-face-count))))
+        (setf (slot-value table '-cached-colors) colors)
+        (setf (slot-value table '-row-marks) row-marks)))
     ;; Compute the divider.
     (when (or divider divider-width)
       (setf (pgmacstbl-divider table)
@@ -179,6 +185,15 @@ See info node `(pgmacstbl)Top' for pgmacstbl documentation."
     (when insert
       (pgmacstbl-insert table))
     table))
+
+(defun pgmacstbl--update-colors (table)
+  (let* ((colors (slot-value table '-cached-colors))
+         (row-faces (mapcar #'pgmacstbl--make-color-face (pgmacstbl-row-colors table)))
+         (row-face-count (length row-faces))
+         (rows (pgmacstbl-objects table))
+         (size (if rows (length rows) 0)))
+    (dotimes (i size)
+      (setf (aref colors i) (elt row-faces (mod i row-face-count))))))
 
 (defun pgmacstbl--compute-colors (row-colors column-colors)
   (cond
@@ -225,6 +240,20 @@ See info node `(pgmacstbl)Top' for pgmacstbl documentation."
               (cl-mapcar #'+ (color-name-to-rgb color1)
                          (color-name-to-rgb color2)))
     (format "#%02X%02X%02X" r g b)))
+
+
+(defun pgmacstbl-mark-row (table line-number mark)
+  (let ((marks (slot-value table '-row-marks)))
+    (setf (aref marks line-number) mark)))
+
+(defun pgmacstbl-unmark-row (table line-number)
+  (let ((marks (slot-value table '-row-marks)))
+    (setf (aref marks line-number) nil)))
+
+;; eg (pgmacstbl-register-mark-face :marked-for-deletion '(:foreground "red"))
+(defun pgmacstbl-register-mark-face (mark face)
+  (push (cons mark face) pgmacstbl--registered-mark-faces))
+
 
 ;;; Interface utility functions.
 
@@ -331,7 +360,18 @@ If it can't be found, return nil and don't move point."
 (defun pgmacstbl-remove-object (table object)
   "Remove OBJECT from TABLE.
 This will also remove the displayed line."
-  ;; First remove from the objects.
+  ;; Update the marks vector (deleting the entry for this object).
+  (let* ((deleted-line-number (cl-position object (pgmacstbl-objects table)))
+         (current-row-marks (slot-value table '-row-marks))
+         (updated-row-marks (make-vector (1- (length current-row-marks)) nil)))
+    (cl-loop
+     for i from 0 below deleted-line-number
+     do (setf (aref updated-row-marks i) (aref current-row-marks i)))
+    (cl-loop
+     for i from (1+ deleted-line-number) below (length updated-row-marks)
+     do (setf (aref updated-row-marks i) (aref current-row-marks i)))
+    (setf (slot-value table '-row-marks) updated-row-marks))
+  ;; Remove object from the table objects.
   (setf (pgmacstbl-objects table) (delq object (pgmacstbl-objects table)))
   ;; Then adjust the cache and display.
   (let ((cache (pgmacstbl--cache table))
@@ -341,14 +381,27 @@ This will also remove the displayed line."
     (save-excursion
       (pgmacstbl-goto-table table)
       (when (pgmacstbl-goto-object object)
-        (delete-line)))))
+        (delete-line))))
+  (pgmacstbl--update-colors table))
 
 (defun pgmacstbl-insert-object (table object &optional after-object)
   "Insert OBJECT into TABLE after AFTER-OBJECT.
 If AFTER-OBJECT is nil (or doesn't exist in the table), insert
 OBJECT at the end.
 This also updates the displayed table."
-  ;; First insert into the objects.
+  (let* ((current-row-marks (slot-value table '-row-marks))
+         (updated-row-marks (make-vector (1+ (length current-row-marks)) nil))
+         (new-line-number (if after-object
+                              (1+ (cl-position after-object (pgmacstbl-objects table)))
+                            (1- (length updated-row-marks)))))
+    (cl-loop
+     for i from 0 below new-line-number
+     do (setf (aref updated-row-marks i) (aref current-row-marks i)))
+    (cl-loop
+     for i from (1+ new-line-number) below (length updated-row-marks)
+     do (setf (aref updated-row-marks i) (aref current-row-marks i)))
+    (setf (slot-value table '-row-marks) updated-row-marks))
+  ;; Insert into the objects.
   (let (pos)
     (if (and after-object
              (setq pos (memq after-object (pgmacstbl-objects table))))
@@ -390,7 +443,8 @@ This also updates the displayed table."
                                                  'pgmacstbl table)))
       ;; We may have inserted a non-numerical value into a previously
       ;; all-numerical table, so recompute.
-      (pgmacstbl--recompute-numerical table (cdr line)))))
+      (pgmacstbl--recompute-numerical table (cdr line)))
+    (pgmacstbl--update-colors table)))
 
 (defun pgmacstbl-column (table index)
   "Return the name of the INDEXth column in TABLE."
@@ -571,8 +625,15 @@ This also updates the displayed table."
     (insert "\n")
     (put-text-property start (point) 'pgmacstbl-object (car line))
     (put-text-property start (point) 'pgmacstbl-line-number line-number)
-    (let ((colors (slot-value table '-cached-colors)))
-      (add-face-text-property start (point) (aref colors line-number)))))
+    (let* ((colors (slot-value table '-cached-colors))
+           (row-mark (aref (slot-value table '-row-marks) line-number))
+           (extra-mark-face (cdr (assoc row-mark pgmacstbl--registered-mark-faces))))
+      (add-face-text-property start (point) (aref colors line-number))
+      (when extra-mark-face
+        (message "For line %d adding extra-mark-face %s" line-number extra-mark-face)
+        ;; We add this face characteristic (which is probably only something like a different
+        ;; background-color) on top of the existing face characteristics.
+        (add-face-text-property start (point) extra-mark-face)))))
 
 (defun pgmacstbl--cache-key ()
   (cons (frame-terminal) (window-width)))

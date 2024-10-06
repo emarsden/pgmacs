@@ -1,10 +1,15 @@
 # Changelog
 
-## [0.15] - Unreleased
+## [0.15] - 2024-10-06
 
-- New functionality: in a row-list buffer, pressing `d` marks the current row for deletion. It will
-  be displayed in red. You can select multiple rows. Pressing `d` in a row-list buffer will delete
-  the selected rows from PostgreSQL and from the current row-list.
+- New `WHERE` filtering functionality in a row-list buffer. Pressing `W` prompts you for the content
+  of a `WHERE` clause (in SQL syntax), and applies it as a filter to the current table. Type `W`
+  again to update the WHERE filter, and enter an empty string (type `W RET`) to cancel the filter.
+
+- New **multi-row delete** functionality: in a row-list buffer, press `d` to mark the current row
+  for deletion. It will be displayed in red. You can select multiple rows, and unmark (deselect) a
+  row by pressing `u`. Pressing `d` in a row-list buffer will delete the selected rows from
+  PostgreSQL and from the current row-list.
 
 - New function `pgmacs-funcall-cell` that allows the user to call a function on a cell value,
   without updating the database. This can be used to implement custom user-specified functions that
