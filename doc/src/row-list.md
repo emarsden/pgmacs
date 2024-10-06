@@ -28,12 +28,16 @@ The following keys are bound when the point is located in the row-list table:
 | <kbd>DEL</kbd>                  | Delete the row at point.                                                             |
 | <kbd>Alt</kbd>-<kbd>left</kbd>  | Move to the previous column.                                                         |
 | <kbd>Alt</kbd>-<kbd>right</kbd> | Move to the next column.                                                             |
+| <kbd>W</kbd>                    | Apply an SQL WHERE filter to the rows displayed.                                     |
 | <kbd>o</kbd>                    | Prompt for a table name and open a new buffer displaying that table's data.          |
 | <kbd>+</kbd>                    | Insert a new row into the current table, prompting for new values in the minibuffer. |
 | <kbd>i</kbd>                    | Insert a new row, prompting for new values in a dedicated buffer.                    |
 | <kbd>k</kbd>                    | Copy the current row.                                                                |
 | <kbd>y</kbd>                    | Paste (yank) the copied row.                                                         |
 | <kbd>j</kbd>                    | Copy the current row to the kill ring in JSON format.                                |
+| <kbd>d</kbd>                    | Mark the current row for deletion.                                                   |
+| <kbd>u</kbd>                    | Unmark the current row (deselect it for deletion).                                   |
+| <kbd>x</kbd>                    | Delete marked rows.                                                                  |
 | <kbd>R</kbd>                    | Rename the current column.                                                           |
 | <kbd><</kbd>                    | Move point to the first row of data.                                                 |
 | <kbd>></kbd>                    | Move point to the last row of data.                                                  |
@@ -60,4 +64,37 @@ to the original row-list buffer.
 
 ![Following foreign key](img/follow-foreign-key.gif)
 
+
+
+## Filtering rows displayed using a WHERE expression
+
+You may wish only to display the rows in a table that match an SQL `WHERE` filter. If you press
+<kbd>W</kbd> in a row-list buffer, PGmacs will prompt you for a WHERE expression to use as a filter.
+In the example illustrated by the video below, table `temperatures` includes a column
+`measurement`. If you type a WHERE filter of `measurement < -5`, PGmacs will display rows
+corresponding to the following SQL query:
+
+```sql
+SELECT * FROM temperatures WHERE measurement < -5
+```
+
+You can type <kbd>W</kbd> again to enter a new filter. To cancel the filter, type <kbd>W</kbd> and enter an
+empty string (enter <kbd>W</kbd> <kbd>RET</kbd>).
+
+
+## Dired-like multi-row delete
+
+You can “mark” rows for later deletion by pressing <kbd>d</kbd>. Each row marked for deletion will
+be highlighted in a red color. You can then delete the marked rows by pressing <kbd>x</kbd> (for
+“expunge”, as in `dired-mode`). To unmark a row, press <kbd>u</kbd>.
+
+
+The screen capture below illustrates this functionality in
+operation, combined with the WHERE filtering described above.
+
+
+<video width="80%" autoplay loop>
+  <source
+  src="https://github.com/emarsden/emarsden.github.io/raw/refs/heads/main/assets/pgmacs-where-filter-multidelete.mp4">
+</video>
 
