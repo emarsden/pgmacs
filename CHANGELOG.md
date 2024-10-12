@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.16] - Unreleased
+
+- Fixes to the interaction between marking rows for deletion and refetching/redrawing the row-list
+  table. A refetch will now unmark all rows, because data in PostgreSQL may have changed since rows
+  were marked for deletion leading to inconsistent line numbers.
+
+- Retain the where-filter when refetching/redrawing a row-list buffer.
+
+
+
 ## [0.15] - 2024-10-06
 
 - New `WHERE` filtering functionality in a row-list buffer. Pressing `W` prompts you for the content

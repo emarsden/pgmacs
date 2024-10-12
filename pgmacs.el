@@ -137,7 +137,7 @@ concerning a specific table, rather than the entire database."
     ""))
 
 (defcustom pgmacs-use-header-line t
-  "If non-nil, use the header line to display information on the PostgreSQL connection."
+  "If non-nil, use header line to display information on PostgreSQL connection."
   :type 'boolean
   :group 'pgmacs)
 
@@ -351,6 +351,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 (defvar-local pgmacs--column-type-names nil)
 (defvar-local pgmacs--offset nil)
 (defvar-local pgmacs--db-buffer nil)
+(defvar-local pgmacs--where-filter nil)
 (defvar-local pgmacs--marked-rows (list))
 
 (defvar pgmacs--column-display-functions (make-hash-table :test #'equal))
@@ -998,6 +999,7 @@ keys, whose names are given by the list PRIMARY-KEYS."
       ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
       ;; However, we don't know what values were chosen for any columns that have a default, so we
       ;; need to refetch the data from PostgreSQL.
+      (setq pgmacs--marked-rows (list))
       (pgmacs--display-table pgmacs--table))))
 
 
@@ -1038,6 +1040,7 @@ Uses the minibuffer to prompt for new values."
       ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
       ;; However, we don't know what values were chosen for any columns that have a default, so we
       ;; need to refetch the data from PostgreSQL.
+      (setq pgmacs--marked-rows (list))
       (pgmacs--display-table pgmacs--table))))
 
 (defun pgmacs--insert-row-widget (current-row)
@@ -1086,6 +1089,7 @@ PostgreSQL database."
                         ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of
                         ;; the pgmacstbl. However, we don't know what values were chosen for any columns
                         ;; that have a default.
+                        (setq pgmacs--marked-rows (list))
                         (pgmacs--display-table table)))))
       (switch-to-buffer "*PGmacs insert row widget*")
       (erase-buffer)
@@ -1168,6 +1172,7 @@ Updates the PostgreSQL database."
       ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
       ;; However, we don't know what values were chosen for any columns that have a default.
       ;; This means that we can't insert at the current-row position.
+      (setq pgmacs--marked-rows (list))
       (pgmacs--display-table pgmacs--table))))
 
 ;; This SQL query adapted from https://stackoverflow.com/a/20537829
@@ -1538,21 +1543,25 @@ Table names are schema-qualified if the schema is non-default."
                                       nil nil nil 'pgmacs--where-filter-history)))
     (cond ((zerop (length filter))
            (message "Cancelling WHERE filter")
+           (setq pgmacs--marked-rows (list))
            (pgmacs--display-table pgmacs--table))
           (t
            (message "Using WHERE filter %s" filter)
+           (setq pgmacs--marked-rows (list))
            (pgmacs--display-table pgmacs--table :where-filter filter)))))
 
 (defun pgmacs--paginated-next (&rest _ignore)
   "Move to the next page of the paginated PostgreSQL table."
   (interactive)
   (cl-incf pgmacs--offset pgmacs-row-limit)
+  (setq pgmacs--marked-rows (list))
   (pgmacs--display-table pgmacs--table))
 
 (defun pgmacs--paginated-prev (&rest _ignore)
   "Move to the previous page of the paginated PostgreSQL table."
   (interactive)
   (cl-decf pgmacs--offset pgmacs-row-limit)
+  (setq pgmacs--marked-rows (list))
   (pgmacs--display-table pgmacs--table))
 
 
@@ -1570,6 +1579,7 @@ Table names are schema-qualified if the schema is non-default."
       (shw "v" "Display the value at point in a dedicated buffer")
       (shw "RET" "Edit the value at point in the minibuffer")
       (shw "w" "Edit the value at point in a widget-based buffer")
+      (shw "W" "Specify a WHERE filter to apply to displayed rows")
       (shw "<backspace>" "Delete the row at point")
       (shw "DEL" "Delete the row at point")
       (shw "+" "Insert a new row, prompting for new values in minibuffer")
@@ -1627,31 +1637,24 @@ Table names are schema-qualified if the schema is non-default."
 ;; Bound to "u" in a row-list buffer.
 (cl-defun pgmacs--row-list-unmark-row (&rest _ignore)
   "Unmark the current row for deletion."
-  (cl-labels ((face-prop-delete (face property)
-                (let (p)
-                  (while plist
-                    (if (not (eq property (car plist)))
-	                (setq p (plist-put p (car plist) (nth 1 plist))))
-                    (setq plist (cddr plist)))
-                  p)))
-    ;; Note: this line number is zero-based
-    (when-let ((line-number (get-text-property (point) 'pgmacstbl-line-number)))
-      (cond ((member line-number pgmacs--marked-rows)
-             (setq pgmacs--marked-rows (cl-delete line-number pgmacs--marked-rows))
-             (let* ((table (pgmacstbl-current-table))
-                    (buffer-read-only nil))
-               (pgmacstbl-unmark-row table line-number)
-               ;; We are redrawing the whole table here instead of only redrawing the current line.
-               ;; This appears wasteful but seems necessary: when we mark a row in
-               ;; `pgmacs--row-list-mark-row', we can use the `add-face-text-property' function to
-               ;; add a face component (such as a particular background color) to the whole line,
-               ;; preserving other aspects of the face (eg. bolds and foreground colors on certain
-               ;; columns). However, there is no `remove-face-text-property' that reverses the
-               ;; addition, so we need to recalculate all the faces from scratch.
-               (pgmacs--redraw-pgmacstbl)
-               (forward-line 1)))
-            (t
-             (message "Current row is not marked"))))))
+  ;; Note: this line number is zero-based
+  (when-let ((line-number (get-text-property (point) 'pgmacstbl-line-number)))
+    (cond ((member line-number pgmacs--marked-rows)
+           (setq pgmacs--marked-rows (cl-delete line-number pgmacs--marked-rows))
+           (let* ((table (pgmacstbl-current-table))
+                  (buffer-read-only nil))
+             (pgmacstbl-unmark-row table line-number)
+             ;; We are redrawing the whole table here instead of only redrawing the current line.
+             ;; This appears wasteful but seems necessary: when we mark a row in
+             ;; `pgmacs--row-list-mark-row', we can use the `add-face-text-property' function to
+             ;; add a face component (such as a particular background color) to the whole line,
+             ;; preserving other aspects of the face (eg. bolds and foreground colors on certain
+             ;; columns). However, there is no `remove-face-text-property' that reverses the
+             ;; addition, so we need to recalculate all the faces from scratch.
+             (pgmacs--redraw-pgmacstbl)
+             (forward-line 1)))
+          (t
+           (message "Current row is not marked")))))
 
 ;; Bound to "x" in a row-list buffer.
 (cl-defun pgmacs--row-list-delete-marked (primary-keys)
@@ -1784,8 +1787,7 @@ smaller than and larger than this value, in the limit of
 pgmacs-row-limit.
 
 Keyword argument WHERE-FILTER is an SQL WHERE clause which filters the
-rows to display in the table. It must start with the keyword
-WHERE.
+rows to display in the table.
 
 The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
   (when (and center-on where-filter)
@@ -1795,7 +1797,10 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
          (t-id (pg-escape-identifier table))
          (t-pretty (pgmacs--display-identifier table)))
     (pop-to-buffer-same-window (format "*PostgreSQL %s %s*" (pgcon-dbname con) t-pretty))
-    (setq-local pgmacs--db-buffer db-buffer)
+    (setq-local pgmacs--db-buffer db-buffer
+                ;; We need to save a possible WHERE filter, because if the user triggers a
+                ;; refetch+redraw of the table, we need to retain the filter.
+                pgmacs--where-filter where-filter)
     (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
     ;; Place some initial content in the buffer early up.
     (let* ((inhibit-read-only t)
@@ -2021,7 +2026,7 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
           (insert "(no rows in table)")
         (pgmacstbl-insert pgmacstbl))
       ;; Recreate the row markings from the line numbers stored in pgmacs--marked-rows, if necessary
-      ;; (this function make be called to update a pgmacstbl after a modification, in which case
+      ;; (this function may be called to update a pgmacstbl after a modification, in which case
       ;; pgmacs--marked-rows may be non-nil).
       (let* ((buffer-read-only nil))
         (dolist (line-number pgmacs--marked-rows)
@@ -2054,16 +2059,18 @@ This refetches data from PostgreSQL."
   (interactive)
   (let ((table pgmacs--table)
         (offset pgmacs--offset)
-        (marked-rows pgmacs--marked-rows)
+        (where-filter pgmacs--where-filter)
         (parent-buffer pgmacs--db-buffer))
     (kill-buffer)
+    ;; We need to reset all row marks, because the PostgreSQL table may have seen changes since our
+    ;; previous fetch of rows, so the line numbers in the pgmacstbl may not longer be relevant.
+    (setq pgmacs--marked-rows (list))
     ;; Make sure we switch back to the main PGmacs buffer before recreating the row-list buffer,
     ;; because this "parent" buffer holds buffer-local variables that we need to connect to
     ;; PostgreSQL.
     (with-current-buffer parent-buffer
-      (pgmacs--display-table table)
-      (setq pgmacs--offset offset
-            pgmacs--marked-rows marked-rows))))
+      (pgmacs--display-table table :where-filter where-filter)
+      (setq pgmacs--offset offset))))
 
 ;; Shrink the current column size to the smallest possible for the values that are currently visible.
 (defun pgmacs--shrink-column (&rest _ignore)
