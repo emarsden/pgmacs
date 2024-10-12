@@ -598,9 +598,11 @@ PRIMARY-KEYS."
 (defvar pgmacs--shell-command-history nil)
 
 (defun pgmacs--shell-command-on-value (current-row primary-keys)
-  "Run a shell command with the current cell value as input.
-Normally display output in the echo area. If called with a prefix argument,
-place the current cell value with the output.
+  "Run a Unix filter shell command with the current cell value as input.
+
+When called without a prefix argument, output is diplayed in the echo area.
+When called with a prefix argument, replace the current cell value with the output
+(updating the database).
 
 For example, to count the number of characters in the current cell,
 
@@ -636,6 +638,26 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
       ;; With a prefix argument, we update the value in the PostgreSQL database and in the
       ;; displayed pgmacstbl.
       (pgmacs--setf-cell current-row primary-keys get-value))))
+
+(defvar pgmacs--async-command-history nil)
+
+(defun pgmacs--async-command-on-value (&rest _ignore)
+  "Run a command asynchronously with the current cell value as first argument.
+The command should be the name of a program, which will be searched for in
+`exec-path' (it is run via `start-process', without a shell). Command output will
+be displayed in a buffer called *PGmacs async command*.
+
+For example, if the cell contains a filename, you can open the filename in the
+default application on your system by entering `xdg-open' (or `open' on a MacOS
+machine).
+
+Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
+  (pgmacs-funcall-cell
+   (lambda (cell-value)
+     (let* ((prompt "Async command: ")
+            (cmd (read-string prompt nil 'pgmacs--async-command-history))
+            (buf (get-buffer-create "*PGmacs async command*")))
+       (start-process "PGmacs-async-command" buf cmd cell-value)))))
 
 (defun pgmacs--downcase-value (current-row primary-keys)
   "Downcase the value in the cell at point and update PostgreSQL.
@@ -1469,9 +1491,7 @@ Table names are schema-qualified if the schema is non-default."
       (when (y-or-n-p (format "Really run SQL '%s'?" sql))
         (let ((res (pg-exec pgmacs--con sql)))
           (pgmacs--notify "%s" (pg-result res :status))))))
-  (pgmacs--display-table pgmacs--table)
-  (pgmacs--update-row-markings))
-
+  (pgmacs--display-table pgmacs--table))
 
 (defun pgmacs--display-procedures (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
@@ -1592,7 +1612,8 @@ Table names are schema-qualified if the schema is non-default."
       (shw "U" "Unmark all rows (deselect all for deletion)")
       (shw "x" "Delete marked rows")
       (shw "R" "Rename the current column")
-      (shw "!" "Run a shell command on the value of the current cell")
+      (shw "!" "Run a filter-like shell command with current cell value as input")
+      (shw "&" "Run a program with the value of current cell as first argument")
       (shw "M-u" "Upcase the value of the current cell")
       (shw "M-l" "Downcase the value of the current cell")
       (shw "M-c" "Capitalize the value of the current cell")
@@ -1880,6 +1901,7 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
                        :actions `("RET" (lambda (row) (pgmacs--table-list-dwim row ',primary-keys))
                                   "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
                                   "!" (lambda (row) (pgmacs--shell-command-on-value row ',primary-keys))
+                                  "&" pgmacs--async-command-on-value
                                   "M-u" (lambda (row) (pgmacs--upcase-value row ',primary-keys))
                                   "M-l" (lambda (row) (pgmacs--downcase-value row ',primary-keys))
                                   "M-c" (lambda (row) (pgmacs--capitalize-value row ',primary-keys))

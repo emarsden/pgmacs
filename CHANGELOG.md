@@ -5,6 +5,10 @@
 - New keybinding in a row-list buffer: `U` will unmark all marked rows (deselects them for
   deletion).
 
+- New keybinding in a row-list buffer: `&` will run an application asynchronously with the current
+  cell value as first commandline argument. This complements the existing `!` keybinding which runs
+  a Unix-like filter shell command with the current cell value as input.
+
 - Fixes to the interaction between marking rows for deletion and refetching/redrawing the row-list
   table. A refetch will now unmark all rows, because data in PostgreSQL may have changed since rows
   were marked for deletion leading to inconsistent line numbers.

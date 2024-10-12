@@ -22,6 +22,7 @@ The following keys are bound when the point is located in the row-list table:
 | <kbd>RET</kbd>                  | Edit the value at point in the minibuffer, or jump to foreign table.                 |
 | <kbd>w</kbd>                    | Edit the value at point in a widget-based buffer.                                    |
 | <kbd>!</kbd>                    | Run a shell command on the value at point, replacing the output if prefix argument.  |
+| <kbd>&</kbd>                    | Run a program asynchronously with the value at point as first arugment.              |
 | <kbd>Alt</kbd>-<kbd>u</kbd>     | Upcase the content of the current cell and update PostgreSQL.                        |
 | <kbd>Alt</kbd>-<kbd>l</kbd>     | Downcase the content of the current cell and update PostgreSQL.                      |
 | <kbd>Alt</kbd>-<kbd>c</kbd>     | Capitalize the content of the current cell and update PostgreSQL.                    |
@@ -53,6 +54,41 @@ The following keys are bound when the point is located in the row-list table:
 | <kbd>}</kbd>                    | Make the current column wider.                                                       |
 | <kbd>T</kbd>                    | Jump to the main PGmacs table-list buffer.                                           |
 | <kbd>q</kbd>                    | Bury the current buffer.                                                             |
+
+
+
+## Run a shell command or an external application on cell value
+
+There are two methods for running an external (non-Emacs) command on the current cell value:
+
+- Run a Unix filter shell command with the cell value as input: press <kbd>!</kbd>. This is works
+  similarly to the standard Emacs `shell-command` command, which is bound to
+  <kbd>M</kbd>-<kbd>!</kbd>. If called with a prefix argument, it will update the database value to
+  the result of the shell command.
+
+- Run a program asynchronously with the cell value as its first commandline argument: press
+  <kbd>&amp;</kbd>. This works similarly to the standard Emacs `async-shell-command`, which is bound
+  to <kbd>M</kbd>-<kbd>&amp;</kbd>.
+
+For example, to count the number of characters in the current cell, type
+
+    ! wc -c
+
+To downcase the value of a text cell (and modify the value in the database) use
+
+    C-u ! tr '[:upper:]' '[:lower]'
+
+To reverse the order of the characters in the cell (and modify the value in
+the database), use
+
+    C-u ! rev
+
+On a Microsoft Windows machine, you may need to install the [MSYS2](https://www.msys2.org/)
+commandline tools for these examples to work.
+
+If the current cell contains a file name, you can launch your system’s default application for that
+filename extension by typing <kbd>&amp;</kbd> then entering `xdg-open` (or `open` on a MacOS
+machine).
 
 
 
