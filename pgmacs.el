@@ -1589,6 +1589,7 @@ Table names are schema-qualified if the schema is non-default."
       (shw "j" "Copy the current row to the kill-ring in JSON format")
       (shw "d" "Mark the current row for deletion")
       (shw "u" "Unmark the current row (deselect for deletion)")
+      (shw "U" "Unmark all rows (deselect all for deletion)")
       (shw "x" "Delete marked rows")
       (shw "R" "Rename the current column")
       (shw "!" "Run a shell command on the value of the current cell")
@@ -1655,6 +1656,16 @@ Table names are schema-qualified if the schema is non-default."
              (forward-line 1)))
           (t
            (message "Current row is not marked")))))
+
+;; Bound to "U" in a row-list buffer.
+(cl-defun pgmacs--row-list-unmark-all (&rest _ignore)
+  "Unmark all rows (deselect them all for deletion)."
+  (let* ((table (pgmacstbl-current-table))
+         (buffer-read-only nil))
+    (dolist (line-number pgmacs--marked-rows)
+      (pgmacstbl-unmark-row table line-number))
+    (setq pgmacs--marked-rows (list)))
+  (pgmacs--redraw-pgmacstbl))
 
 ;; Bound to "x" in a row-list buffer.
 (cl-defun pgmacs--row-list-delete-marked (primary-keys)
@@ -1899,6 +1910,7 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
                                   "j" pgmacs--row-as-json
                                   "d" (lambda (&rest _ignore) (pgmacs--row-list-mark-row ',primary-keys))
                                   "u" pgmacs--row-list-unmark-row
+                                  "U" pgmacs--row-list-unmark-all
                                   "x" (lambda (&rest _ignored) (pgmacs--row-list-delete-marked ',primary-keys))
                                   ;; "n" and "p" are bound when table is paginated to next/prev page
                                   "<" (lambda (&rest _ignored)

@@ -37,6 +37,7 @@ The following keys are bound when the point is located in the row-list table:
 | <kbd>j</kbd>                    | Copy the current row to the kill ring in JSON format.                                |
 | <kbd>d</kbd>                    | Mark the current row for deletion.                                                   |
 | <kbd>u</kbd>                    | Unmark the current row (deselect it for deletion).                                   |
+| <kbd>U</kbd>                    | Unmark all rows (deselect them for deletion).                                        |
 | <kbd>x</kbd>                    | Delete marked rows.                                                                  |
 | <kbd>R</kbd>                    | Rename the current column.                                                           |
 | <kbd><</kbd>                    | Move point to the first row of data.                                                 |

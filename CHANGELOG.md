@@ -2,6 +2,9 @@
 
 ## [0.16] - Unreleased
 
+- New keybinding in a row-list buffer: `U` will unmark all marked rows (deselects them for
+  deletion).
+
 - Fixes to the interaction between marking rows for deletion and refetching/redrawing the row-list
   table. A refetch will now unmark all rows, because data in PostgreSQL may have changed since rows
   were marked for deletion leading to inconsistent line numbers.
