@@ -630,7 +630,6 @@ This also updates the displayed table."
            (extra-mark-face (cdr (assoc row-mark pgmacstbl--registered-mark-faces))))
       (add-face-text-property start (point) (aref colors line-number))
       (when extra-mark-face
-        (message "For line %d adding extra-mark-face %s" line-number extra-mark-face)
         ;; We add this face characteristic (which is probably only something like a different
         ;; background-color) on top of the existing face characteristics.
         (add-face-text-property start (point) extra-mark-face)))))
