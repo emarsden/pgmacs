@@ -24,8 +24,8 @@ The following keys are bound when the point is located in the table list buffer:
 | <kbd>></kbd>   | Move to the end of the table list.                                                   |
 | <kbd>{</kbd>   | Make the current column narrower.                                                    |
 | <kbd>}</kbd>   | Make the current column wider.                                                       |
-| <kbd>g</kbd>    | Redraw the current buffer (refetches data from PostgreSQL).                          |
-| <kbd>h</kbd>    | Display help for the table-list buffer.                                              |
+| <kbd>g</kbd>   | Redraw the current buffer (refetches data from PostgreSQL).                          |
+| <kbd>h</kbd>   | Display help for the table-list buffer.                                              |
 | <kbd>q</kbd>   | Bury the current buffer.                                                             |
 
 

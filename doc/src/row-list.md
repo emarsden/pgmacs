@@ -22,7 +22,7 @@ The following keys are bound when the point is located in the row-list table:
 | <kbd>RET</kbd>                  | Edit the value at point in the minibuffer, or jump to foreign table.                 |
 | <kbd>w</kbd>                    | Edit the value at point in a widget-based buffer.                                    |
 | <kbd>!</kbd>                    | Run a shell command on the value at point, replacing the output if prefix argument.  |
-| <kbd>&</kbd>                    | Run a program asynchronously with the value at point as first arugment.              |
+| <kbd>&</kbd>                    | Run a program asynchronously with the value at point as first argument.              |
 | <kbd>Alt</kbd>-<kbd>u</kbd>     | Upcase the content of the current cell and update PostgreSQL.                        |
 | <kbd>Alt</kbd>-<kbd>l</kbd>     | Downcase the content of the current cell and update PostgreSQL.                      |
 | <kbd>Alt</kbd>-<kbd>c</kbd>     | Capitalize the content of the current cell and update PostgreSQL.                    |
@@ -61,7 +61,7 @@ The following keys are bound when the point is located in the row-list table:
 
 There are two methods for running an external (non-Emacs) command on the current cell value:
 
-- Run a Unix filter shell command with the cell value as input: press <kbd>!</kbd>. This is works
+- Run a Unix filter shell command with the cell value as input: press <kbd>!</kbd>. This works
   similarly to the standard Emacs `shell-command` command, which is bound to
   <kbd>M</kbd>-<kbd>!</kbd>. If called with a prefix argument, it will update the database value to
   the result of the shell command.

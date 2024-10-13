@@ -61,6 +61,15 @@
   "Face used to display a PGmacs database table header."
   :group 'pgmacs)
 
+(defface pgmacs-where-filter
+  '((((class color) (background light))
+     ;; This is a pale purple color
+     :background "#E6E6FA")
+    (((class color) (background dark))
+     :foreground "#E6E6FA"))
+  "Face used to display a PGmacs WHERE filter in a row-list buffer."
+  :group 'pgmacs)
+
 (defcustom pgmacs-row-colors
   '("#D9CEB4" "#D9B96C")
   "The colors used for alternating rows in a database table."
@@ -1559,7 +1568,7 @@ Table names are schema-qualified if the schema is non-default."
     (message "Resetting table OFFSET")
     (sit-for 0.5))
   (setq pgmacs--offset 0)
-  (let ((filter (read-from-minibuffer "WHERE clause (not including WHERE, empty to cancel): "
+  (let ((filter (read-from-minibuffer "WHERE: "
                                       nil nil nil 'pgmacs--where-filter-history)))
     (cond ((zerop (length filter))
            (message "Cancelling WHERE filter")
@@ -2043,7 +2052,7 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
       (when where-filter
         (insert (propertize "WHERE filter" 'face 'bold))
         (insert ": ")
-        (insert (propertize where-filter 'face '(:background "#E6E6FA")))
+        (insert (propertize where-filter 'face 'pgmacs-where-filter))
         (insert "\n\n"))
       (when (pg-result res :incomplete)
         (pgmacs-paginated-mode)
