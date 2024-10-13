@@ -118,6 +118,15 @@ SELECT * FROM temperatures WHERE measurement < -5
 You can type <kbd>W</kbd> again to enter a new filter. To cancel the filter, type <kbd>W</kbd> and enter an
 empty string (enter <kbd>W</kbd> <kbd>RET</kbd>).
 
+The screen recording below illustrates the use of a WHERE filter on a large table that contains
+various attributes concerning French inhabited locations. It starts by using a WHERE filter to
+display only the row corresponding to the city of Toulouse based on its zip code, copies that row as
+JSON with <kbd>j</kbd>, then with the copied latitude and longitude prepares a PostGIS query to
+select (with an updated WHERE filter) rows that are within a certain geographic distance of
+Toulouse, using the PostGIS function `ST_DistanceSphere`.
+
+![WHERE filter using a PostGIS query](https://github.com/emarsden/emarsden.github.io/blob/main/assets/pgmacs-where-filter-postgis.gif)
+
 
 ## Dired-like multi-row delete
 
