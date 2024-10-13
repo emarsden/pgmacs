@@ -125,7 +125,7 @@ JSON with <kbd>j</kbd>, then with the copied latitude and longitude prepares a P
 select (with an updated WHERE filter) rows that are within a certain geographic distance of
 Toulouse, using the PostGIS function `ST_DistanceSphere`.
 
-![WHERE filter using a PostGIS query](https://github.com/emarsden/emarsden.github.io/blob/main/assets/pgmacs-where-filter-postgis.gif)
+![WHERE filter using a PostGIS query](https://raw.githubusercontent.com/emarsden/emarsden.github.io/refs/heads/main/assets/pgmacs-where-filter-postgis.gif)
 
 
 ## Dired-like multi-row delete
