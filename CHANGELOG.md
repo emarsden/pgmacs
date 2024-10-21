@@ -15,6 +15,8 @@
 
 - Retain the where-filter when refetching/redrawing a row-list buffer.
 
+- Implement tab-completion on column names when reading a WHERE filter in the minibuffer.
+
 
 
 ## [0.15] - 2024-10-06

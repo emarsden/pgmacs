@@ -22,6 +22,7 @@
 (require 'cus-edit)
 (require 'svg)
 (require 'rx)
+(require 'sql)
 (require 'pg)
 (require 'pgmacstbl)
 
@@ -279,6 +280,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (use-local-map pgmacs-table-list-map)
   (pgmacs--widget-setup)
   (cursor-intangible-mode 1)
+  (buffer-disable-undo)
   (run-mode-hooks 'pgmacs-mode-hook))
 
 (defvar-keymap pgmacs-row-list-map
@@ -1559,7 +1561,50 @@ Table names are schema-qualified if the schema is non-default."
                     count
                     (if (> count 1) "s" ""))))
 
+(defun pgmacs--find-completable-symbol ()
+  (let ((bounds (bounds-of-thing-at-point 'symbol)))
+    (when bounds
+      (buffer-substring-no-properties (car bounds) (cdr bounds)))))
+
+;; See elisp-completion-at-point.
+(defun pgmacs--completion-at-point ()
+  (let ((completion-ignore-case t)
+	(pattern (pgmacs--find-completable-symbol))
+	beg)
+    (when pattern
+      (save-excursion
+        ;; Avoid end-of-buffer error.
+        (goto-char (+ (point) (length pattern) -1))
+        (when (search-backward pattern nil t)
+          (setq beg (point))
+          (forward-char (length pattern))
+          (list beg (point) pgmacs--completions :exclusive 'no))))))
+
 (defvar pgmacs--where-filter-history nil)
+
+;; TODO: can we font-lock with sql-mode-postgres-font-lock-keywords ?
+(defun pgmacs--read-sql-minibuffer (prompt completions)
+  ;; See function read--expression in simple.el
+  (minibuffer-with-setup-hook
+      (lambda ()
+        (set-syntax-table sql-mode-syntax-table)
+        ;; cf. minibuffer-local-completion-map
+        (local-set-key (kbd "<tab>") #'completion-at-point)
+        (setq-local pgmacs--completions completions)
+        (add-hook 'completion-at-point-functions
+                  #'pgmacs--completion-at-point nil t))
+    ;; (minibuffer-message "(without the WHERE keyword)")
+    (let ((completion-styles '(basic flex)))
+      (read-from-minibuffer prompt nil nil nil 'pgmacs--where-filter-history))))
+
+;; The list of column names in the current table. Note that this function needs to be called in the
+;; PGmacs buffer (where the text properties it consults are set), and not in the minibuffer. If we
+;; implement fuzzy matching, we should escape the column names with pg-escape-identifiers, because a
+;; case-sensitive SQL identifier will need quoting to be recognized by PostgreSQL.
+(defun pgmacs--completion-table ()
+  (let* ((tbl (pgmacstbl-current-table))
+         (cols (pgmacstbl-columns tbl)))
+    (mapcar #'pgmacstbl-column-name cols)))
 
 ;; Bound to "W" in a row-list buffer.
 (defun pgmacs--add-where-filter (&rest _ignore)
@@ -1568,8 +1613,7 @@ Table names are schema-qualified if the schema is non-default."
     (message "Resetting table OFFSET")
     (sit-for 0.5))
   (setq pgmacs--offset 0)
-  (let ((filter (read-from-minibuffer "WHERE: "
-                                      nil nil nil 'pgmacs--where-filter-history)))
+  (let ((filter (pgmacs--read-sql-minibuffer "WHERE: " (pgmacs--completion-table))))
     (cond ((zerop (length filter))
            (message "Cancelling WHERE filter")
            (setq pgmacs--marked-rows (list))
@@ -1599,6 +1643,7 @@ Table names are schema-qualified if the schema is non-default."
   (interactive)
   (pop-to-buffer "*PGmacs row-list help*")
   (erase-buffer)
+  (buffer-disable-undo)
   (help-mode)
   (cl-flet ((shw (key msg)
               (insert (propertize (format "%12s" key) 'face '(:foreground "blue")))
@@ -2214,6 +2259,7 @@ Prompt for the table name in the minibuffer."
     (erase-buffer)
     (remove-overlays)
     (kill-all-local-variables)
+    (buffer-disable-undo)
     (setq-local pgmacs--db-buffer db-buffer)
     (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
            (row (pg-result res :tuple 0))
@@ -2322,6 +2368,7 @@ Uses PostgreSQL connection CON."
     (erase-buffer)
     (remove-overlays)
     (kill-all-local-variables)
+    (buffer-disable-undo)
     (setq-local pgmacs--con con
                 pgmacs--db-buffer db-buffer
                 buffer-read-only t
@@ -2460,6 +2507,7 @@ Uses PostgreSQL connection CON."
   (interactive)
   (pop-to-buffer "*PGmacs table-list help*")
   (erase-buffer)
+  (buffer-disable-undo)
   (help-mode)
   (cl-flet ((shw (key msg)
               (insert (propertize (format "%12s" key) 'face '(:foreground "blue")))
