@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.16] - Unreleased
+## [0.16] - 2024-10-27
 
 - New keybinding in a row-list buffer: `U` will unmark all marked rows (deselects them for
   deletion).

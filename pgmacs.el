@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
-;; Version: 0.15
+;; Version: 0.16
 ;; Package-Requires: ((emacs "29.1") (pg "0.39"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
@@ -599,6 +599,8 @@ FUNCTION is called on (old-value col-name col-type) and returns the new value."
 The new value in database row ROW is read in the minibuffer.
 Editing requires the database table to have primary keys named in the list
 PRIMARY-KEYS."
+  (unless primary-keys
+    (user-error "Cannot edit a table that has no PRIMARY KEY"))
   (let ((get-value (lambda (old-value col-name col-type)
                      (pgmacs--read-value (substring-no-properties col-name)
                                          (substring-no-properties col-type)

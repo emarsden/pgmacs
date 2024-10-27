@@ -115,7 +115,7 @@ on-disk size of tables, and these functions are not always implemented. What we 
   (tested with version 2.16.1).
 
 - The [IvorySQL](https://www.ivorysql.org/) Oracle-compatible flavour of PostgreSQL works perfectly
-  (tested with version 3.4).
+  (last tested with version 3.4).
 
 - [Xata](https://xata.io/) “serverless PostgreSQL” has many limitations including lack of support
   for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
