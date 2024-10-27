@@ -51,7 +51,7 @@ LABEL org.opencontainers.image.description "The Emacs-based browser/editor for P
 LABEL org.opencontainers.image.title "PGmacs"
 LABEL org.opencontainers.image.url "https://github.com/emarsden/pgmacs"
 LABEL org.opencontainers.image.source "https://github.com/emarsden/pgmacs"
-LABEL org.opencontainers.image.version "0.14"
+LABEL org.opencontainers.image.version "0.16"
 LABEL org.opencontainers.image.authors "eric.marsden@risk-engineering.org"
 LABEL org.opencontainers.image.licenses "GPLv3"
 
