@@ -364,6 +364,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 (defvar-local pgmacs--db-buffer nil)
 (defvar-local pgmacs--where-filter nil)
 (defvar-local pgmacs--marked-rows (list))
+(defvar-local pgmacs--completions nil)
 
 (defvar pgmacs--column-display-functions (make-hash-table :test #'equal))
 
@@ -999,7 +1000,7 @@ keys, whose names are given by the list PRIMARY-KEYS."
                  (warn "Deletion affected more than 1 row; rolling back")
                  (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))))
 
-;; TOOD: could handle a numeric arg prefix
+;; TODO: could handle a numeric arg prefix
 (defun pgmacs--insert-row-empty ()
   "Insert an empty row into the PostgreSQL table at point."
   (interactive)
@@ -1544,6 +1545,36 @@ Table names are schema-qualified if the schema is non-default."
       (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
       (insert "\n\n")
       (pgmacs--show-pgresult buf res))))
+
+(defun pgmacs--display-running-queries (&rest _ignore)
+  "Display the list of queries running in PostgreSQL.
+Opens a dedicated buffer if the query list is not empty."
+  (let* ((db-buffer pgmacs--db-buffer)
+         (con pgmacs--con)
+         (sql "SELECT pid, age(clock_timestamp(), query_start) AS duration, usename, query, state
+               FROM pg_catalog.pg_stat_activity
+               WHERE state != 'idle' AND query NOT ILIKE '%pg_stat_activity%'
+               ORDER BY query_start DESC")
+         (ps-name (pg-ensure-prepared-statement con "QRY-running-queries" sql nil))
+         (res (pg-fetch-prepared con ps-name nil))
+         (tuples (pg-result res :tuples)))
+    (cond ((null tuples)
+           (pgmacs--notify "No running queries" nil))
+          (t
+           (let ((buf (get-buffer-create "*PostgreSQL running queries*")))
+             (pop-to-buffer buf)
+             (erase-buffer)
+             (remove-overlays)
+             (kill-all-local-variables)
+             (setq-local pgmacs--con con
+                         pgmacs--db-buffer db-buffer
+                         buffer-read-only t
+                         truncate-lines t)
+             (pgmacs-mode)
+             (let ((inhibit-read-only t))
+               (insert (propertize "Queries running in this PostgreSQL backend" 'face 'bold))
+               (insert "\n\n")
+               (pgmacs--show-pgresult buf res)))))))
 
 (defun pgmacs--run-analyze (&rest _ignore)
   "Run ANALYZE on the current PostgreSQL table."
@@ -2758,9 +2789,12 @@ inlined vector SVG image that is encoded as a data URI."
     (insert-text-button "Display procedures"
                         'action #'pgmacs--display-procedures)
     (insert "   ")
+    (insert-text-button "Display running queries"
+                        'action #'pgmacs--display-running-queries)
+    (insert "   ")
     (insert-text-button "More backend information"
                         'action #'pgmacs--display-backend-information)
-    (insert "   ")
+    (insert "   \n")
     (insert-text-button "PostgreSQL settings"
                         'action (lambda (&rest _ignore)
                                   (pgmacs-show-result con "SELECT * FROM pg_settings")))

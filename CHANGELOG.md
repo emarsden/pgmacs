@@ -17,6 +17,8 @@
 
 - Implement tab-completion on column names when reading a WHERE filter in the minibuffer.
 
+- New text button in the table-list buffer which displays the list of queries currently running in
+  the PostgreSQL backend that we are connected to.
 
 
 ## [0.15] - 2024-10-06
