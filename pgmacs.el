@@ -1209,7 +1209,12 @@ Updates the PostgreSQL database."
       ;; However, we don't know what values were chosen for any columns that have a default.
       ;; This means that we can't insert at the current-row position.
       (setq pgmacs--marked-rows (list))
-      (pgmacs--display-table pgmacs--table))))
+      ;; Redisplay the table, but attempt to put point on the new row
+      (let ((pos (point)))
+        (pgmacs--display-table pgmacs--table)
+        (when (< pos (point-max))
+          (goto-char pos)
+          (recenter))))))
 
 ;; This SQL query adapted from https://stackoverflow.com/a/20537829
 (defun pgmacs--table-primary-keys (con table)

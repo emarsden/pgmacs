@@ -5,6 +5,9 @@
 
 - Bug fix: adding a WHERE filter is possible when point is located outside the row-list table.
 
+- Bug fix: regenerate the row color cache when inserting or deleting rows, to account for the
+  changed row count.
+
 
 ## [0.16] - 2024-10-27
 
