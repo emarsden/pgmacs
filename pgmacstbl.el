@@ -149,7 +149,7 @@ See info node `(pgmacstbl)Top' for pgmacstbl documentation."
                   columns))
     ;; Compute missing column data.
     (setf (pgmacstbl-columns table) (pgmacstbl--compute-columns table))
-    ;; Compute the colors. We are now ignoring column-colors.
+    ;; Compute the row colors and marks. We are now ignoring column-colors.
     (when row-colors
       (let* ((size (if objects (length objects) 0))
              (colors (make-vector size nil))
@@ -186,14 +186,17 @@ See info node `(pgmacstbl)Top' for pgmacstbl documentation."
       (pgmacstbl-insert table))
     table))
 
+;; We need to account for the fact that the number of rows (of pgmacstbl-objects) may have changed,
+;; so regenerate the '-cached-colors vector.
 (defun pgmacstbl--update-colors (table)
-  (let* ((colors (slot-value table '-cached-colors))
+  (let* ((rows (pgmacstbl-objects table))
+         (size (if rows (length rows) 0))
+         (colors (make-vector size nil))
          (row-faces (mapcar #'pgmacstbl--make-color-face (pgmacstbl-row-colors table)))
-         (row-face-count (length row-faces))
-         (rows (pgmacstbl-objects table))
-         (size (if rows (length rows) 0)))
+         (row-face-count (length row-faces)))
     (dotimes (i size)
-      (setf (aref colors i) (elt row-faces (mod i row-face-count))))))
+      (setf (aref colors i) (elt row-faces (mod i row-face-count))))
+    (setf (slot-value table '-cached-colors) colors)))
 
 (defun pgmacstbl--compute-colors (row-colors column-colors)
   (cond
@@ -368,8 +371,8 @@ This will also remove the displayed line."
      for i from 0 below deleted-line-number
      do (setf (aref updated-row-marks i) (aref current-row-marks i)))
     (cl-loop
-     for i from (1+ deleted-line-number) below (length updated-row-marks)
-     do (setf (aref updated-row-marks i) (aref current-row-marks i)))
+     for i from (1+ deleted-line-number) below (length current-row-marks)
+     do (setf (aref updated-row-marks (1- i)) (aref current-row-marks i)))
     (setf (slot-value table '-row-marks) updated-row-marks))
   ;; Remove object from the table objects.
   (setf (pgmacstbl-objects table) (delq object (pgmacstbl-objects table)))
@@ -399,7 +402,7 @@ This also updates the displayed table."
      do (setf (aref updated-row-marks i) (aref current-row-marks i)))
     (cl-loop
      for i from (1+ new-line-number) below (length updated-row-marks)
-     do (setf (aref updated-row-marks i) (aref current-row-marks i)))
+     do (setf (aref updated-row-marks i) (aref current-row-marks (1- i))))
     (setf (slot-value table '-row-marks) updated-row-marks))
   ;; Insert into the objects.
   (let (pos)

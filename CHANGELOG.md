@@ -8,6 +8,8 @@
 - Bug fix: regenerate the row color cache when inserting or deleting rows, to account for the
   changed row count.
 
+- Bug fix: row-marks are correctly adjusted when inserting or deleting rows in a table.
+
 
 ## [0.16] - 2024-10-27
 
