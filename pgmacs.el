@@ -1635,9 +1635,11 @@ Opens a dedicated buffer if the query list is not empty."
 ;; implement fuzzy matching, we should escape the column names with pg-escape-identifiers, because a
 ;; case-sensitive SQL identifier will need quoting to be recognized by PostgreSQL.
 (defun pgmacs--completion-table ()
-  (let* ((tbl (pgmacstbl-current-table))
-         (cols (pgmacstbl-columns tbl)))
-    (mapcar #'pgmacstbl-column-name cols)))
+  (save-excursion
+    (pgmacstbl-beginning-of-table)
+    (let* ((tbl (pgmacstbl-current-table))
+           (cols (pgmacstbl-columns tbl)))
+      (mapcar #'pgmacstbl-column-name cols))))
 
 ;; Bound to "W" in a row-list buffer.
 (defun pgmacs--add-where-filter (&rest _ignore)

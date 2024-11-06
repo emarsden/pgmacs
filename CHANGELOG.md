@@ -1,5 +1,11 @@
 # Changelog
 
+
+## [0.17] - Unreleased
+
+- Bug fix: adding a WHERE filter is possible when point is located outside the row-list table.
+
+
 ## [0.16] - 2024-10-27
 
 - New keybinding in a row-list buffer: `U` will unmark all marked rows (deselects them for
