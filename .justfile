@@ -61,4 +61,4 @@ trivy-repository:
 # Run a grype vulnerability scan of our container image
 # https://github.com/anchore/grype
 grype-container:
-    podman run --rm -it docker.io/anchore/grype ghcr.io/emarsden/pgmacs:latest
+    podman run --rm --pull=newer -it docker.io/anchore/grype ghcr.io/emarsden/pgmacs:latest
