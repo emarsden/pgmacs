@@ -10,6 +10,8 @@
 
 - Bug fix: row-marks are correctly adjusted when inserting or deleting rows in a table.
 
+- Bug fix: insertion of new row data of type HSTORE functions correctly.
+
 
 ## [0.16] - 2024-10-27
 
