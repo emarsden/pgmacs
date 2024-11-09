@@ -1749,7 +1749,11 @@ Opens a dedicated buffer if the query list is not empty."
            (buffer-read-only nil))
       (pgmacstbl-mark-row table line-number :marked-for-deletion)
       (add-face-text-property (pos-bol) (pos-eol) '(:background "red"))
-      (forward-line 1))))
+      ;; Move point to next row, unless we are already on the last row.
+      (let ((pos (point)))
+        (forward-line 1)
+        (when (eobp)
+          (goto-char pos))))))
 
 ;; Bound to "u" in a row-list buffer.
 (cl-defun pgmacs--row-list-unmark-row (&rest _ignore)

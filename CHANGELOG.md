@@ -17,6 +17,9 @@
 
 - Bug fix: updating the last row of a table no longer triggers an error related to row colors.
 
+- When marking table rows for deletion, don't move point to the next row if we are already on the
+  last row.
+
 
 ## [0.16] - 2024-10-27
 
