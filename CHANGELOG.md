@@ -20,6 +20,8 @@
 - When marking table rows for deletion, don't move point to the next row if we are already on the
   last row.
 
+- When paginating table display, fix the logic for display of "Previous rows" button.
+
 
 ## [0.16] - 2024-10-27
 

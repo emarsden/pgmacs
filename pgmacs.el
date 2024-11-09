@@ -352,9 +352,8 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
     (setq pgmacs--progress nil)))
 
 
-(defvar-local pgmacs--kill-ring
-    "Used for copying and pasting rows in a buffer's table."
-  nil)
+(defvar-local pgmacs--kill-ring nil
+  "Used for copying and pasting rows in a buffer's table.")
 
 ;; TODO: it would be cleaner to hold these all in a pgmacs-connection object.
 (defvar-local pgmacs--con nil)
@@ -2144,16 +2143,17 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
         (insert ": ")
         (insert (propertize where-filter 'face 'pgmacs-where-filter))
         (insert "\n\n"))
-      (when (pg-result res :incomplete)
+      (when pgmacs--offset
         (pgmacs-paginated-mode)
-        (when (> pgmacs--offset pgmacs-row-limit)
+        (when (>= pgmacs--offset pgmacs-row-limit)
           (insert-text-button
            (format "Prev. %s rows" pgmacs-row-limit)
            'action #'pgmacs--paginated-prev)
           (insert "   "))
-        (insert-text-button
-         (format "Next %s rows" pgmacs-row-limit)
-         'action #'pgmacs--paginated-next)
+        (when (pg-result res :incomplete)
+          (insert-text-button
+           (format "Next %s rows" pgmacs-row-limit)
+           'action #'pgmacs--paginated-next))
         (insert "\n\n"))
       (if (null rows)
           (insert "(no rows in table)")
