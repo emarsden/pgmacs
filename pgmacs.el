@@ -1644,7 +1644,7 @@ Opens a dedicated buffer if the query list is not empty."
   (save-excursion
     (pgmacstbl-beginning-of-table)
     (let* ((tbl (pgmacstbl-current-table))
-           (cols (pgmacstbl-columns tbl)))
+           (cols (and tbl (pgmacstbl-columns tbl))))
       (mapcar #'pgmacstbl-column-name cols))))
 
 ;; Bound to "W" in a row-list buffer.

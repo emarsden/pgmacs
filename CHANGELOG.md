@@ -12,6 +12,9 @@
 
 - Bug fix: insertion of new row data of type HSTORE functions correctly.
 
+- Bug fix: column name completion function does not generate errors when no pgmacstbl is present
+  (which can occur when displaying an empty result set).
+
 
 ## [0.16] - 2024-10-27
 

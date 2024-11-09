@@ -415,7 +415,7 @@ This also updates the displayed table."
   ;; Then adjust the cache and display.
   (save-excursion
     (pgmacstbl-goto-table table)
-    (let* ((cache (pgmacstbl--cache table))
+    (let* ((cache (pgmacstbl--ensure-cache table))
            (inhibit-read-only t)
            (keymap (get-text-property (point) 'keymap))
            (ellipsis (if (pgmacstbl-ellipsis table)
