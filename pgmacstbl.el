@@ -381,11 +381,11 @@ This will also remove the displayed line."
         (inhibit-read-only t))
     (when cache
       (setcar cache (delq (assq object (car cache)) (car cache))))
+    (pgmacstbl--update-colors table)
     (save-excursion
       (pgmacstbl-goto-table table)
       (when (pgmacstbl-goto-object object)
-        (delete-line))))
-  (pgmacstbl--update-colors table))
+        (delete-line)))))
 
 (defun pgmacstbl-insert-object (table object &optional after-object)
   "Insert OBJECT into TABLE after AFTER-OBJECT.
@@ -436,9 +436,8 @@ This also updates the displayed table."
           (setcdr pos (cons line (cdr pos)))
           (unless (pgmacstbl-goto-object after-object)
             (pgmacstbl-end-of-table))))
+      (pgmacstbl--update-colors table)
       (let ((start (point)))
-        ;; FIXME: We have to adjust colors in lines below this if we
-        ;; have :row-colors.
         (pgmacstbl--insert-line table line 0
                              (nth 1 cache) (pgmacstbl--spacer table)
                              ellipsis ellipsis-width)
@@ -446,8 +445,7 @@ This also updates the displayed table."
                                                  'pgmacstbl table)))
       ;; We may have inserted a non-numerical value into a previously
       ;; all-numerical table, so recompute.
-      (pgmacstbl--recompute-numerical table (cdr line)))
-    (pgmacstbl--update-colors table)))
+      (pgmacstbl--recompute-numerical table (cdr line)))))
 
 (defun pgmacstbl-column (table index)
   "Return the name of the INDEXth column in TABLE."
