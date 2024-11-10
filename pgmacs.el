@@ -613,20 +613,22 @@ PRIMARY-KEYS."
 (defun pgmacs--shell-command-on-value (current-row primary-keys)
   "Run a Unix filter shell command with the current cell value as input.
 
-When called without a prefix argument, output is diplayed in the echo area.
-When called with a prefix argument, replace the current cell value with the output
+When called without a prefix argument, output is diplayed in the
+echo area. When called with a prefix argument, replace the
+current cell value with the output
 (updating the database).
 
 For example, to count the number of characters in the current cell,
 
    ! wc -c
 
-To downcase the value of a text cell (and modify the value in the database) use
+To downcase the value of a text cell (and modify the value in the
+database) use
 
    C-u ! tr '[:upper:]' '[:lower]'
 
-To reverse the order of the characters in the cell (and modify the value in
-the database), use
+To reverse the order of the characters in the cell (and modify
+the value in the database), use
 
    C-u ! rev
 
@@ -656,13 +658,15 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
 
 (defun pgmacs--async-command-on-value (&rest _ignore)
   "Run a command asynchronously with the current cell value as first argument.
-The command should be the name of a program, which will be searched for in
-`exec-path' (it is run via `start-process', without a shell). Command output will
-be displayed in a buffer called *PGmacs async command*.
 
-For example, if the cell contains a filename, you can open the filename in the
-default application on your system by entering `xdg-open' (or `open' on a MacOS
-machine).
+The command should be the name of a program, which will be
+searched for in `exec-path' (it is run via `start-process',
+without a shell). Command output will be displayed in a buffer
+called *PGmacs async command*.
+
+For example, if the cell contains a filename, you can open the
+filename in the default application on your system by entering
+`xdg-open' (or `open' on a MacOS machine).
 
 Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
   (pgmacs-funcall-cell
