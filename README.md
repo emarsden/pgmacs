@@ -106,6 +106,23 @@ list of tables available, and these tables are not always present in PostgreSQL-
 databases. PGmacs also uses some PostgreSQL-specific functions to display information such as the
 on-disk size of tables, and these functions are not always implemented. What we have tested so far:
 
+PGmacs also works, more or less, with some “PostgreSQL-compatible” databases. There are four main
+points where this compatibility may be problematic:
+
+- Compatibility with the PostgreSQL wire protocol. This is the most basic form of compatibility.
+
+- Compatibility with the PostgreSQL flavour of SQL, such as row expressions, non-standard functions
+  such as `CHR`, data types such as `BIT` and `VARBIT`, user-defined ENUMS and so on.
+
+- Implementation of the system tables that are used by PGmacs to retrieve the list of tables in a
+  database, their on-disk size, column metainformation, and the list of indexes present.
+
+- Establishing encrypted TLS connection to hosted services. Most PostgreSQL client libraries (in
+  particular the official client library libpq) use OpenSSL for TLS support, whereas Emacs uses
+  GnuTLS, and you may encounter incompatibilities.
+
+The following PostgreSQL-compatible databases have been tested:
+
 - [Neon](https://neon.tech/) “serverless PostgreSQL” works perfectly.
 
 - [ParadeDB](https://www.paradedb.com/) v0.9.1 seems to work fine in limited testing (it's really a
@@ -116,6 +133,9 @@ on-disk size of tables, and these functions are not always implemented. What we 
 
 - The [IvorySQL](https://www.ivorysql.org/) Oracle-compatible flavour of PostgreSQL works perfectly
   (last tested with version 3.4).
+
+- The [PgBouncer](https://www.pgbouncer.org/) connection pooler for PostgreSQL works fine (tested
+  with version 1.23 in the default session pooling mode).
 
 - [Xata](https://xata.io/) “serverless PostgreSQL” has many limitations including lack of support
   for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
@@ -150,6 +170,13 @@ on-disk size of tables, and these functions are not always implemented. What we 
 - ClickHouse v24.5 does not work: its implementation of the wire protocol is very limited, with no
   support for the `pg_type` metadata and no support for basic PostgreSQL-flavoured SQL commands such
   as `SET`.
+
+- Hosted PostgreSQL services that have been tested: [Railway.app](https://railway.app/) is running a
+  hosted Debian build of PostgreSQL 16.4, and works fine.
+
+- Untested but likely to work: Amazon RDS, Google Cloud SQL, Azure Database for PostgreSQL, Amazon
+  Auroa, Google AlloyDB, Materialize, CitusData. You may however encounter difficulties with TLS
+  connections, as noted above.
 
 
 ## License

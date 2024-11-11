@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.17] - Unreleased
+## [0.17] - 2024-11-11
 
 - Bug fix: adding a WHERE filter is possible when point is located outside the row-list table.
 
@@ -17,10 +17,10 @@
 
 - Bug fix: updating the last row of a table no longer triggers an error related to row colors.
 
-- When marking table rows for deletion, don't move point to the next row if we are already on the
+- When marking table rows for deletion, don’t move point to the next row if we are already on the
   last row.
 
-- When paginating table display, fix the logic for display of "Previous rows" button.
+- When paginating table display, fix the logic for display of “Previous rows” button.
 
 
 ## [0.16] - 2024-10-27
