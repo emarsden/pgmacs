@@ -1,6 +1,11 @@
 # Changelog
 
 
+## [0.18] - Unreleased
+
+- Redraw the table list after renaming a table.
+
+
 ## [0.17] - 2024-11-11
 
 - Bug fix: adding a WHERE filter is possible when point is located outside the row-list table.

@@ -2519,7 +2519,7 @@ Uses PostgreSQL connection CON."
 
 (defun pgmacs--table-list-delete (table-row)
   "Delete (drop) the PostgreSQL table specified by TABLE-ROW."
-  (let* ((tbl (pgmacstbl-current-table))
+  (let* ((pgmacstbl (pgmacstbl-current-table))
          (table (car table-row))
          (t-id (pg-escape-identifier table)))
     (when (yes-or-no-p (format "Really drop PostgreSQL table %s? " t-id))
@@ -2527,20 +2527,24 @@ Uses PostgreSQL connection CON."
       (let* ((sql (format "DROP TABLE %s" t-id))
              (res (pg-exec pgmacs--con sql)))
         (pgmacs--notify "%s" (pg-result res :status))
-        (pgmacstbl-remove-object tbl table-row)
+        (pgmacstbl-remove-object pgmacstbl table-row)
         (pgmacs--redraw-pgmacstbl)))))
 
 (defun pgmacs--table-list-rename (table-row)
   "Rename the PostgreSQL table specified by TABLE-ROW."
-  (let* ((table (car table-row))
+  (let* ((pgmacstbl (pgmacstbl-current-table))
+	 (table (car table-row))
          (t-id (pg-escape-identifier table))
          (new (read-string (format "Rename table %s to: " t-id)))
          (new-id (pg-escape-identifier new)))
     (let* ((sql (format "ALTER TABLE %s RENAME TO %s" t-id new-id))
            (res (pg-exec pgmacs--con sql)))
       (pgmacs--notify "%s" (pg-result res :status))
+      (let ((new-row (copy-sequence table-row)))
+	(setf (cl-first new-row) new)
+	(pgmacstbl-insert-object pgmacstbl new-row table-row)
+	(pgmacstbl-remove-object pgmacstbl table-row))
       ;; Redraw in the table-list buffer.
-      (setf (cl-first table-row) new)
       (pgmacs--redraw-pgmacstbl))))
 
 (defun pgmacs--table-list-redraw (&rest _ignore)
