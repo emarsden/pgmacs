@@ -55,11 +55,11 @@ git clone https://github.com/emarsden/pgmacs/
 ```
 
 
-## Setting up a PostgreSQL user with limited privileges
+~~~admonish warning title="Setting up a PostgreSQL user with limited privileges"
 
 You should be careful about giving random software you downloaded from the internet access to your
 PostgreSQL data. I would recommend you take a quick read through the source code (it’s quite short,
-only 2600 lines) before running it. Before taking the time to do this, you can also run PGmacs as a
+only 3000 lines) before running it. Before taking the time to do this, you can also run PGmacs as a
 PostgreSQL user which is not allowed to insert or delete data. Here’s how to do this (using
 predefined roles that are available from PostgreSQL v14 onwards): 
 
@@ -67,6 +67,7 @@ predefined roles that are available from PostgreSQL v14 onwards):
 CREATE USER pgmacs_readonly_user WITH PASSWORD 'changeme';
 GRANT pg_read_all_data TO pgmacs_readonly_user;
 ```
+~~~
 
 
 ## Connecting to a PostgreSQL database
