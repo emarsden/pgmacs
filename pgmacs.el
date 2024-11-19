@@ -220,6 +220,12 @@ Uses customizations implemented in Emacs' customize support."
 (define-key pgmacs-table-list-map [menu-bar tools PGmacs run-sql]
    '("Run SQL query" . pgmacs-run-sql))
 
+(defun pgmacs-script-mode ()
+  (setq major-mode 'sql-mode
+	minor-mode-list (cons 'pgmacs-mode minor-mode-list)
+        mode-name "PGmacsScript")
+  (when (and pgmacs-use-header-line pgmacs-header-line)
+    (setq header-line-format pgmacs-header-line)))
 
 (defun pgmacs-mode ()
   "Mode for browsing and editing data in a PostgreSQL database.
@@ -2396,6 +2402,11 @@ Prompt for the table name in the minibuffer."
   (let ((sql (read-from-minibuffer "SQL query: " nil nil nil 'pgmacs--run-sql-history)))
     (pgmacs-show-result pgmacs--con sql)))
 
+(defun pgmacs-run-sql-region (start end)
+  "Send a region to the SQL process."
+  (interactive "r")
+  (pgmacs-show-result pgmacs--con (buffer-substring-no-properties start end)))
+
 (defun pgmacs-run-buffer-sql (&rest _ignore)
   "Execute the SQL query in a user-specified buffer.
 The output is displayed in a dedicated buffer."
@@ -2715,6 +2726,20 @@ inlined vector SVG image that is encoded as a data URI."
          (maybe-icon (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-table)))
     (concat maybe-icon name)))
 
+(defun pgmacs--script (&rest _ignore)
+  "Open a buffer to write scripts to be ran at this database connection."
+  (let* ((db-buffer pgmacs--db-buffer)
+         (con pgmacs--con)
+         (buf (get-buffer-create "*PostgreSQL Script*")))
+    (pop-to-buffer buf)
+    (erase-buffer)
+    (remove-overlays)
+    (kill-all-local-variables)
+    (setq-local pgmacs--con con
+                pgmacs--db-buffer db-buffer
+                buffer-read-only nil
+                truncate-lines t)
+    (pgmacs-script-mode)))
 
 ;;;###autoload
 (defun pgmacs-open (con)
@@ -2769,6 +2794,7 @@ inlined vector SVG image that is encoded as a data URI."
                              "RET" pgmacs--table-list-RET
                              "<deletechar>" pgmacs--table-list-delete
                              "S" pgmacs--schemaspy-database
+                             "s" pgmacs--script
                              "r" pgmacs--table-list-rename
                              "g" pgmacs--table-list-redraw
                              "o" pgmacs-open-table
@@ -2831,6 +2857,10 @@ inlined vector SVG image that is encoded as a data URI."
                ;; FIXME probably only want a subset of these columns
                (pgmacs-show-result con "SELECT * FROM pg_stat_replication"))
      'help-echo "Show information on PostgreSQL replication status")
+    (insert "   \n")
+    (insert-text-button "Script"
+                        'action #'pgmacs--script
+                        'help-echo "Write a PostgreSQL script")
     (insert "\n\n")
     (pgmacstbl-insert pgmacstbl)
     (pgmacs--stop-progress-reporter)))
