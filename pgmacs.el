@@ -2420,14 +2420,17 @@ Uses PostgreSQL connection CON."
     (insert (propertize "SQL" 'face 'bold))
     (insert (format ": %s\n\n" sql)))
   (let* ((res (pg-exec con sql)))
-    (pgmacs--show-pgresult (current-buffer) res)))
+    (pgmacs--show-pgresult (current-buffer) res))
+  (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--show-pgresult (buffer pgresult)
   (with-current-buffer buffer
     (let ((rows (pg-result pgresult :tuples))
           (attributes (pg-result pgresult :attributes))
-          (con pgmacs--con))
+          (con pgmacs--con)
+          (inhibit-read-only t))
       (cond ((null rows)
+             (insert (format "Query status: %s\n\n" (pg-result pgresult :status)))
              (insert "(no rows)"))
             (t
              (let* ((column-names (mapcar #'cl-first attributes))
@@ -2446,7 +2449,6 @@ Uses PostgreSQL connection CON."
                                                :min-width (1+ (max w (length name)))
                                                :formatter fmt
                                                :displayer (pgmacs--make-column-displayer "" nil))))
-                    (inhibit-read-only t)
                     (pgmacstbl (make-pgmacstbl
                                 :insert nil
                                 :use-header-line nil
@@ -2480,8 +2482,7 @@ Uses PostgreSQL connection CON."
                                            "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
                                            "q" (lambda (&rest _ignore) (bury-buffer))))))
                (pgmacstbl-insert pgmacstbl))))
-      (shrink-window-if-larger-than-buffer)
-      (pgmacs--stop-progress-reporter))))
+      (shrink-window-if-larger-than-buffer))))
 
 
 ;; If the cursor is on the Comment column, allow the user to set the table comment. Otherwise,
