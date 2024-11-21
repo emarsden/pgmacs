@@ -8,6 +8,8 @@
 - New customizable variable `pgmacs-row-list-hook` to specify functions to be run when a row-list
   buffer has been created.
 
+- Optimization: don't use expensive `:eval` in the definition of `pgmacs-header-line`.
+
 
 ## [0.17] - 2024-11-11
 

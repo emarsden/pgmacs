@@ -151,30 +151,9 @@ concerning a specific table, rather than the entire database."
   :type 'boolean
   :group 'pgmacs)
 
-(defvar pgmacs-header-line
-  (list (when (char-displayable-p ?🐘) " 🐘")
-        (propertize " PGmacs " 'face 'bold)
-        '(:eval (when pgmacs--con
-                 ;; (list :tcp host port dbname user password)
-                 (let ((ci (pgcon-connect-info pgmacs--con))
-                       (tls (cl-first
-                             (pg-result
-                              (pg-exec pgmacs--con "SHOW ssl") :tuple 0)))
-                       (maybe-icon (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user)))
-                   (cl-case (cl-first ci)
-                     (:tcp
-                      (format "%s as %s%s on %s:%s (TLS: %s)"
-                              (propertize (cl-fourth ci) 'face 'bold)
-                              maybe-icon
-                              (cl-fifth ci)
-                              (cl-second ci)
-                              (cl-third ci)
-                              tls))
-                     (:local
-                      (format "%s as %s%s on Unix socket"
-                              (propertize (cl-fourth ci) 'face 'bold)
-                              maybe-icon
-                              (cl-fifth ci))))))))
+;; This is set to a value which displays information on the current PostgreSQL connection in
+;; function pgmacs-open.
+(defvar pgmacs-header-line nil
   "Header-line to use in PGmacs buffers. Nil to disable.")
 
 (defcustom pgmacs-mode-hook nil
@@ -955,7 +934,6 @@ Point is located in CURRENT-ROW."
          (buf (get-buffer-create (format "*PostgreSQL column value %s*" col-name)))
          (value (funcall (pgmacstbl-column-formatter col)
                          (nth col-id current-row))))
-    (erase-buffer)
     (pop-to-buffer buf)
     (let ((buffer-read-only nil))
       (erase-buffer)
@@ -1549,8 +1527,6 @@ Table names are schema-qualified if the schema is non-default."
          (res (pg-fetch-prepared con ps-name nil))
          (buf (get-buffer-create "*PGmacs procedures*")))
     (pop-to-buffer buf)
-    (erase-buffer)
-    (remove-overlays)
     (kill-all-local-variables)
     (setq-local pgmacs--con con
                 pgmacs--db-buffer db-buffer
@@ -1558,6 +1534,8 @@ Table names are schema-qualified if the schema is non-default."
                 truncate-lines t)
     (pgmacs-mode)
     (let ((inhibit-read-only t))
+      (erase-buffer)
+      (remove-overlays)
       (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
       (insert "\n\n")
       (pgmacs--show-pgresult buf res))))
@@ -1579,8 +1557,6 @@ Opens a dedicated buffer if the query list is not empty."
           (t
            (let ((buf (get-buffer-create "*PostgreSQL running queries*")))
              (pop-to-buffer buf)
-             (erase-buffer)
-             (remove-overlays)
              (kill-all-local-variables)
              (setq-local pgmacs--con con
                          pgmacs--db-buffer db-buffer
@@ -1588,6 +1564,8 @@ Opens a dedicated buffer if the query list is not empty."
                          truncate-lines t)
              (pgmacs-mode)
              (let ((inhibit-read-only t))
+               (erase-buffer)
+               (remove-overlays)
                (insert (propertize "Queries running in this PostgreSQL backend" 'face 'bold))
                (insert "\n\n")
                (pgmacs--show-pgresult buf res)))))))
@@ -1691,7 +1669,6 @@ Opens a dedicated buffer if the query list is not empty."
   "Open a buffer describing keybindings in a row-list buffer."
   (interactive)
   (pop-to-buffer "*PGmacs row-list help*")
-  (erase-buffer)
   (buffer-disable-undo)
   (help-mode)
   (cl-flet ((shw (key msg)
@@ -1699,6 +1676,7 @@ Opens a dedicated buffer if the query list is not empty."
               (insert (propertize " → " 'face '(:foreground "gray")))
               (insert msg "\n")))
     (let ((inhibit-read-only t))
+      (erase-buffer)
       (shw "v" "Display the value at point in a dedicated buffer")
       (shw "RET" "Edit the value at point in the minibuffer")
       (shw "w" "Edit the value at point in a widget-based buffer")
@@ -2314,16 +2292,18 @@ Prompt for the table name in the minibuffer."
   (let ((con pgmacs--con)
         (db-buffer pgmacs--db-buffer))
     (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
-    (erase-buffer)
-    (remove-overlays)
     (kill-all-local-variables)
     (buffer-disable-undo)
-    (setq-local pgmacs--db-buffer db-buffer)
+    (setq-local pgmacs--db-buffer db-buffer
+                buffer-read-only t)
     (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
            (row (pg-result res :tuple 0))
            (addr (cl-first row))
            (port (cl-second row))
-           (pid (cl-third row)))
+           (pid (cl-third row))
+           (inhibit-read-only t))
+      (erase-buffer)
+      (remove-overlays)
       (insert (format "Connected to backend with pid %s" pid))
       (if addr
           (insert (format " at %s:%s\n" addr port))
@@ -2423,8 +2403,6 @@ The output is displayed in a dedicated buffer."
 Uses PostgreSQL connection CON."
   (let ((db-buffer pgmacs--db-buffer))
     (pop-to-buffer (get-buffer-create "*PostgreSQL TMP*"))
-    (erase-buffer)
-    (remove-overlays)
     (kill-all-local-variables)
     (buffer-disable-undo)
     (setq-local pgmacs--con con
@@ -2435,6 +2413,8 @@ Uses PostgreSQL connection CON."
   (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   ;; Insert initial content into buffer early.
   (let ((inhibit-read-only t))
+    (erase-buffer)
+    (remove-overlays)
     (insert (propertize "PostgreSQL query output" 'face 'bold))
     (insert "\n")
     (insert (propertize "SQL" 'face 'bold))
@@ -2733,6 +2713,29 @@ inlined vector SVG image that is encoded as a data URI."
     (pg-enable-query-log con))
   (pg-hstore-setup con)
   (pg-vector-setup con)
+  (when pgmacs-use-header-line
+    (setq pgmacs-header-line
+          (list (when (char-displayable-p ?🐘) " 🐘")
+                (propertize " PGmacs " 'face 'bold)
+                ;; (list :tcp host port dbname user password)
+                (let* ((ci (pgcon-connect-info con))
+                       (res (pg-exec con "SHOW ssl"))
+                       (tls (cl-first (pg-result res :tuple 0)))
+                       (maybe-icon (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user)))
+                  (cl-case (cl-first ci)
+                    (:tcp
+                     (format "%s as %s%s on %s:%s (TLS: %s)"
+                             (propertize (cl-fourth ci) 'face 'bold)
+                             maybe-icon
+                             (cl-fifth ci)
+                             (cl-second ci)
+                             (cl-third ci)
+                             tls))
+                    (:local
+                     (format "%s as %s%s on Unix socket"
+                             (propertize (cl-fourth ci) 'face 'bold)
+                             maybe-icon
+                             (cl-fifth ci))))))))
   (pop-to-buffer-same-window (format "*PostgreSQL %s*" (pgcon-dbname con)))
   (setq-local pgmacs--con con
               pgmacs--db-buffer (current-buffer)
