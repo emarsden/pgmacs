@@ -56,6 +56,9 @@ The following keys are bound when the point is located in the row-list table:
 | <kbd>q</kbd>                    | Bury the current buffer.                                                             |
 
 
+The hook functions on `pgmacs-row-list-hook` are run when a row-list buffer is opened. They are run
+just before control is returned to the user, in a buffer with all data inserted.
+
 
 ## Run a shell command or an external application on cell value
 

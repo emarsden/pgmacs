@@ -182,6 +182,11 @@ concerning a specific table, rather than the entire database."
   :type 'hook
   :group 'pgmacs)
 
+(defcustom pgmacs-row-list-hook nil
+  "Functions to run after opening a PGmacs row-list buffer."
+  :type 'hook
+  :group 'pgmacs)
+
 (defun pgmacs--widget-setup ()
   "Set up the appearance of widgets used in PGmacs.
 Uses customizations implemented in Emacs' customize support."
@@ -1921,9 +1926,12 @@ smaller than and larger than this value, in the limit of
 pgmacs-row-limit.
 
 Keyword argument WHERE-FILTER is an SQL WHERE clause which filters the
-rows to display in the table.
+rows to display in the table. The WHERE clause does not include the
+SQL keyword WHERE (example: `column_name > 0').
 
-The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
+The CENTER-ON and WHERE-FILTER arguments are mutually exclusive.
+
+Runs functions on `pgmacs-row-list-hook'."
   (when (and center-on where-filter)
     (user-error "CENTER-ON and WHERE-FILTER arguments are mutually exclusive"))
   (let* ((con pgmacs--con)
@@ -2188,7 +2196,8 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive."
              (pgmacstbl-goto-object row)
              (pgmacstbl-goto-column pk-col-id)
              (cl-return-from position-cursor))
-           finally do (message "Didn't find row matching %s" pk-val)))))))
+           finally do (message "Didn't find row matching %s" pk-val)))))
+    (run-hooks 'pgmacs-row-list-hook)))
 
 (defun pgmacs--row-list-redraw (&rest _ignore)
   "Refresh a PostgreSQL row-list buffer.

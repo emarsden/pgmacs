@@ -5,6 +5,9 @@
 
 - Redraw the table list after renaming a table.
 
+- New customizable variable `pgmacs-row-list-hook` to specify functions to be run when a row-list
+  buffer has been created.
+
 
 ## [0.17] - 2024-11-11
 
