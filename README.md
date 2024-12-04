@@ -96,7 +96,7 @@ it to modify real PostgreSQL databases used in production.
 pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
 Windows and MacOS. It works both in graphical mode and in the terminal.
 
-**PostgreSQL version**: PGmacs is primarily tested with PostgreSQL versions 17.1 and 16.4, but
+**PostgreSQL version**: PGmacs is primarily tested with PostgreSQL versions 17.2 and 16.4, but
 should work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate
 with PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
@@ -112,7 +112,10 @@ points where this compatibility may be problematic:
 - Compatibility with the PostgreSQL wire protocol. This is the most basic form of compatibility.
 
 - Compatibility with the PostgreSQL flavour of SQL, such as row expressions, non-standard functions
-  such as `CHR`, data types such as `BIT` and `VARBIT`, user-defined ENUMS and so on.
+  such as `CHR`, data types such as `BIT`, `VARBIT`, `JSON` and `JSONB`, user-defined ENUMS and so
+  on, functionality such as `LISTEN`. Some databases that claim to be “Postgres compatible” don’t
+  even support foreign keys, views, triggers, sequences, tablespaces and temporary tables (looking
+  at you, Amazon Aurora DSQL).
 
 - Implementation of the system tables that are used by PGmacs to retrieve the list of tables in a
   database, their on-disk size, column metainformation, and the list of indexes present.
@@ -145,10 +148,10 @@ The following PostgreSQL-compatible databases have been tested:
   SQL command that adds a PRIMARY KEY to an existing table, nor to display total database size on
   disk, for example.
   
-- [CrateDB](https://crate.io/) v5.8.3 does not currently work; it does not implement PostgreSQL
+- [CrateDB](https://crate.io/) v5.9.4 does not currently work; it does not implement PostgreSQL
   functions that we use to query table metainformation.
 
-- [CockroachDB](https://github.com/cockroachdb/cockroach) version 24.2 does not work with PGmacs:
+- [CockroachDB](https://github.com/cockroachdb/cockroach) version 24.3 does not work with PGmacs:
   our query for `pg-table-owner` triggers an internal error, there is no implementation of the
   function `pg_size_pretty`, and the database fails on basic SQL such as the boolean vector syntax
   `b'1001000'`.
@@ -172,11 +175,12 @@ The following PostgreSQL-compatible databases have been tested:
   as `SET`.
 
 - Hosted PostgreSQL services that have been tested: [Railway.app](https://railway.app/) is running a
-  hosted Debian build of PostgreSQL 16.4, and works fine.
+  Debian build of PostgreSQL 16.4, and works fine; [Aiven.io](https://aiven.io/) is running a Red
+  Hat build of PostgreSQL 16.4 on Linux/Aarch64 and works fine.
 
 - Untested but likely to work: Amazon RDS, Google Cloud SQL, Azure Database for PostgreSQL, Amazon
-  Auroa, Google AlloyDB, Materialize, CitusData. You may however encounter difficulties with TLS
-  connections, as noted above.
+  Auroa, Google AlloyDB, Materialize. You may however encounter difficulties with TLS connections,
+  as noted above.
 
 
 ## License
