@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.18] - Unreleased
+## [0.18] - 2024-12-04
 
 - Redraw the table list after renaming a table.
 
