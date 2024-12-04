@@ -10,6 +10,11 @@
 
 - Optimization: don't use expensive `:eval` in the definition of `pgmacs-header-line`.
 
+- Preliminary changes to work with certain semi-compatible PostgreSQL variants that don't implement
+  all of the system tables or metadata functions that we use to display additional information
+  concerning databases and tables. Currently preliminary changes for CrateDB, CockroachDB, Spanner,
+  YDB.
+
 
 ## [0.17] - 2024-11-11
 

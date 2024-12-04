@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 ;; Version: 0.17
-;; Package-Requires: ((emacs "29.1") (pg "0.39"))
+;; Package-Requires: ((emacs "29.1") (pg "0.44"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -1204,6 +1204,8 @@ Updates the PostgreSQL database."
           (recenter))))))
 
 ;; This SQL query adapted from https://stackoverflow.com/a/20537829
+;;
+;; Note: query is not working on CrateDB and Spanner.
 (defun pgmacs--table-primary-keys (con table)
   "Return the columns active as PRIMARY KEY in TABLE.
 Uses PostgreSQL connection CON."
@@ -1397,6 +1399,22 @@ Uses PostgreSQL connection CON."
     (when res (cl-first (pg-result res :tuple 0)))))
 
 
+;; This function called for semi-compatible PostgreSQL variants that only partially implement the
+;; system tables that we use to query for metainformation concerning SQL tables.
+(defun pgmacs--list-tables-basic ()
+  "Return a list of table-names and associated metadata for the current database.
+Table names are schema-qualified if the schema is non-default.
+
+This function called for PostgreSQL variants that don't provide full compatibility."
+  (let ((entries (list)))
+    (dolist (table (pg-tables pgmacs--con))
+      (let* ((tid (pg-escape-identifier table))
+             (res (pg-exec pgmacs--con (format "SELECT COUNT(*) FROM %s" tid)))
+             (tuple (pg-result res :tuple 0))
+             (rows (cl-first tuple)))
+        (push (list table rows 0 "" "") entries)))
+    entries))
+
 ;; TODO also include VIEWs
 ;;   SELECT * FROM information_schema.views
 ;;
@@ -1410,7 +1428,7 @@ Uses PostgreSQL connection CON."
 ;;    SELECT n_live_tup FROM pg_stat_user_tables (zero for non-VACUUMed tables)
 ;;
 ;; We could perhaps fill in the row count column in a lazy manner to improve query speed.
-(defun pgmacs--list-tables ()
+(defun pgmacs--list-tables-full ()
   "Return a list of table-names and associated metadata for the current database.
 Table names are schema-qualified if the schema is non-default."
   (let ((entries (list)))
@@ -1432,6 +1450,11 @@ Table names are schema-qualified if the schema is non-default."
              (owner (pg-table-owner pgmacs--con table)))
         (push (list table rows size owner (or comment "")) entries)))
     entries))
+
+(defun pgmacs--list-tables ()
+  (if (member (pgcon-server-variant pgmacs--con) '(cratedb cockroachdb spanner ydb))
+      (pgmacs--list-tables-basic)
+    (pgmacs--list-tables-full)))
 
 ;; Used to display only the first line of a table cell.
 (defun pgmacs--truncate-multiline (string)
@@ -1499,6 +1522,11 @@ Table names are schema-qualified if the schema is non-default."
           (pgmacs--notify "%s" (pg-result res :status))))))
   (pgmacs--display-table pgmacs--table))
 
+;; TODO: add functionality to call a procedure with a widget-based interface for the procedure
+;; arguments.
+;;
+;; TODO: allow user to edit the definition of a function, using a query such as that provided
+;; at https://stackoverflow.com/questions/12148914/get-definition-of-function-sequence-type-etc-in-postgresql-with-sql-query
 (defun pgmacs--display-procedures (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
   (let* ((db-buffer pgmacs--db-buffer)
@@ -1668,6 +1696,7 @@ Opens a dedicated buffer if the query list is not empty."
 (defun pgmacs--row-list-help (&rest _ignore)
   "Open a buffer describing keybindings in a row-list buffer."
   (interactive)
+  ;; FIXME perhaps should use with-help-window
   (pop-to-buffer "*PGmacs row-list help*")
   (buffer-disable-undo)
   (help-mode)
@@ -2059,6 +2088,7 @@ Runs functions on `pgmacs-row-list-hook'."
                                       (pgmacs--display-table table))
                             'help-echo "Modify the table comment")
         (insert "\n"))
+      ;; FIXME: pg_size_pretty not implemented in CockroachDB, YDB.
       (let* ((sql "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_total_relation_size($1)),
                           pg_catalog.pg_size_pretty(pg_catalog.pg_indexes_size($1))")
              (res (pg-exec-prepared con sql `((,t-id . "text"))))
@@ -2294,8 +2324,7 @@ Prompt for the table name in the minibuffer."
     (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
     (kill-all-local-variables)
     (buffer-disable-undo)
-    (setq-local pgmacs--db-buffer db-buffer
-                buffer-read-only t)
+    (setq-local pgmacs--db-buffer db-buffer)
     (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
            (row (pg-result res :tuple 0))
            (addr (cl-first row))
@@ -2308,9 +2337,11 @@ Prompt for the table name in the minibuffer."
       (if addr
           (insert (format " at %s:%s\n" addr port))
         (insert " over Unix-domain socket\n")))
-    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('ssl_library')"))
-           (row (pg-result res :tuple 0)))
-      (insert (format "Backend compiled with SSL library %s\n" (cl-first row))))
+    (unless (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb))
+      (when (> (pgcon-server-version-major con) 11)
+        (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('ssl_library')"))
+               (row (pg-result res :tuple 0)))
+          (insert (format "Backend compiled with SSL library %s\n" (cl-first row))))))
     (let* ((res (pg-exec con "SELECT current_user, pg_catalog.current_setting('is_superuser')"))
            (row (pg-result res :tuple 0)))
       (insert (format "Connected as user %s (%ssuperuser)\n"
@@ -2365,6 +2396,7 @@ Prompt for the table name in the minibuffer."
     (shrink-window-if-larger-than-buffer)
     (goto-char (point-min))
     (help-mode)
+    (setq buffer-read-only t)
     (pgmacs-transient-mode)))
 
 
@@ -2706,6 +2738,13 @@ inlined vector SVG image that is encoded as a data URI."
     (concat maybe-icon name)))
 
 
+(defun pgmacs--tls-status (con)
+  (if (and (not (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb)))
+           (> (pgcon-server-version-major con) 11))
+      (let ((res (pg-exec con "SHOW ssl")))
+        (cl-first (pg-result res :tuple 0)))
+    "unknown"))
+
 ;;;###autoload
 (defun pgmacs-open (con)
   "Browse the contents of PostgreSQL database to which we are connected over CON."
@@ -2720,8 +2759,7 @@ inlined vector SVG image that is encoded as a data URI."
                 (propertize " PGmacs " 'face 'bold)
                 ;; (list :tcp host port dbname user password)
                 (let* ((ci (pgcon-connect-info con))
-                       (res (pg-exec con "SHOW ssl"))
-                       (tls (cl-first (pg-result res :tuple 0)))
+                       (tls (pgmacs--tls-status con))
                        (maybe-icon (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user)))
                   (cl-case (cl-first ci)
                     (:tcp
@@ -2804,19 +2842,20 @@ inlined vector SVG image that is encoded as a data URI."
                               ("Size on disk" (cl-third object))
                               ("Owner" (cl-fourth object))
                               ("Comment" (cl-fifth object)))))))
-    (let* ((res (pg-exec con "SELECT current_user, pg_backend_pid(), pg_is_in_recovery()"))
-           (row (pg-result res :tuple 0)))
-      (insert (format "\nConnected to database %s%s as %s%s (pid %d %s)\n"
-                      (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-database)
-                      dbname
-                      (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user)
-                      (cl-first row)
-                      (cl-second row)
-                      (if (cl-third row) "RECOVERING" "PRIMARY"))))
-    (let* ((sql "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_database_size($1))")
-           (res (pg-exec-prepared con sql `((,dbname . "text"))))
-           (size (cl-first (pg-result res :tuple 0))))
-      (insert (format "Total database size: %s\n" size)))
+    (unless (member (pgcon-server-variant con) '(cratedb cockroachdb spanner ydb))
+      (let* ((res (pg-exec con "SELECT current_user, pg_backend_pid(), pg_is_in_recovery()"))
+             (row (pg-result res :tuple 0)))
+        (insert (format "\nConnected to database %s%s as %s%s (pid %d %s)\n"
+                        (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-database)
+                        dbname
+                        (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user)
+                        (cl-first row)
+                        (cl-second row)
+                        (if (cl-third row) "RECOVERING" "PRIMARY"))))
+      (let* ((sql "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_database_size($1))")
+             (res (pg-exec-prepared con sql `((,dbname . "text"))))
+             (size (cl-first (pg-result res :tuple 0))))
+        (insert (format "Total database size: %s\n" size))))
     ;; Perhaps also display output from
     ;; select state, count(*) from pg_stat_activity where pid <> pg_backend_pid() group by 1 order by 1;'
     ;; see https://gitlab.com/postgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
