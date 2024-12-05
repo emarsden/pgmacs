@@ -1,7 +1,7 @@
 #        -*- Dockerfile -*-
 #
 # Recipe to build a container image including a terminal-only Emacs, PGmacs and its dependencies.
-# Container size is 150MB on AMD64.
+# Container size is 64MB on AMD64.
 #
 # To build the container locally (not needed for an end user):
 #
@@ -51,7 +51,7 @@ LABEL org.opencontainers.image.description "The Emacs-based browser/editor for P
 LABEL org.opencontainers.image.title "PGmacs"
 LABEL org.opencontainers.image.url "https://github.com/emarsden/pgmacs"
 LABEL org.opencontainers.image.source "https://github.com/emarsden/pgmacs"
-LABEL org.opencontainers.image.version "0.17"
+LABEL org.opencontainers.image.version "0.18"
 LABEL org.opencontainers.image.authors "eric.marsden@risk-engineering.org"
 LABEL org.opencontainers.image.licenses "GPLv3"
 
