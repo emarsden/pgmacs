@@ -328,7 +328,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   :init-value nil
   :keymap pgmacs-paginated-map)
 
-
+(defvar pgmacs--connections nil)
 ;; Used for updating on progress retrieving information from PostgreSQL.
 ;; FIXME: these should be per-PostgreSQL-connection rather than per-Emacs-instance.
 (defvar pgmacs--progress nil)
@@ -2405,7 +2405,11 @@ Prompt for the table name in the minibuffer."
 (defun pgmacs-run-sql-region (start end)
   "Send a region to the SQL process."
   (interactive "r")
-  (pgmacs-show-result pgmacs--con (buffer-substring-no-properties start end)))
+  (let ((connection (completing-read
+		     "Choose a connection: "
+		     (mapcar (lambda (x) `("" ,x)))
+		     nil t nil)))
+    (pgmacs-show-result connection (buffer-substring-no-properties start end))))
 
 (defun pgmacs-run-buffer-sql (&rest _ignore)
   "Execute the SQL query in a user-specified buffer.
@@ -2993,6 +2997,7 @@ enviroment variables, if set:
                                                     (widget-value w-hostname)
                                                     (widget-value w-port)
                                                     (widget-value w-tls))))
+			       (setq (cons con pgmacs--connections))
                                (pgmacs-open con)))
                    "Connect")
     (widget-insert "\n")
