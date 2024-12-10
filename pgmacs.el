@@ -2997,7 +2997,7 @@ enviroment variables, if set:
                                                     (widget-value w-hostname)
                                                     (widget-value w-port)
                                                     (widget-value w-tls))))
-			       (setq (cons con pgmacs--connections))
+			       (setq pgmacs--connections (cons con pgmacs--connections))
                                (pgmacs-open con)))
                    "Connect")
     (widget-insert "\n")
