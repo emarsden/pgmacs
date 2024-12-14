@@ -59,7 +59,7 @@ RUN apk update && \
     apk upgrade && \
     apk add --no-cache emacs-nox ncurses && \
     mkdir /elisp && \
-    chown root.root /elisp && \
+    chown root:root /elisp && \
     chmod a=rwx,o+t /elisp && \
     ls -l /usr/share/emacs/site-lisp && \
     echo "(push \"/elisp\" load-path)" > /usr/share/emacs/site-lisp/site-start.el && \
