@@ -100,13 +100,7 @@ Windows and MacOS. It works both in graphical mode and in the terminal.
 should work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate
 with PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
-PGmacs also works with some databases that implement the PostgreSQL wire protocol, but
-not with all of them. PGmacs queries various internal PostgreSQL tables for metainformation on the
-list of tables available, and these tables are not always present in PostgreSQL-compatible
-databases. PGmacs also uses some PostgreSQL-specific functions to display information such as the
-on-disk size of tables, and these functions are not always implemented. What we have tested so far:
-
-PGmacs also works, more or less, with some “PostgreSQL-compatible” databases. There are four main
+PGmacs also works, more or less, with some “**PostgreSQL-compatible**” databases. There are four main
 points where this compatibility may be problematic:
 
 - Compatibility with the PostgreSQL wire protocol. This is the most basic form of compatibility.
@@ -128,36 +122,36 @@ The following PostgreSQL-compatible databases have been tested:
 
 - [Neon](https://neon.tech/) “serverless PostgreSQL” works perfectly.
 
-- [ParadeDB](https://www.paradedb.com/) v0.9.1 seems to work fine in limited testing (it's really a
-  PostgreSQL extension rather than a fully separate product).
+- [ParadeDB](https://www.paradedb.com/) seems to work fine in limited testing (it's really a
+  PostgreSQL extension rather than a fully separate product). Last tested with v0.9.1.
   
 - The [Timescale DB](https://www.timescale.com/) extension for time series data works perfectly
-  (tested with version 2.16.1).
+  (last tested with version 2.16.1).
 
 - The [IvorySQL](https://www.ivorysql.org/) Oracle-compatible flavour of PostgreSQL works perfectly
   (last tested with version 3.4).
 
-- The [PgBouncer](https://www.pgbouncer.org/) connection pooler for PostgreSQL works fine (tested
-  with version 1.23 in the default session pooling mode).
+- The [PgBouncer](https://www.pgbouncer.org/) connection pooler for PostgreSQL works fine (last
+  tested with version 1.23 in the default session pooling mode).
 
 - [Xata](https://xata.io/) “serverless PostgreSQL” has many limitations including lack of support
   for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
   for `EXPLAIN`, for `CREATE EXTENSION`, for functions such as `pg_notify`.
 
-- [YugabyteDB](https://yugabyte.com/) v2.23 works to a limited extent: we are not able to run the
+- [YugabyteDB](https://yugabyte.com/) works to a limited extent: we are not able to run the
   SQL command that adds a PRIMARY KEY to an existing table, nor to display total database size on
-  disk, for example.
+  disk, for example. Last tested with v2.23.
   
-- [CrateDB](https://crate.io/) v5.9.4 does not currently work; it does not implement PostgreSQL
-  functions that we use to query table metainformation.
+- [CrateDB](https://crate.io/) does not currently work; it does not implement PostgreSQL
+  functions that we use to query table metainformation. Last tested with v5.9.4.
 
-- [CockroachDB](https://github.com/cockroachdb/cockroach) version 24.3 does not work with PGmacs:
+- [CockroachDB](https://github.com/cockroachdb/cockroach) does not work with PGmacs:
   our query for `pg-table-owner` triggers an internal error, there is no implementation of the
   function `pg_size_pretty`, and the database fails on basic SQL such as the boolean vector syntax
-  `b'1001000'`.
+  `b'1001000'`. Lasted tested with version 24.3.
 
-- [QuestDB](https://questdb.io/): tested against version 6.5.4. This has very limited PostgreSQL
-  support, and does not support the `integer` type for example.
+- [QuestDB](https://questdb.io/) has very limited PostgreSQL support, and does not support the
+  `integer` type for example. Last tested against version 6.5.4.
 
 - [Google Spanner](https://cloud.google.com/spanner), or at least the Spanner emulator (that reports
   itself as `PostgreSQL 14.1`) and the PGAdapter library that enables support for the PostgreSQL
@@ -166,13 +160,13 @@ The following PostgreSQL-compatible databases have been tested:
   functions we use to query the current user and database status, such as `current_user`,
   `pg_backend_pid`, `pg_is_in_recovery`.
 
-- [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) version 23-4 has very limited
+- [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) has very limited
   PostgreSQL compatibility and does not work with PGmacs. The system tables that we query to obtain
-  the list of tables in the current database are not implemented.
+  the list of tables in the current database are not implemented. Lasted tested with version 23-4.
 
-- ClickHouse v24.5 does not work: its implementation of the wire protocol is very limited, with no
-  support for the `pg_type` metadata and no support for basic PostgreSQL-flavoured SQL commands such
-  as `SET`.
+- ClickHouse does not work: its implementation of the wire protocol is very limited, with no support
+  for the `pg_type` metadata and no support for basic PostgreSQL-flavoured SQL commands such as
+  `SET`. Last tested with v24.5.
 
 - Hosted PostgreSQL services that have been tested: [Railway.app](https://railway.app/) is running a
   Debian build of PostgreSQL 16.4, and works fine; [Aiven.io](https://aiven.io/) is running a Red
