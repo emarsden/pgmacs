@@ -306,7 +306,7 @@ If TABLE is found, return the position of the start of the table.
 If it can't be found, return nil and don't move point."
   (let ((start (point)))
     (goto-char (point-min))
-    (if-let ((match (text-property-search-forward 'pgmacstbl table t)))
+    (if-let* ((match (text-property-search-forward 'pgmacstbl table t)))
         (goto-char (prop-match-beginning match))
       (goto-char start)
       nil)))
@@ -314,7 +314,7 @@ If it can't be found, return nil and don't move point."
 (defun pgmacstbl-goto-column (column-number)
   "Go to COLUMN-NUMBER on the current line."
   (beginning-of-line)
-  (if-let ((match (text-property-search-forward 'pgmacstbl-column column-number t)))
+  (if-let* ((match (text-property-search-forward 'pgmacstbl-column column-number t)))
       (let* ((tbl (pgmacstbl-current-table))
              (column (nth column-number (pgmacstbl-columns tbl))))
         (if (pgmacstbl-column--numerical column)
@@ -826,11 +826,11 @@ If NEXT, do the next column."
                                   (nth 1 (elt (cdr elem) index)))
                                 cache)))))
         ;; Let min-width/max-width specs have their say.
-        (when-let ((min-width (and (pgmacstbl-column-min-width column)
+        (when-let* ((min-width (and (pgmacstbl-column-min-width column)
                                    (pgmacstbl--compute-width
                                     table (pgmacstbl-column-min-width column)))))
           (setq width (max width min-width)))
-        (when-let ((max-width (and (pgmacstbl-column-max-width column)
+        (when-let* ((max-width (and (pgmacstbl-column-max-width column)
                                    (pgmacstbl--compute-width
                                     table (pgmacstbl-column-max-width column)))))
           (setq width (min width max-width)))
@@ -865,7 +865,7 @@ If NEXT, do the next column."
                      (pgmacstbl-keymap table))
                  (copy-keymap pgmacstbl-map)
                pgmacstbl-map)))
-    (when-let ((actions (pgmacstbl-actions table)))
+    (when-let* ((actions (pgmacstbl-actions table)))
       (while actions
         (funcall (lambda (key binding)
                    (keymap-set map key
