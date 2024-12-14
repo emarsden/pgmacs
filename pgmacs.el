@@ -71,6 +71,30 @@
   "Face used to display a PGmacs WHERE filter in a row-list buffer."
   :group 'pgmacs)
 
+(defface pgmacs-highlighted
+  '((((class color) (background light))
+     :weight bold
+     :foreground "blue")
+    (((class color) (background dark))
+     :weight bold
+     :foreground "lightblue"))
+  "Face used to draw attention to text."
+  :group 'pgmacs)
+
+(defface pgmacs-muted
+  '((((class color) (background light))
+     :foreground "gray")
+    (((class color) (background dark))
+     :foreground "grey30"))
+  "Face used to display muted text."
+  :group 'pgmacs)
+
+(defcustom pgmacs-deleted-color
+  "red"
+  "The background color used for table rows pending deletion."
+  :type 'color
+  :group 'pgmacs)
+
 (defcustom pgmacs-row-colors
   '("#D9CEB4" "#D9B96C")
   "The colors used for alternating rows in a database table."
@@ -1527,8 +1551,8 @@ Table names are schema-qualified if the schema is non-default."
   (interactive)
   (with-help-window "*PGmacs proc-list help*"
     (cl-flet ((shw (key msg)
-                (insert (propertize (format "%12s" key) 'face '(:foreground "blue")))
-                (insert (propertize " → " 'face '(:foreground "gray")))
+                (insert (propertize (format "%12s" key) 'face 'pgmacs-highlighted))
+                (insert (propertize " → " 'face 'pgmacs-muted))
                 (insert msg "\n")))
       (let ((inhibit-read-only t))
         (erase-buffer)
@@ -1815,8 +1839,8 @@ Opens a dedicated buffer if the query list is not empty."
   (buffer-disable-undo)
   (help-mode)
   (cl-flet ((shw (key msg)
-              (insert (propertize (format "%12s" key) 'face '(:foreground "blue")))
-              (insert (propertize " → " 'face '(:foreground "gray")))
+              (insert (propertize (format "%12s" key) 'face 'pgmacs-highlighted))
+              (insert (propertize " → " 'face 'pgmacs-muted))
               (insert msg "\n")))
     (let ((inhibit-read-only t))
       (erase-buffer)
@@ -1878,7 +1902,7 @@ Opens a dedicated buffer if the query list is not empty."
     (let* ((table (pgmacstbl-current-table))
            (buffer-read-only nil))
       (pgmacstbl-mark-row table line-number :marked-for-deletion)
-      (add-face-text-property (pos-bol) (pos-eol) '(:background "red"))
+      (add-face-text-property (pos-bol) (pos-eol) `(:background ,pgmacs-deleted-color))
       ;; Move point to next row, unless we are already on the last row.
       (let ((pos (point)))
         (forward-line 1)
@@ -2305,7 +2329,7 @@ Runs functions on `pgmacs-row-list-hook'."
           (save-excursion
             (let ((object (elt (pgmacstbl-objects pgmacstbl) line-number)))
               (pgmacstbl-goto-object object)
-              (add-face-text-property (pos-bol) (pos-eol) '(:background "red"))))))
+              (add-face-text-property (pos-bol) (pos-eol) `(:background ,pgmacs-deleted-color))))))
       (pgmacs--stop-progress-reporter)
       ;; if asked to center-on a particular pk value, search for it and move point to that row
       (when center-on
@@ -3160,7 +3184,7 @@ enviroment variables, if set:
     (widget-forward 1)))
 
 
-(pgmacstbl-register-mark-face :marked-for-deletion '(:background "red"))
+(pgmacstbl-register-mark-face :marked-for-deletion `(:background ,pgmacs-deleted-color))
 
 
 (provide 'pgmacs)

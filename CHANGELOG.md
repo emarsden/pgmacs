@@ -7,6 +7,14 @@
   procedure definition is moved to a separate buffer which is opened by typing `RET` in the
   proc-list buffer.
 
+- New keybinding in table-list, row-list and proc-list buffers: `TAB` moves to the next column,
+  first moving to the next line if already on the last column.
+
+- Make better use of faces to improve support for light/dark background themes: new faces
+  `pgmacs-highlighted` and `pgmacs-muted` that are used in our help buffers, and customizable
+  `pgmacs-deleted-color` used for rows that are pending deletion. Legibility problem noted by
+  @distichum.
+
 
 ## [0.18] - 2024-12-04
 
