@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2023-2024 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
-;; Version: 0.17
+;; Version: 0.18
 ;; Package-Requires: ((emacs "29.1") (pg "0.44"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
@@ -1522,11 +1522,75 @@ Table names are schema-qualified if the schema is non-default."
           (pgmacs--notify "%s" (pg-result res :status))))))
   (pgmacs--display-table pgmacs--table))
 
+(defun pgmacs--proc-list-help (&rest _ignore)
+  "Open a buffer describing keybindings in a proc-list buffer."
+  (interactive)
+  (with-help-window "*PGmacs proc-list help*"
+    (cl-flet ((shw (key msg)
+                (insert (propertize (format "%12s" key) 'face '(:foreground "blue")))
+                (insert (propertize " → " 'face '(:foreground "gray")))
+                (insert msg "\n")))
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (shw "RET" "Display details of the procedure at point")
+        (shw "TAB" "Move to next column")
+        (shw "<backspace>" "Delete the procedure at point")
+        (shw "DEL" "Delete the procedure at point")
+        ;; (shw "R" "Rename the current procedure")
+        (shw "<" "Move point to the first row in the table")
+        (shw ">" "Move point to the last row in the table")
+        (shw "{" "Shrink the horizontal space used by the current column")
+        (shw "}" "Grow the horizontal space used by the current column")
+        ;; (shw "r" "Redraw the table without refetching data from PostgreSQL")
+        ;; (shw "g" "Redraw the table (refetches data from PostgreSQL)")
+        ;; (shw "T" "Switch to the main table-list buffer for this database")
+        (shw "q" "Bury this buffer")
+        (shrink-window-if-larger-than-buffer)
+        (goto-char (point-min))))))
+
 ;; TODO: add functionality to call a procedure with a widget-based interface for the procedure
 ;; arguments.
 ;;
 ;; TODO: allow user to edit the definition of a function, using a query such as that provided
 ;; at https://stackoverflow.com/questions/12148914/get-definition-of-function-sequence-type-etc-in-postgresql-with-sql-query
+(defun pgmacs--proc-list-RET (proc-row)
+  "Handle RET on a row in the proc-list buffer PROC-ROW."
+  (let* ((db-buffer pgmacs--db-buffer)
+         (con pgmacs--con)
+         (oid (nth 6 proc-row))
+         (sql "SELECT pg_catalog.pg_get_function_arguments(p.oid) AS arguments,
+                      t.typname AS return_type,
+                      CASE WHEN l.lanname = 'internal' THEN p.prosrc
+                           ELSE pg_catalog.pg_get_functiondef(p.oid)
+                           END AS definition
+                    FROM pg_catalog.pg_proc p
+                    LEFT JOIN pg_catalog.pg_language l ON p.prolang = l.oid
+                    LEFT JOIN pg_catalog.pg_type t ON t.oid = p.prorettype
+                    WHERE p.oid = $1")
+         (ps-name (pg-ensure-prepared-statement con "QRY-proc-details" sql (list "int4")))
+         (res (pg-fetch-prepared con ps-name `((,oid . "int4"))))
+         (tuple (pg-result res :tuple 0))
+         (buf (get-buffer-create "*PostgreSQL procedure*")))
+    (pop-to-buffer buf)
+    (kill-all-local-variables)
+    (setq-local pgmacs--con con
+                pgmacs--db-buffer db-buffer
+                buffer-read-only t
+                truncate-lines t)
+    (pgmacs-mode)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (remove-overlays)
+      (insert (propertize "Name" 'face 'bold))
+      (insert (format ": %s.%s\n" (cl-first proc-row) (cl-second proc-row)))
+      (insert (propertize "Arguments" 'face 'bold))
+      (insert (format ": %s\n" (cl-first tuple)))
+      (insert (propertize "Return type" 'face 'bold))
+      (insert (format ": %s\n" (cl-second tuple)))
+      (insert (propertize "Definition" 'face 'bold))
+      (insert (format ": %s\n" (cl-third tuple)))
+      (shrink-window-if-larger-than-buffer))))
+
 (defun pgmacs--display-procedures (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
   (let* ((db-buffer pgmacs--db-buffer)
@@ -1538,13 +1602,11 @@ Table names are schema-qualified if the schema is non-default."
                            when 'p' then 'PROCEDURE'
                            when 'a' then 'AGGREGATE'
                            when 'w' then 'WINDOW'
-                      END AS KIND,
+                      END AS kind,
                       l.lanname as language,
-                      CASE WHEN l.lanname = 'internal' THEN p.prosrc
-                           ELSE pg_catalog.pg_get_functiondef(p.oid)
-                           END AS DEFINITION,
                       pg_catalog.pg_get_function_arguments(p.oid) AS arguments,
-                      t.typname AS return_type
+                      t.typname as return_type,
+                      p.oid
                FROM pg_catalog.pg_proc p
                LEFT JOIN pg_catalog.pg_namespace n ON p.pronamespace = n.oid
                LEFT JOIN pg_catalog.pg_language l ON p.prolang = l.oid
@@ -1553,6 +1615,57 @@ Table names are schema-qualified if the schema is non-default."
                ORDER BY schema_name, specific_name")
          (ps-name (pg-ensure-prepared-statement con "QRY-list-procedures" sql nil))
          (res (pg-fetch-prepared con ps-name nil))
+         (pgmacstbl (make-pgmacstbl
+                     :insert nil
+                     :use-header-line nil
+                     :columns (list
+                               (make-pgmacstbl-column
+                                :name (propertize "Schema" 'face 'pgmacs-table-header)
+                                :width "15%"
+                                :align 'left)
+                               (make-pgmacstbl-column
+                                :name (propertize "Name" 'face 'pgmacs-table-header)
+                                :primary t
+                                :width "35%"
+                                :align 'left)
+                               (make-pgmacstbl-column
+                                :name (propertize "Signature" 'face 'pgmacs-table-header)
+                                :width "40%"
+                                :align 'left)
+                               (make-pgmacstbl-column
+                                :name (propertize "Type" 'face 'pgmacs-table-header)
+                                :width 9
+                                :align 'left)
+                               (make-pgmacstbl-column
+                                :name (propertize "Language" 'face 'pgmacs-table-header)
+                                :width 8 :align 'right))
+                     :row-colors pgmacs-row-colors
+                     :face 'pgmacs-table-data
+                     :objects (pg-result res :tuples)
+                     :actions '("h" pgmacs--proc-list-help
+                                "?" pgmacs--proc-list-help
+                                "RET" pgmacs--proc-list-RET
+                                "TAB" pgmacs--next-column
+                                ;; "<deletechar>" pgmacs--proc-list-delete
+                                ;; "r" pgmacs--proc-list-rename
+                                ;; "g" pgmacs--proc-list-redraw
+                                ;; the functions pgmacstbl-beginning-of-table and
+                                ;; pgmacstbl-end-of-table don't work when we have inserted text before
+                                ;; the pgmacstbl.
+                                "<" (lambda (&rest _ignored)
+                                      (text-property-search-backward 'pgmacstbl)
+                                      (next-line))
+                                ">" (lambda (&rest _ignored)
+                                      (text-property-search-forward 'pgmacstbl)
+                                      (previous-line))
+                                "q"  (lambda (&rest _ignored) (bury-buffer)))
+                     :getter (lambda (object column pgmacstbl)
+                               (pcase (pgmacstbl-column pgmacstbl column)
+                                 ("Schema" (pgmacs--display-table-name (cl-first object)))
+                                 ("Name" (cl-second object))
+                                 ("Signature" (format "%s → %s" (nth 4 object) (nth 5 object)))
+                                 ("Type" (nth 2 object))
+                                 ("Language" (nth 3 object))))))
          (buf (get-buffer-create "*PGmacs procedures*")))
     (pop-to-buffer buf)
     (kill-all-local-variables)
@@ -1566,7 +1679,7 @@ Table names are schema-qualified if the schema is non-default."
       (remove-overlays)
       (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
       (insert "\n\n")
-      (pgmacs--show-pgresult buf res))))
+      (pgmacstbl-insert pgmacstbl))))
 
 (defun pgmacs--display-running-queries (&rest _ignore)
   "Display the list of queries running in PostgreSQL.
@@ -1663,6 +1776,7 @@ Opens a dedicated buffer if the query list is not empty."
 
 ;; Bound to "W" in a row-list buffer.
 (defun pgmacs--add-where-filter (&rest _ignore)
+  "Add an SQL WHERE filter to the current PGmacs row-list buffer."
   (interactive)
   (unless (zerop pgmacs--offset)
     (message "Resetting table OFFSET")
@@ -1708,6 +1822,7 @@ Opens a dedicated buffer if the query list is not empty."
       (erase-buffer)
       (shw "v" "Display the value at point in a dedicated buffer")
       (shw "RET" "Edit the value at point in the minibuffer")
+      (shw "TAB" "Move to next column")
       (shw "w" "Edit the value at point in a widget-based buffer")
       (shw "W" "Specify a WHERE filter to apply to displayed rows")
       (shw "<backspace>" "Delete the row at point")
@@ -1758,7 +1873,7 @@ Opens a dedicated buffer if the query list is not empty."
     (message "Can't delete from a table that has no PRIMARY KEY")
     (cl-return-from pgmacs--row-list-mark-row))
   ;; Note: this line number is zero-based
-  (when-let ((line-number (get-text-property (point) 'pgmacstbl-line-number)))
+  (when-let* ((line-number (get-text-property (point) 'pgmacstbl-line-number)))
     (cl-pushnew line-number pgmacs--marked-rows)
     (let* ((table (pgmacstbl-current-table))
            (buffer-read-only nil))
@@ -1902,6 +2017,9 @@ specied by PRIMARY-KEYS."
 (defun pgmacs--select-rows-where (con table-name-escaped where-filter row-count)
   (when (cl-search ";" where-filter)
     (user-error "WHERE filter must not contain end-of-statement marker ';'"))
+  (let ((case-fold-search t))
+    (when (cl-search "WHERE" where-filter :test #'char-equal)
+      (user-error "WHERE filter should be specified without the WHERE keyword")))
   (let ((sql (format "SELECT * FROM %s WHERE %s" table-name-escaped where-filter)))
     (pg-exec-prepared con sql (list) :max-rows row-count)))
 
@@ -2016,6 +2134,7 @@ Runs functions on `pgmacs-row-list-hook'."
                        ;; same syntax for keys as keymap-set
                        ;; TODO: the primary-keys could perhaps be saved as a text property on the table?
                        :actions `("RET" (lambda (row) (pgmacs--table-list-dwim row ',primary-keys))
+                                  "TAB" pgmacs--next-column
                                   "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
                                   "!" (lambda (row) (pgmacs--shell-command-on-value row ',primary-keys))
                                   "&" pgmacs--async-command-on-value
@@ -2027,7 +2146,6 @@ Runs functions on `pgmacs-row-list-hook'."
                                   "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                   "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
                                   "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                                  "TAB" (lambda (_row) (pgmacstbl-next-column))
                                   "<backtab>" (lambda (_row) (pgmacstbl-previous-column))
                                   "R" pgmacs--row-list-rename-column
                                   "h" pgmacs--row-list-help
@@ -2488,7 +2606,8 @@ Uses PostgreSQL connection CON."
                                 :columns columns
                                 :row-colors pgmacs-row-colors
                                 :objects rows
-                                :actions '("e" pgmacs-run-sql
+                                :actions '("TAB" pgmacs--next-column
+                                           "e" pgmacs-run-sql
                                            "E" pgmacs-run-buffer-sql
                                            "r" pgmacs--redraw-pgmacstbl
                                            "j" pgmacs--row-as-json
@@ -2516,6 +2635,18 @@ Uses PostgreSQL connection CON."
                (pgmacstbl-insert pgmacstbl))))
       (shrink-window-if-larger-than-buffer))))
 
+;; Bound to TAB in table-list, row-list, proc-list buffers.
+(defun pgmacs--next-column (&rest _ignore)
+  (let* ((tbl (pgmacstbl-current-table))
+         (column-count (length (pgmacstbl-columns tbl)))
+         (current-col (pgmacstbl-current-column)))
+    (when current-col
+      (message "Current col = %d, column-count = %d" current-col column-count)
+      (cond ((eql current-col (1- column-count))
+             (next-line)
+             (pgmacstbl-goto-column 0))
+            (t
+             (pgmacstbl-next-column))))))
 
 ;; If the cursor is on the Comment column, allow the user to set the table comment. Otherwise,
 ;; display the table in a separate buffer.
@@ -2590,6 +2721,7 @@ Uses PostgreSQL connection CON."
               (insert msg "\n")))
     (let ((inhibit-read-only t))
       (shw "RET" "Open a new buffer to browse/edit the table at point")
+      (shw "TAB" "Move to next column")
       (shw "<deletechar>" "Delete the table at point")
       (shw "r" "Rename the table at point")
       (shw "o" "Prompt for a table to browse/edit in a new buffer")
@@ -2668,10 +2800,10 @@ inlined vector SVG image that is encoded as a data URI."
           (pgmacs--rewrite-schemaspy-svg out)
           (find-file out))))))
 
-;; Run SchemaSpy on the current database, display the SVG. We display only the "real relationships"
-;; summary SVG for the database; SchemaSpy generates many other images including for each orphan
-;; table.
+;; We display only the "real relationships" summary SVG for the database; SchemaSpy generates many
+;; other images including for each orphan table.
 (defun pgmacs--schemaspy-database (&rest _ignore)
+  "Run SchemaSpy on the current PGmacs database and display the SVG."
   (interactive)
   (unless (display-graphic-p)
     (user-error "SchemaSpy will only work on a graphical terminal"))
@@ -2704,6 +2836,7 @@ inlined vector SVG image that is encoded as a data URI."
           (find-file out))))))
 
 (defun pgmacs--svg-icon-database ()
+  "Return an SVG icon representing a database."
   (let ((icon (svg-create "1.3em" "1.3em" :viewBox "0 0 16 16")))
     (cl-flet ((ellipse (y)
                 (svg-ellipse icon 8 y 5 1 :fill "purple")
@@ -2715,12 +2848,14 @@ inlined vector SVG image that is encoded as a data URI."
       (svg-image icon :margin 2 :ascent 'center))))
 
 (defun pgmacs--svg-icon-user ()
+  "Return an SVG icon representing a computer user."
   (let ((icon (svg-create "0.7em" "0.7em" :viewBox "0 0 16 16")))
     (svg-circle icon 8 4 3.8 :fill "black" :opacity 0.5)
     (svg-rectangle icon 1 9 15 20 :fill "black" :opacity 0.5 :rx 3)
     (svg-image icon :margin 2 :ascent 'center)))
 
 (defun pgmacs--svg-icon-table ()
+  "Return an SVG icon representing a database table."
   (let ((icon (svg-create "1em" "1em" :viewBox "-0.4 -0.4 3.6 4.6" :fill "currentColor")))
     (svg-rectangle icon 0 0 3 3 :fill "none" :stroke "black" :stroke-width 0.3 :rx 0.1)
     (svg-line icon 0 1 3 1 :stroke "black" :stroke-width 0.2)
@@ -2818,6 +2953,7 @@ inlined vector SVG image that is encoded as a data URI."
                   :actions '("h" pgmacs--table-list-help
                              "?" pgmacs--table-list-help
                              "RET" pgmacs--table-list-RET
+                             "TAB" pgmacs--next-column
                              "<deletechar>" pgmacs--table-list-delete
                              "S" pgmacs--schemaspy-database
                              "r" pgmacs--table-list-rename

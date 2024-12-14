@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.19] - Unreleased
+
+- Improve the display of the list of procedures/functions in the database. The display of the full
+  procedure definition is moved to a separate buffer which is opened by typing `RET` in the
+  proc-list buffer.
+
+
 ## [0.18] - 2024-12-04
 
 - Redraw the table list after renaming a table.
