@@ -16,6 +16,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'eieio)
 (require 'button)
 (require 'widget)
 (require 'wid-edit)
@@ -162,7 +163,6 @@ concerning a specific table, rather than the entire database."
   :type 'string
   :group 'pgmacs)
 
-
 (defun pgmacs--maybe-svg-icon (svg-fn)
   (if (and (display-graphic-p)
            (image-type-available-p 'svg))
@@ -190,20 +190,71 @@ concerning a specific table, rather than the entire database."
   :type 'hook
   :group 'pgmacs)
 
+;; TODO: it would be cleaner to hold these all in a pgmacs-connection object.
+(defvar-local pgmacs--con nil)
+(defvar-local pgmacs--table nil)
+(defvar-local pgmacs--column-type-names nil)
+(defvar-local pgmacs--offset nil)
+(defvar-local pgmacs--db-buffer nil)
+(defvar-local pgmacs--where-filter nil)
+(defvar-local pgmacs--marked-rows (list))
+(defvar-local pgmacs--completions nil)
+
+;; It is possible to customize the row of text buttons that is displayed above the list of tables in
+;; the main PGmacs buffer. Add an object that implements pgmacs--insert (such as a
+;; pgmacs-shortcut-button object) to the pgmacs-table-list-buttons list.
+(defclass pgmacs-shortcut-button ()
+  ((label :initarg :label :type string)
+   (action :initarg :action)
+   (help-echo :initarg :help-echo :initform nil)))
+
+;; Insert OBJECT into the current buffer.
+(cl-defgeneric pgmacs--insert (object))
+
+(cl-defmethod pgmacs--insert ((btn pgmacs-shortcut-button))
+  (with-slots (label action help-echo) btn
+    (insert-text-button label 'action action 'help-echo help-echo)))
+
+(defvar pgmacs-table-list-buttons
+  (list (pgmacs-shortcut-button
+	 :label "Display procedures"
+         :action #'pgmacs--display-procedures)
+	(pgmacs-shortcut-button
+	 :label "Display running queries"
+         :action #'pgmacs--display-running-queries)
+	(pgmacs-shortcut-button
+	 :label "More backend information"
+         :action #'pgmacs--display-backend-information)
+	(pgmacs-shortcut-button
+	 :label "PostgreSQL settings"
+         :action (lambda (&rest _ignore)
+                   (pgmacs-show-result pgmacs--con "SELECT * FROM pg_settings")))
+	(pgmacs-shortcut-button
+	 :label "Stat activity"
+         :action #'pgmacs--display-stat-activity
+         :help-echo "Show information from the pg_stat_activity table")
+	(pgmacs-shortcut-button
+	 :label "Replication stats"
+	 :action #'pgmacs--display-replication-stats
+	 :help-echo "Show information on PostgreSQL replication status"))
+  "List of shortcut buttons to display on the main table-list buffer.")
+
+;; TODO: pgmacs-row-list-buttons
+
 (defun pgmacs--widget-setup ()
   "Set up the appearance of widgets used in PGmacs.
 Uses customizations implemented in Emacs' customize support."
   ;; cus-edit.el has this rather rude keymap binding which adds to widget-field-keymap
   ;; bindings that are not relevant to us. So we revert it back to widget-field-keymap.
   (widget-put (get 'editable-field 'widget-type) :keymap widget-field-keymap)
-  (setq-local widget-button-face custom-button)
-  (setq-local widget-button-pressed-face custom-button-pressed)
-  (setq-local widget-mouse-face custom-button-mouse)
+  (setq-local widget-button-face custom-button
+	      widget-button-pressed-face custom-button-pressed
+	      widget-mouse-face custom-button-mouse)
   (when custom-raised-buttons
-    (setq-local widget-push-button-prefix "")
-    (setq-local widget-push-button-suffix "")
-    (setq-local widget-link-prefix "")
-    (setq-local widget-link-suffix "")))
+    (setq-local widget-push-button-prefix ""
+		widget-push-button-suffix ""
+		widget-link-prefix ""
+		widget-link-suffix "")))
 
 (defvar-keymap pgmacs-table-list-map
   :doc "Keymap for PGmacs table-list buffers"
@@ -362,16 +413,6 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 
 (defvar-local pgmacs--kill-ring nil
   "Used for copying and pasting rows in a buffer's table.")
-
-;; TODO: it would be cleaner to hold these all in a pgmacs-connection object.
-(defvar-local pgmacs--con nil)
-(defvar-local pgmacs--table nil)
-(defvar-local pgmacs--column-type-names nil)
-(defvar-local pgmacs--offset nil)
-(defvar-local pgmacs--db-buffer nil)
-(defvar-local pgmacs--where-filter nil)
-(defvar-local pgmacs--marked-rows (list))
-(defvar-local pgmacs--completions nil)
 
 (defvar pgmacs--column-display-functions (make-hash-table :test #'equal))
 
@@ -1678,7 +1719,7 @@ Table names are schema-qualified if the schema is non-default."
                                 ;; the pgmacstbl.
                                 "<" (lambda (&rest _ignored)
                                       (text-property-search-backward 'pgmacstbl)
-                                      (next-line))
+                                      (forward-line))
                                 ">" (lambda (&rest _ignored)
                                       (text-property-search-forward 'pgmacstbl)
                                       (previous-line))
@@ -1732,6 +1773,30 @@ Opens a dedicated buffer if the query list is not empty."
                (erase-buffer)
                (remove-overlays)
                (insert (propertize "Queries running in this PostgreSQL backend" 'face 'bold))
+               (insert "\n\n")
+               (pgmacs--show-pgresult buf res)))))))
+
+(defun pgmacs--display-replication-stats (&rest _ignore)
+  "Display the replication status of this PostgreSQL instance."
+  (let* ((db-buffer pgmacs--db-buffer)
+         (con pgmacs--con)
+         (res (pg-exec con "SELECT * FROM pg_stat_replication"))
+         (tuples (pg-result res :tuples)))
+    (cond ((null tuples)
+           (pgmacs--notify "Empty replication stats" nil))
+          (t
+           (let ((buf (get-buffer-create "*PostgreSQL replication stats*")))
+             (pop-to-buffer buf)
+             (kill-all-local-variables)
+             (setq-local pgmacs--con con
+                         pgmacs--db-buffer db-buffer
+                         buffer-read-only t
+                         truncate-lines t)
+             (pgmacs-mode)
+             (let ((inhibit-read-only t))
+               (erase-buffer)
+               (remove-overlays)
+               (insert (propertize "Replication statistics from pg_stat_replication view" 'face 'bold))
                (insert "\n\n")
                (pgmacs--show-pgresult buf res)))))))
 
@@ -2665,9 +2730,8 @@ Uses PostgreSQL connection CON."
          (column-count (length (pgmacstbl-columns tbl)))
          (current-col (pgmacstbl-current-column)))
     (when current-col
-      (message "Current col = %d, column-count = %d" current-col column-count)
       (cond ((eql current-col (1- column-count))
-             (next-line)
+             (forward-line)
              (pgmacstbl-goto-column 0))
             (t
              (pgmacstbl-next-column))))))
@@ -3018,31 +3082,13 @@ inlined vector SVG image that is encoded as a data URI."
         (insert (format "Total database size: %s\n" size))))
     ;; Perhaps also display output from
     ;; select state, count(*) from pg_stat_activity where pid <> pg_backend_pid() group by 1 order by 1;'
-    ;; see https://gitlab.com/postgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
+    ;; see https://gitlab.com/posetgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
     (insert "\n")
-    (insert-text-button "Display procedures"
-                        'action #'pgmacs--display-procedures)
-    (insert "   ")
-    (insert-text-button "Display running queries"
-                        'action #'pgmacs--display-running-queries)
-    (insert "   ")
-    (insert-text-button "More backend information"
-                        'action #'pgmacs--display-backend-information)
-    (insert "   \n")
-    (insert-text-button "PostgreSQL settings"
-                        'action (lambda (&rest _ignore)
-                                  (pgmacs-show-result con "SELECT * FROM pg_settings")))
-    (insert "   ")
-    (insert-text-button "Stat activity"
-                        'action #'pgmacs--display-stat-activity
-                        'help-echo "Show information from the pg_stat_activity table")
-    (insert "   ")
-    (insert-text-button
-     "Replication stats"
-     'action (lambda (&rest _ignore)
-               ;; FIXME probably only want a subset of these columns
-               (pgmacs-show-result con "SELECT * FROM pg_stat_replication"))
-     'help-echo "Show information on PostgreSQL replication status")
+    (dolist (btn pgmacs-table-list-buttons)
+      (pgmacs--insert btn)
+      (insert "  ")
+      (when (> (current-column) (min (window-width) 90))
+        (insert "\n")))
     (insert "\n\n")
     (pgmacstbl-insert pgmacstbl)
     (pgmacs--stop-progress-reporter)))

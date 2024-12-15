@@ -15,6 +15,11 @@
   `pgmacs-deleted-color` used for rows that are pending deletion. Legibility problem noted by
   @distichum.
 
+- The row of text buttons displayed above the list of tables in the main PGmacs buffer is now
+  extensible. Add an object that implements `pgmacs--insert` (such as a `pgmacs-shortcut-button`
+  object) to the `pgmacs-table-list-buttons` list, and that will be included in the button
+  shortcuts.
+
 
 ## [0.18] - 2024-12-04
 
