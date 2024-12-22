@@ -1348,6 +1348,24 @@ Uses PostgreSQL connection CON."
          (res (pg-fetch-prepared con ps-name params)))
     (null (pg-result res :tuples))))
 
+(defun pgmacs--fk-constraints (con table)
+  "Return the list of foreign key constraints for TABLE.
+Uses PostgreSQL connection CON."
+  (pcase (pgcon-server-variant con)
+    ((or 'postgresql 'orioledb 'ivorysql 'timescaledb 'citusdb 'xata)
+     (let* ((t-id (pg-escape-identifier table))
+            ;; Query adapted from https://stackoverflow.com/questions/1152260/how-to-list-table-foreign-keys
+            (sql "SELECT conname,
+                pg_catalog.pg_get_constraintdef(r.oid, true) as condef
+               FROM pg_catalog.pg_constraint r
+               WHERE r.conrelid = $1::regclass AND r.contype = 'f' ORDER BY 1")
+            (argument-types (list "text"))
+            (params `((,t-id . "text")))
+            (ps-name (pg-ensure-prepared-statement con "QRY-table-fk-constraints" sql argument-types))
+            (res (pg-fetch-prepared con ps-name params)))
+       (pg-result res :tuples)))
+    (_ nil)))
+
 ;; Function pgmacs--column-info uses some moderately complex SQL queries to determine the
 ;; constraints of a column. These queries are called once per column for a row-list buffer. To avoid
 ;; redundant processing by PostgreSQL in parsing and preparing a query plan for these queries, we
@@ -1367,8 +1385,8 @@ over the PostgreSQL connection CON."
                FROM information_schema.table_constraints tc
                JOIN information_schema.constraint_column_usage AS ccu USING (constraint_schema, constraint_name)
                JOIN information_schema.columns AS c ON c.table_schema = tc.constraint_schema
-               AND tc.table_name = c.table_name
-               AND ccu.column_name = c.column_name
+                 AND tc.table_name = c.table_name
+                 AND ccu.column_name = c.column_name
                WHERE tc.constraint_schema = $1
                  AND tc.table_name = $2
                  AND c.column_name = $3
@@ -1379,19 +1397,33 @@ over the PostgreSQL connection CON."
          (res (pg-fetch-prepared con ps-name params))
          (check-constraints (pg-result res :tuples))
          (sql "SELECT
-                 ccu.table_schema AS foreign_table_schema,
-                 ccu.table_name AS foreign_table_name,
-                 ccu.column_name AS foreign_column_name
-               FROM information_schema.table_constraints tc
-               JOIN information_schema.constraint_column_usage AS ccu
-                 USING (constraint_schema, constraint_name)
-               JOIN information_schema.key_column_usage AS kcu
-                 ON kcu.constraint_name = tc.constraint_name
-                 AND kcu.table_schema = tc.table_schema
-               WHERE tc.constraint_type = 'FOREIGN KEY'
-                 AND tc.constraint_schema = $1
-                 AND tc.table_name = $2
-                 AND kcu.column_name = $3")
+                 $1,
+                 cl.relname AS parent_table,
+                 att.attname AS parent_column,
+                 conname
+               FROM
+                (SELECT
+                     unnest(con1.conkey) AS parent,
+                     unnest(con1.confkey) AS child,
+                     con1.confrelid,
+                     con1.conrelid,
+                     con1.conname
+                 FROM
+                     pg_class cl
+                     JOIN pg_namespace ns ON cl.relnamespace = ns.oid
+                     JOIN pg_constraint con1 ON con1.conrelid = cl.oid
+                 WHERE
+                     ns.nspname = $1 AND
+                     cl.relname = $2 AND
+                     con1.contype = 'f'
+                ) con
+               JOIN pg_attribute att ON
+                    att.attrelid = con.confrelid and att.attnum = con.child
+               JOIN pg_class cl ON
+                    cl.oid = con.confrelid
+               JOIN pg_attribute att2 ON
+                    att2.attrelid = con.conrelid and att2.attnum = con.parent
+               WHERE att2.attname = $3")
          ;; this query has the same arguments (and argument types) as that above
          (ps-name (pg-ensure-prepared-statement con "QRY-references-constraints" sql argument-types))
          (res (pg-fetch-prepared con ps-name params))
@@ -1421,9 +1453,17 @@ over the PostgreSQL connection CON."
                (puthash (cl-first c) (format "%s %s" (cl-second c) (cl-first clauses)) column-info)))
             (t
              (puthash (cl-first c) (cl-second c) column-info))))
-    (dolist (c references-constraints)
-      (let ((sqn (make-pg-qualified-name :schema (cl-first c) :name (cl-second c))))
-        (puthash "REFERENCES" (list sqn (cl-third c)) column-info)))
+    ;; If references-constraints contains a single row, we are in the presence of a simple foreign
+    ;; key reference (to a single column), and the second element of the hash-table entry is the
+    ;; target column name. If there is more than one row, we have a complex (multi-column) foreign
+    ;; key reference, and the second element of the hash-table entry is set to nil.
+    (when references-constraints
+      (message "We have references-constraints = %s" references-constraints)
+      (let* ((fc (cl-first references-constraints))
+             (target-col (and (eql 1 (length references-constraints))
+                              (cl-third fc))))
+        (let ((sqn (make-pg-qualified-name :schema (cl-first fc) :name (cl-second fc))))
+          (puthash "REFERENCES" (list sqn target-col) column-info))))
     (when (pgmacs--column-nullable-p con table column)
       (puthash "NOT NULL" nil column-info))
     (when (cl-first maxlen)
@@ -1438,10 +1478,11 @@ over the PostgreSQL connection CON."
     (maphash (lambda (k v)
                (cond ((string= "TYPE" k) nil)
                      ((string= "REFERENCES" k)
-                      (push (format "REFERENCES %s(%s)"
-                                    (pgmacs--display-identifier (cl-first v))
-                                    (cl-second v))
-                            items))
+                      (when (cl-second v)
+                        (push (format "REFERENCES %s(%s)"
+                                      (pgmacs--display-identifier (cl-first v))
+                                      (cl-second v))
+                              items)))
                      (t
                       (push (if v (format "%s %s" k v) k) items))))
              column-info)
@@ -1978,7 +2019,7 @@ Opens a dedicated buffer if the query list is not empty."
 (cl-defun pgmacs--row-list-unmark-row (&rest _ignore)
   "Unmark the current row for deletion."
   ;; Note: this line number is zero-based
-  (when-let ((line-number (get-text-property (point) 'pgmacstbl-line-number)))
+  (when-let* ((line-number (get-text-property (point) 'pgmacstbl-line-number)))
     (cond ((member line-number pgmacs--marked-rows)
            (setq pgmacs--marked-rows (cl-delete line-number pgmacs--marked-rows))
            (let* ((table (pgmacstbl-current-table))
@@ -2322,6 +2363,11 @@ Runs functions on `pgmacs-row-list-hook'."
             (insert (propertize "` " 'face 'shadow)))
           (insert last)
           (insert "\n")))
+      (let ((fkc (pgmacs--fk-constraints con table)))
+        (when fkc
+          (insert (propertize "Foreign key constraints" 'face 'bold) ":\n")
+          (dolist (c fkc)
+            (insert "  " (cl-first c) " " (cl-second c) "\n"))))
       (when indexes
         (insert (propertize "Indexes" 'face 'bold))
         (insert ":\n")
@@ -2482,7 +2528,7 @@ This refetches data from PostgreSQL."
                (pk-col-id (pgmacstbl-current-column))
                (pk-col-type (aref pgmacs--column-type-names pk-col-id))
                (pk-val (nth pk-col-id row))
-               (center-on (list pk pk-val pk-col-type)))
+               (center-on (and pk (list pk pk-val pk-col-type))))
           (pgmacs--display-table table :center-on center-on))
       (pgmacs--edit-value-minibuffer row primary-keys))))
 

@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.19] - Unreleased
+## [0.19] - 2024-12-22
 
 - Improve the display of the list of procedures/functions in the database. The display of the full
   procedure definition is moved to a separate buffer which is opened by typing `RET` in the
@@ -19,6 +19,12 @@
   extensible. Add an object that implements `pgmacs--insert` (such as a `pgmacs-shortcut-button`
   object) to the `pgmacs-table-list-buttons` list, and that will be included in the button
   shortcuts.
+
+- Fix display of foreign key reference metadata for columns in row-list buffers: the information
+  displayed for composite foreign key references (composed of multiple columns in either the source
+  or the destination table) was incorrect (reported by @akurth). Foreign key information is only
+  displayed in the column section when it concerns a simple key. An additional foreign key section
+  is displayed under the column metadata, using similar formatting to the psql tool.
 
 
 ## [0.18] - 2024-12-04
