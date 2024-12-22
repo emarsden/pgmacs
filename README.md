@@ -138,12 +138,13 @@ The following PostgreSQL-compatible databases have been tested:
   for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
   for `EXPLAIN`, for `CREATE EXTENSION`, for functions such as `pg_notify`.
 
-- [YugabyteDB](https://yugabyte.com/) works to a limited extent: we are not able to run the
-  SQL command that adds a PRIMARY KEY to an existing table, nor to display total database size on
-  disk, for example. Last tested with v2.23.
+- [YugabyteDB](https://yugabyte.com/) works to a limited extent: we are not able to run the SQL
+  command that adds a PRIMARY KEY to an existing table, nor to display total database size on disk,
+  for example. It does support some extensions such as pgvector, for example. Last tested with
+  v2.23.
   
 - [CrateDB](https://crate.io/) does not currently work; it does not implement PostgreSQL
-  functions that we use to query table metainformation. Last tested with v5.9.4.
+  functions that we use to query table metainformation. Last tested with v5.9.5.
 
 - [CockroachDB](https://github.com/cockroachdb/cockroach) does not work with PGmacs:
   our query for `pg-table-owner` triggers an internal error, there is no implementation of the
