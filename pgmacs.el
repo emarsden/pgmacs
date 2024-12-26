@@ -200,11 +200,12 @@ concerning a specific table, rather than the entire database."
 (defvar-local pgmacs--marked-rows (list))
 (defvar-local pgmacs--completions nil)
 
-;; It is possible to customize the row of text buttons that is displayed above the list of tables in
-;; the main PGmacs buffer. Add an object that implements pgmacs--insert (such as a
-;; pgmacs-shortcut-button object) to the pgmacs-table-list-buttons list.
 (defclass pgmacs-shortcut-button ()
   ((label :initarg :label :type string)
+   ;; Condition, if defined, is a function called with zero arguments that determines whether this
+   ;; button should be inserted, bassed on characteristics of the current table, for example. It can
+   ;; use buffer-local variables pgmacs--con and pgmacs--table.
+   (condition :initarg :condition :initform nil)
    (action :initarg :action)
    (help-echo :initarg :help-echo :initform nil)))
 
@@ -212,9 +213,17 @@ concerning a specific table, rather than the entire database."
 (cl-defgeneric pgmacs--insert (object))
 
 (cl-defmethod pgmacs--insert ((btn pgmacs-shortcut-button))
-  (with-slots (label action help-echo) btn
-    (insert-text-button label 'action action 'help-echo help-echo)))
+  (with-slots (label condition action help-echo) btn
+    (let ((disabled nil))
+      (when condition
+        (unless (funcall condition)
+          (setq disabled t)))
+      (unless disabled
+        (insert-text-button label 'action action 'help-echo help-echo)))))
 
+;; It is possible to customize the row of text buttons that is displayed above the list of tables in
+;; the main PGmacs buffer. Add an object that implements pgmacs--insert (such as a
+;; pgmacs-shortcut-button object) to the pgmacs-table-list-buttons list.
 (defvar pgmacs-table-list-buttons
   (list (pgmacs-shortcut-button
 	 :label "Display procedures"
@@ -239,7 +248,33 @@ concerning a specific table, rather than the entire database."
 	 :help-echo "Show information on PostgreSQL replication status"))
   "List of shortcut buttons to display on the main table-list buffer.")
 
-;; TODO: pgmacs-row-list-buttons
+(defvar pgmacs-row-list-buttons
+  (list (pgmacs-shortcut-button
+         :label "Export table to CSV buffer"
+         :action #'pgmacs--table-to-csv
+         :help-echo  "Export this table to a CSV buffer")
+        (pgmacs-shortcut-button
+         :condition (lambda () (null (pgmacs--table-primary-keys pgmacs--con pgmacs--table)))
+         :label "Add primary key to table"
+         :action #'pgmacs--add-primary-key
+         :help-echo "Add a PRIMARY KEY to enable editing")
+        (pgmacs-shortcut-button
+         :label "Count rows"
+         :action #'pgmacs--run-count
+         :help-echo "Count rows in this table")
+        (pgmacs-shortcut-button
+         :label "ANALYZE this table"
+         :action #'pgmacs--run-analyze
+         :help-echo "Run ANALYZE on this table")
+        (pgmacs-shortcut-button
+         :condition (lambda () (null (pg-table-comment pgmacs--con pgmacs--table)))
+         :label "Add table comment"
+         :action (lambda (&rest _ignore)
+                   (let ((comment (read-from-minibuffer "Table comment: ")))
+                     (setf (pg-table-comment pgmacs--con pgmacs--table) comment))
+                   (pgmacs--display-table pgmacs--table))
+         :help-echo "Add an SQL comment to the table")))
+
 
 (defun pgmacs--widget-setup ()
   "Set up the appearance of widgets used in PGmacs.
@@ -2336,14 +2371,14 @@ Runs functions on `pgmacs-row-list-hook'."
                                       (pgmacs--display-table table))
                             'help-echo "Modify the table comment")
         (insert "\n"))
-      ;; FIXME: pg_size_pretty not implemented in CockroachDB, YDB.
-      (let* ((sql "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_total_relation_size($1)),
+      (unless (member (pgcon-server-variant con) '(cockroachdb ydb))
+        (let* ((sql "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_total_relation_size($1)),
                           pg_catalog.pg_size_pretty(pg_catalog.pg_indexes_size($1))")
-             (res (pg-exec-prepared con sql `((,t-id . "text"))))
-             (row (pg-result res  :tuple 0)))
-        (insert (propertize "On-disk-size" 'face 'bold))
-        (insert (format ": %s" (cl-first row)))
-        (insert (format " (indexes %s)\n" (cl-second row))))
+               (res (pg-exec-prepared con sql `((,t-id . "text"))))
+               (row (pg-result res  :tuple 0)))
+          (insert (propertize "On-disk-size" 'face 'bold))
+          (insert (format ": %s" (cl-first row)))
+          (insert (format " (indexes %s)\n" (cl-second row)))))
       (insert (propertize "Columns" 'face 'bold))
       (insert ":\n")
       (let ((colinfo (list)))
@@ -2385,30 +2420,11 @@ Runs functions on `pgmacs-row-list-hook'."
           (insert "enabled")
         (insert "not enabled"))
       (insert "\n\n")
-      (insert-text-button "Export table to CSV buffer"
-                          'action #'pgmacs--table-to-csv
-                          'help-echo "Export this table to a CSV buffer")
-      (unless primary-keys
-        (insert "   ")
-        (insert-text-button "Add primary key to table"
-                            'action #'pgmacs--add-primary-key
-                            'help-echo "Add a PRIMARY KEY to enable editing"))
-      (insert "  ")
-      (insert-text-button "Count rows"
-                          'action #'pgmacs--run-count
-                          'help-echo "Count rows in this table")
-      (insert "  ")
-      (insert-text-button "ANALYZE this table"
-                          'action #'pgmacs--run-analyze
-                          'help-echo "Run ANALYZE on this table")
-      (unless comment
-        (insert "\n")
-        (insert-text-button "Add table comment"
-                            'action (lambda (&rest _ignore)
-                                      (let ((comment (read-from-minibuffer "Table comment: ")))
-                                        (setf (pg-table-comment con table) comment))
-                                      (pgmacs--display-table table))
-                            'help-echo "Add an SQL comment to the table"))
+      (dolist (btn pgmacs-row-list-buttons)
+        (pgmacs--insert btn)
+        (insert "  ")
+        (when (> (current-column) (min (window-width) 90))
+          (insert "\n")))
       (insert "\n\n")
       ;; Make it visually clear to the user that a WHERE filter is active
       (when where-filter

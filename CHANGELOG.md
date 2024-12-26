@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.20] - Unreleased
+
+- New variable `pgmacs-row-list-buttons` which offers similar functionality to
+  `pgmacs-table-list-buttons` for a row-list buffer. Add the ability to define buttons that are only
+  shown if a particular condition is non-nil, thanks to the `:condition` initarg to a button.
+
+
 ## [0.19] - 2024-12-22
 
 - Improve the display of the list of procedures/functions in the database. The display of the full
