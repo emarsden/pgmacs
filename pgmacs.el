@@ -190,6 +190,11 @@ concerning a specific table, rather than the entire database."
   :type 'hook
   :group 'pgmacs)
 
+(defcustom pgmacs-shrink-columns nil
+  "If non-nil, shrink all columns in a row-list buffer by default."
+  :type 'boolean
+  :group 'pgmacs)
+
 ;; TODO: it would be cleaner to hold these all in a pgmacs-connection object.
 (defvar-local pgmacs--con nil)
 (defvar-local pgmacs--table nil)
@@ -2017,6 +2022,7 @@ Opens a dedicated buffer if the query list is not empty."
       (shw ">" "Move point to the last row in the table")
       (shw "{" "Shrink the horizontal space used by the current column")
       (shw "}" "Grow the horizontal space used by the current column")
+      (shw "=" "Shrink each column to the smallest size possible")
       (shw "o" "Prompt for a table name and open a new buffer displaying that table's data")
       (shw "r" "Redraw the table without refetching data from PostgreSQL")
       (shw "g" "Redraw the table (refetches data from PostgreSQL)")
@@ -2446,7 +2452,9 @@ Runs functions on `pgmacs-row-list-hook'."
         (insert "\n\n"))
       (if (null rows)
           (insert "(no rows in table)")
-        (pgmacstbl-insert pgmacstbl))
+        (pgmacstbl-insert pgmacstbl)
+        (when pgmacs-shrink-columns
+          (pgmacs--shrink-columns)))
       ;; Recreate the row markings from the line numbers stored in pgmacs--marked-rows, if necessary
       ;; (this function may be called to update a pgmacstbl after a modification, in which case
       ;; pgmacs--marked-rows may be non-nil).
@@ -2783,7 +2791,9 @@ Uses PostgreSQL connection CON."
                                            "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
                                            "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
                                            "q" (lambda (&rest _ignore) (bury-buffer))))))
-               (pgmacstbl-insert pgmacstbl))))
+               (pgmacstbl-insert pgmacstbl)
+               (when pgmacs-shrink-columns
+                 (pgmacs--shrink-columns)))))
       (shrink-window-if-larger-than-buffer))))
 
 ;; Bound to TAB in table-list, row-list, proc-list buffers.
