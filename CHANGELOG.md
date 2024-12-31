@@ -7,6 +7,11 @@
   `pgmacs-table-list-buttons` for a row-list buffer. Add the ability to define buttons that are only
   shown if a particular condition is non-nil, thanks to the `:condition` initarg to a button.
 
+- New customizable variables `pgmacs-timestamp-format` and `pgmacs-timestamp-zone`. The first is a
+  format string used to display column data of type timestamp, timestamptz and datetime. The second
+  is an optional time zone to use for the display of timestamp, timestamptz and datetime data; the
+  default behaviour is to use the local timezone. Patch from @akurth.
+
 
 ## [0.19] - 2024-12-22
 

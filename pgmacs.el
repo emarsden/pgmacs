@@ -190,6 +190,17 @@ concerning a specific table, rather than the entire database."
   :type 'hook
   :group 'pgmacs)
 
+(defcustom pgmacs-timestamp-format "%Y-%m-%dT%T"
+  "Format string to be used for timestamp/timestamptz/datetime output."
+  :type 'string
+  :group 'pgmacs)
+
+(defcustom pgmacs-timestamp-zone nil
+  "Time zone to be used for timestamp/timestamptz/datetime output,
+e.g. 'UTC' or 'Europe/Berlin'. Nil for local OS timezone."
+  :type 'string
+  :group 'pgmacs)
+
 (defcustom pgmacs-shrink-columns nil
   "If non-nil, shrink all columns in a row-list buffer by default."
   :type 'boolean
@@ -485,10 +496,10 @@ Applies format string FMT to ARGS."
   (cond ((string= type-name "date")
          (lambda (val) (format-time-string "%Y-%m-%d" val)))
         ((or (string= type-name "timestamp")
-            (string= type-name "timestamptz")
-	    (string= type-name "datetime"))
+             (string= type-name "timestamptz")
+             (string= type-name "datetime"))
          ;; these are represented as a `decode-time' structure
-         (lambda (val) (format-time-string "%Y-%m-%dT%T" val)))
+         (lambda (val) (format-time-string pgmacs-timestamp-format val pgmacs-timestamp-zone)))
         ((or (string= type-name "text")
              (string= type-name "varchar")
              (string= type-name "name"))
