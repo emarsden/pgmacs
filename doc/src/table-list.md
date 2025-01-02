@@ -14,7 +14,7 @@ The following keys are bound when the point is located in the table list buffer:
 |----------------|--------------------------------------------------------------------------------------|
 | <kbd>RET</kbd> | Open a new buffer to browse/edit the table at point.                                 |
 | <kbd>Del</kbd> | Delete the table at point.                                                           |
-| <kbd>r</kbd>   | Rename the table at point.                                                           |
+| <kbd>R</kbd>   | Rename the table at point.                                                           |
 | <kbd>o</kbd>   | Prompt for a table to browse/edit in a new buffer.                                   |
 | <kbd>p</kbd>   | New buffer listing the functions and procedures in the current database.             |
 | <kbd>e</kbd>   | Open a new buffer to display the output from an SQL query.                           |

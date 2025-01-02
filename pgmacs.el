@@ -2897,7 +2897,7 @@ Uses PostgreSQL connection CON."
       (shw "RET" "Open a new buffer to browse/edit the table at point")
       (shw "TAB" "Move to next column")
       (shw "<deletechar>" "Delete the table at point")
-      (shw "r" "Rename the table at point")
+      (shw "R" "Rename the table at point")
       (shw "o" "Prompt for a table to browse/edit in a new buffer")
       (shw "p" "New buffer listing the functions and procedures in the current database")
       (shw "e" "New buffer with output from SQL query")
@@ -3130,7 +3130,7 @@ inlined vector SVG image that is encoded as a data URI."
                              "TAB" pgmacs--next-column
                              "<deletechar>" pgmacs--table-list-delete
                              "S" pgmacs--schemaspy-database
-                             "r" pgmacs--table-list-rename
+                             "R" pgmacs--table-list-rename
                              "g" pgmacs--table-list-redraw
                              "o" pgmacs-open-table
                              "e" pgmacs-run-sql
