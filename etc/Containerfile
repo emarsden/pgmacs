@@ -43,7 +43,7 @@ RUN apk update && \
       --eval '(byte-compile-file "/src/pg-el/pg-gis.el")' \
       --eval '(byte-compile-file "/src/pg-el/pg-lo.el")' \
       -l /src/pgmacs/pgmacstbl.el --eval '(byte-compile-file "/src/pgmacs/pgmacstbl.el")' \
-      --eval '(byte-compile-file "/src/pgmacs/pgmacs-sql-keywords.el")' \
+      -l /src/pgmacs/pgmacs-sql-keywords.el --eval '(byte-compile-file "/src/pgmacs/pgmacs-sql-keywords.el")' \
       --eval '(byte-compile-file "/src/pgmacs/pgmacs.el")'
 
 
