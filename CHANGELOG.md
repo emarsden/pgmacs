@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.20] - Unreleased
+## [0.20] - 2025-01-02
 
 - New variable `pgmacs-row-list-buttons` which offers similar functionality to
   `pgmacs-table-list-buttons` for a row-list buffer. Add the ability to define buttons that are only
