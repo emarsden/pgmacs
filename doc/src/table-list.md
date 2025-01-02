@@ -36,3 +36,24 @@ concerning the PostgreSQL backend that you are connected to, including the list 
 extensions.
 
 ![Screenshot backend information](img/backend-information-buffer.png)
+
+
+
+## Custom buttons in the table-list buffer
+
+The list of buttons displayed above the list of tables (“Display tables", “More backend information” and so on)
+is user-customizable via the variable `pgmacs-table-list-buttons`. To add a new button to this list,
+add code such as the following to your Emacs initialization file:
+
+```lisp
+(require 'pgmacs)
+
+(add-to-list 'pgmacs-table-list-buttons
+   (pgmacs-shortcut-button
+     :label "The displayed label"
+     :action #'my/function-of-zero-arguments
+     :help-echo "Help text echoed to minibuffer"))
+```
+
+If you prefer the button to be added to the end of the list, add a last argument of `t` to the
+`add-to-list` invocation.

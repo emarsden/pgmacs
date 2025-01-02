@@ -288,7 +288,6 @@ e.g. 'UTC' or 'Europe/Berlin'. Nil for local OS timezone."
                    (pgmacs--display-table pgmacs--table))
          :help-echo "Add an SQL comment to the table")))
 
-
 (defun pgmacs--widget-setup ()
   "Set up the appearance of widgets used in PGmacs.
 Uses customizations implemented in Emacs' customize support."
@@ -2444,7 +2443,8 @@ Runs functions on `pgmacs-row-list-hook'."
         (insert "  ")
         (when (> (current-column) (min (window-width) 90))
           (insert "\n")))
-      (insert "\n\n")
+      (unless (bolp)
+        (insert "\n"))
       ;; Make it visually clear to the user that a WHERE filter is active
       (when where-filter
         (insert (propertize "WHERE filter" 'face 'bold))

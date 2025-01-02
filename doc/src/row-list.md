@@ -52,12 +52,22 @@ The following keys are bound when the point is located in the row-list table:
 | <kbd>S</kbd>                    | Sort the table by the current column.                                                |
 | <kbd>{</kbd>                    | Make the current column narrower.                                                    |
 | <kbd>}</kbd>                    | Make the current column wider.                                                       |
+| <kbd>=</kbd>                    | Adjust all column widths to the narrowest size possible.                             |
 | <kbd>T</kbd>                    | Jump to the main PGmacs table-list buffer.                                           |
 | <kbd>q</kbd>                    | Bury the current buffer.                                                             |
 
 
-The hook functions on `pgmacs-row-list-hook` are run when a row-list buffer is opened. They are run
-just before control is returned to the user, in a buffer with all data inserted.
+Any functions on `pgmacs-row-list-hook` are run when a row-list buffer is opened. They are run just
+before control is returned to the user, in a buffer with all data inserted. For example, if you
+would like all column widths to be adjusted to the narrowest size possible given the data displayed
+in the table (obtaining the same result as if you pressed <kbd>=</kbd> each time you open a row-list
+buffer), you can include the following in your Emacs initialization file:
+
+```lisp
+(eval-after-load 'pgmacs
+   (add-hook 'pgmacs-row-list-hook #'pgmacs--shrink-columns))
+```
+
 
 
 ## Run a shell command or an external application on cell value
@@ -147,3 +157,24 @@ operation, combined with the WHERE filtering described above.
   src="https://github.com/emarsden/emarsden.github.io/raw/refs/heads/main/assets/pgmacs-where-filter-multidelete.mp4">
 </video>
 
+
+
+
+## Custom buttons in a row-list buffer
+
+The list of buttons displayed above the rows of a table (“count rows”, “export to CSV” and so on)
+is user-customizable via the variable `pgmacs-row-list-buttons`. To add a new button to this list,
+add code such as the following to your Emacs initialization file:
+
+```lisp
+(require 'pgmacs)
+
+(add-to-list 'pgmacs-row-list-buttons
+   (pgmacs-shortcut-button
+     :label "The displayed label"
+     :action #'my/function-of-zero-arguments
+     :help-echo "Help text echoed to minibuffer"))
+```
+
+If you prefer the button to be added to the end of the list, add a last argument of `t` to the
+`add-to-list` invocation.
