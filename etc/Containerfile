@@ -43,6 +43,7 @@ RUN apk update && \
       --eval '(byte-compile-file "/src/pg-el/pg-gis.el")' \
       --eval '(byte-compile-file "/src/pg-el/pg-lo.el")' \
       -l /src/pgmacs/pgmacstbl.el --eval '(byte-compile-file "/src/pgmacs/pgmacstbl.el")' \
+      --eval '(byte-compile-file "/src/pgmacs/pgmacs-sql-keywords.el")' \
       --eval '(byte-compile-file "/src/pgmacs/pgmacs.el")'
 
 
@@ -79,6 +80,8 @@ COPY --from=builder --chown=root:root /src/pg-el/pg-lo.el /elisp
 COPY --from=builder --chown=root:root /src/pg-el/pg-lo.elc /elisp
 COPY --from=builder --chown=root:root /src/pgmacs/pgmacstbl.el /elisp
 COPY --from=builder --chown=root:root /src/pgmacs/pgmacstbl.elc /elisp
+COPY --from=builder --chown=root:root /src/pgmacs/pgmacs-sql-keywords.el /elisp
+COPY --from=builder --chown=root:root /src/pgmacs/pgmacs-sql-keywords.elc /elisp
 COPY --from=builder --chown=root:root /src/pgmacs/pgmacs.el /elisp
 COPY --from=builder --chown=root:root /src/pgmacs/pgmacs.elc /elisp
 

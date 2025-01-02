@@ -1,6 +1,6 @@
 ;;; pgmacs.el --- Emacs is editing a PostgreSQL database  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023-2024 Eric Marsden
+;; Copyright (C) 2023-2025 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 ;; Version: 0.19
 ;; Package-Requires: ((emacs "29.1") (pg "0.44"))
@@ -26,6 +26,8 @@
 (require 'sql)
 (require 'pg)
 (require 'pgmacstbl)
+(require 'pgmacs-sql-keywords)
+
 
 (defgroup pgmacs nil
   "Edit a PostgreSQL database from Emacs."
@@ -1922,10 +1924,12 @@ Opens a dedicated buffer if the query list is not empty."
           (forward-char (length pattern))
           (list beg (point) pgmacs--completions :exclusive 'no))))))
 
-(defvar pgmacs--where-filter-history nil)
 
+;; This function is called both from pgmacs-read-sql (bound to "e") and from
+;; pgmacs--add-where-filter.
+;;
 ;; TODO: can we font-lock with sql-mode-postgres-font-lock-keywords ?
-(defun pgmacs--read-sql-minibuffer (prompt completions)
+(defun pgmacs--read-sql-minibuffer (prompt completions history-variable)
   ;; See function read--expression in simple.el
   (minibuffer-with-setup-hook
       (lambda ()
@@ -1935,9 +1939,8 @@ Opens a dedicated buffer if the query list is not empty."
         (setq-local pgmacs--completions completions)
         (add-hook 'completion-at-point-functions
                   #'pgmacs--completion-at-point nil t))
-    ;; (minibuffer-message "(without the WHERE keyword)")
     (let ((completion-styles '(basic flex)))
-      (read-from-minibuffer prompt nil nil nil 'pgmacs--where-filter-history))))
+      (read-from-minibuffer prompt nil nil nil history-variable))))
 
 ;; The list of column names in the current table. Note that this function needs to be called in the
 ;; PGmacs buffer (where the text properties it consults are set), and not in the minibuffer. If we
@@ -1948,7 +1951,10 @@ Opens a dedicated buffer if the query list is not empty."
     (pgmacstbl-beginning-of-table)
     (let* ((tbl (pgmacstbl-current-table))
            (cols (and tbl (pgmacstbl-columns tbl))))
-      (mapcar #'pgmacstbl-column-name cols))))
+      (append (mapcar #'pgmacstbl-column-name cols)
+              pgmacs--postgresql-keywords))))
+
+(defvar pgmacs--where-filter-history nil)
 
 ;; Bound to "W" in a row-list buffer.
 (defun pgmacs--add-where-filter (&rest _ignore)
@@ -1958,7 +1964,9 @@ Opens a dedicated buffer if the query list is not empty."
     (message "Resetting table OFFSET")
     (sit-for 0.5))
   (setq pgmacs--offset 0)
-  (let ((filter (pgmacs--read-sql-minibuffer "WHERE: " (pgmacs--completion-table))))
+  (let ((filter (pgmacs--read-sql-minibuffer "WHERE: "
+                                             (pgmacs--completion-table)
+                                             'pgmacs--where-filter-history)))
     (cond ((zerop (length filter))
            (message "Cancelling WHERE filter")
            (setq pgmacs--marked-rows (list))
@@ -2694,7 +2702,12 @@ Prompt for the table name in the minibuffer."
 (defun pgmacs-run-sql (&rest _ignore)
   "Prompt for an SQL query and display the output in a dedicated buffer."
   (interactive)
-  (let ((sql (read-from-minibuffer "SQL query: " nil nil nil 'pgmacs--run-sql-history)))
+  (let* ((completions (append (pg-tables pgmacs--con)
+                              pgmacs--postgresql-keywords))
+         (completion-ignore-case t)
+         (sql (pgmacs--read-sql-minibuffer "SQL query: "
+                                            completions
+                                            'pgmacs--run-sql-history)))
     (pgmacs-show-result pgmacs--con sql)))
 
 (defun pgmacs-run-buffer-sql (&rest _ignore)

@@ -12,6 +12,8 @@
   is an optional time zone to use for the display of timestamp, timestamptz and datetime data; the
   default behaviour is to use the local timezone. Patch from @akurth.
 
+- When reading SQL queries from the minibuffer, completion is available for SQL keywords.
+
 
 ## [0.19] - 2024-12-22
 
