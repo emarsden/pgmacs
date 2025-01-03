@@ -1628,7 +1628,7 @@ Uses PostgreSQL connection CON."
 ;; estimating the row count. Otherwise, use a naïve COUNT(*) query which is expensive but always
 ;; returns valid results.
 (defun pgmacs--estimate-row-count (table)
-  (let ((db-size (get 'database-size pgmacs--con)))
+  (let ((db-size (get 'pgmacs--con 'database-size)))
     (if (and db-size (> db-size pgmacs-large-database-threshold))
         (pgmacs--estimate-row-count/fast table)
       (pgmacs--estimate-row-count/expensive table))))
