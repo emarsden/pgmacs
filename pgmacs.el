@@ -112,6 +112,21 @@ PostgreSQL over a slow network link."
   :type 'number
   :group 'pgmacs)
 
+(defcustom pgmacs-large-database-threshold 100000000
+  "Avoid table scans for databases above this size in octets.
+
+For a database larger than this value (queried via
+pg_database_size), PGmacs will estimate table row counts using an
+imprecise method that does not require a full table scan, but
+will provide invalid results for tables that have not been
+VACUUMed or ANALYZEd. For sizes below this threshold, a more
+accurate SELECT COUNT(*) FROM table_name query will be used.
+
+If set to zero, full table scans will never be issued (this may
+be a safe option on large production databases)."
+  :type 'number
+  :group 'pgmacs)
+
 (defcustom pgmacs-max-column-width 60
   "The maximal width in characters of a table column."
   :type 'number
@@ -1339,7 +1354,7 @@ Uses PostgreSQL connection CON."
          (res (pg-fetch-prepared con ps-name params)))
     (mapcar #'cl-first (pg-result res :tuples))))
 
-(defun pgmacs--table-indexes (con table)
+(defun pgmacs--table-indexes/full (con table)
   "Return details of the indexes present on TABLE.
 Uses PostgreSQL connection CON."
   (let* ((schema (if (pg-qualified-name-p table)
@@ -1377,6 +1392,13 @@ Uses PostgreSQL connection CON."
          (ps-name (pg-ensure-prepared-statement con "QRY-table-indexes" sql argument-types))
          (res (pg-fetch-prepared con ps-name params)))
     (pg-result res :tuples)))
+
+(defun pgmacs--table-indexes (con table)
+  "Return details of the indexes present on TABLE.
+Uses PostgreSQL connection CON."
+  (pcase (pgcon-server-variant con)
+    ('cratedb nil)
+    (_ (pgmacs--table-indexes/full con table))))
 
 (defun pgmacs--column-nullable-p (con table column)
   "Is there a NOT NULL constraint on COLUMN in TABLE?
@@ -1417,7 +1439,7 @@ Uses PostgreSQL connection CON."
 ;; constraints of a column. These queries are called once per column for a row-list buffer. To avoid
 ;; redundant processing by PostgreSQL in parsing and preparing a query plan for these queries, we
 ;; use PostgreSQL prepared statements via the `pg-ensure-prepared' function.
-(defun pgmacs--column-info (con table column)
+(defun pgmacs--column-info/full (con table column)
   "Return a hashtable containing metainformation on COLUMN in TABLE.
 The metainformation includes the type name, whether the column is a PRIMARY KEY,
 whether it is affected by constraints such as UNIQUE.  Information is retrieved
@@ -1505,7 +1527,6 @@ over the PostgreSQL connection CON."
     ;; target column name. If there is more than one row, we have a complex (multi-column) foreign
     ;; key reference, and the second element of the hash-table entry is set to nil.
     (when references-constraints
-      (message "We have references-constraints = %s" references-constraints)
       (let* ((fc (cl-first references-constraints))
              (target-col (and (eql 1 (length references-constraints))
                               (cl-third fc))))
@@ -1518,6 +1539,27 @@ over the PostgreSQL connection CON."
     (when defaults
       (puthash "DEFAULT" defaults column-info))
     column-info))
+
+(defun pgmacs--column-info/basic (con table column)
+  (let* ((defaults (pg-column-default con table column))
+         (sql (format "SELECT %s FROM %s LIMIT 0"
+                      (pg-escape-identifier column)
+                      (pg-escape-identifier table)))
+         (res (pg-exec con sql))
+         (oid (cadar (pg-result res :attributes)))
+         (column-info (make-hash-table :test #'equal))
+         (type-name (pg-lookup-type-name con oid)))
+    (puthash "TYPE" type-name column-info)
+    column-info))
+
+(defun pgmacs--column-info (con table column)
+  "Return a hashtable containing metainformation on COLUMN in TABLE.
+The metainformation includes the type name, whether the column is a PRIMARY KEY,
+whether it is affected by constraints such as UNIQUE.  Information is retrieved
+over the PostgreSQL connection CON."
+  (pcase (pgcon-server-variant con)
+    ('cratedb (pgmacs--column-info/basic con table column))
+    (_ (pgmacs--column-info/full con table column))))
 
 ;; Format the column-info hashtable as a string
 (defun pgmacs--format-column-info (column-info)
@@ -1552,6 +1594,45 @@ Uses PostgreSQL connection CON."
     (when res (cl-first (pg-result res :tuple 0)))))
 
 
+;; The count of table rows using COUNT(*) is imperfect for a number of reasons: it's not using a
+;; parameterized query (not possible for a DDL query), and it's slow on large tables, requiring a
+;; full table scan. However, alternatives are not reliable and will return incorrect results for
+;; tables that haven't yet been VACCUMed or ANALYZEd.
+(defun pgmacs--estimate-row-count/expensive (table)
+  (let* ((tid (pg-escape-identifier table))
+         (res (pg-exec pgmacs--con (format "SELECT COUNT(*) FROM %s" tid)))
+         (tuple (pg-result res :tuple 0)))
+    (cl-first tuple)))
+
+;; See discussion at
+;; https://stackoverflow.com/questions/7943233/fast-way-to-discover-the-row-count-of-a-table-in-postgresql
+(defun pgmacs--estimate-row-count/fast (table)
+  (let* ((schema (if (pg-qualified-name-p table)
+                     (pg-qualified-name-schema table)
+                   "public"))
+         (tname (if (pg-qualified-name-p table)
+                    (pg-qualified-name-name table)
+                  table))
+         (sql "SELECT c.reltuples::bigint AS estimate
+               FROM   pg_class c
+               JOIN   pg_namespace n ON n.oid = c.relnamespace
+               WHERE n.nspname = $1 AND c.relname = $2")
+         (argument-types (list "text" "text"))
+         (params `((,schema . "text") (,tname . "text")))
+         (ps-name (pg-ensure-prepared-statement pgmacs--con "QRY-estimate-row-count" sql argument-types))
+         (res (pg-fetch-prepared pgmacs--con ps-name params)))
+    (cl-first (pg-result res :tuple 0))))
+
+;; If the database size is "large" (according to customizable variable
+;; pgmacs-large-database-threshold), avoid table scans and use a fast but unreliable method of
+;; estimating the row count. Otherwise, use a naïve COUNT(*) query which is expensive but always
+;; returns valid results.
+(defun pgmacs--estimate-row-count (table)
+  (let ((db-size (get 'database-size pgmacs--con)))
+    (if (and db-size (> db-size pgmacs-large-database-threshold))
+        (pgmacs--estimate-row-count/fast table)
+      (pgmacs--estimate-row-count/expensive table))))
+
 ;; This function called for semi-compatible PostgreSQL variants that only partially implement the
 ;; system tables that we use to query for metainformation concerning SQL tables.
 (defun pgmacs--list-tables-basic ()
@@ -1570,17 +1651,6 @@ This function called for PostgreSQL variants that don't provide full compatibili
 
 ;; TODO also include VIEWs
 ;;   SELECT * FROM information_schema.views
-;;
-;; The count of table rows using COUNT(*) is imperfect for a number of reasons: it's not using a
-;; parameterized query (not possible for a DDL query), and it's slow on large tables. However,
-;; alternatives are probably less good because they return incorrect results for tables that haven't
-;; yet been VACCUMed. Possible alternatives:
-;;
-;;    SELECT reltuples::bigint FROM pg_class WHERE oid=$1::regclass (returns -1)
-;;
-;;    SELECT n_live_tup FROM pg_stat_user_tables (zero for non-VACUUMed tables)
-;;
-;; We could perhaps fill in the row count column in a lazy manner to improve query speed.
 (defun pgmacs--list-tables-full ()
   "Return a list of table-names and associated metadata for the current database.
 Table names are schema-qualified if the schema is non-default."
@@ -1588,20 +1658,19 @@ Table names are schema-qualified if the schema is non-default."
     (dolist (table (pg-tables pgmacs--con))
       (let* ((tid (pg-escape-identifier table))
              (sql (format "SELECT
-                            COUNT(*),
-                            pg_catalog.pg_size_pretty(pg_catalog.pg_total_relation_size($1)),
+                            pg_catalog.pg_total_relation_size($1),
                             obj_description($1::regclass::oid, 'pg_class')
                            FROM %s"
                           tid))
              (res (pg-exec-prepared pgmacs--con sql `((,tid . "text"))))
              (tuple (pg-result res :tuple 0))
-             (rows (cl-first tuple))
-             (size (cl-second tuple))
+             (row-count 0)
+             (size (and (cl-first tuple) (file-size-human-readable (cl-first tuple) 'iec " ")))
              ;; We could use function `pg-table-comment', but that would imply an additional SQL
              ;; query and this function is speed critical.
-             (comment (cl-third tuple))
+             (comment (cl-second tuple))
              (owner (pg-table-owner pgmacs--con table)))
-        (push (list table rows size owner (or comment "")) entries)))
+        (push (list table row-count size owner (or comment "")) entries)))
     entries))
 
 (defun pgmacs--list-tables ()
@@ -2257,9 +2326,14 @@ Runs functions on `pgmacs-row-list-hook'."
            (owner (pg-table-owner con table))
            (maybe-icon (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user))
            (owner-displayed (concat maybe-icon owner))
-           (header (format "PostgreSQL table %s, owned by %s\n" t-pretty owner-displayed)))
+           (header1 (format "PostgreSQL table %s" t-pretty))
+           ;; Will be null for some semi-compatible PostgreSQL variants
+           (header2 (if owner (format ", owned by %s" owner-displayed) "")))
       (erase-buffer)
-      (insert (propertize header 'face 'bold)))
+      (insert
+       (propertize header1 'face 'bold)
+       (propertize header2 'face 'bold)
+       "\n"))
     (let* ((primary-keys (pgmacs--table-primary-keys con table))
            (comment (pg-table-comment con table))
            (indexes (pgmacs--table-indexes con table))
@@ -2389,14 +2463,14 @@ Runs functions on `pgmacs-row-list-hook'."
                                       (pgmacs--display-table table))
                             'help-echo "Modify the table comment")
         (insert "\n"))
-      (unless (member (pgcon-server-variant con) '(cockroachdb ydb))
-        (let* ((sql "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_total_relation_size($1)),
-                          pg_catalog.pg_size_pretty(pg_catalog.pg_indexes_size($1))")
+      (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb))
+        (let* ((sql "SELECT pg_catalog.pg_total_relation_size($1),
+                          pg_catalog.pg_indexes_size($1)")
                (res (pg-exec-prepared con sql `((,t-id . "text"))))
                (row (pg-result res  :tuple 0)))
           (insert (propertize "On-disk-size" 'face 'bold))
-          (insert (format ": %s" (cl-first row)))
-          (insert (format " (indexes %s)\n" (cl-second row)))))
+          (insert (format ": %s" (file-size-human-readable (cl-first row) 'iec " ")))
+          (insert (format " (indexes %s)\n" (file-size-human-readable (cl-second row) 'iec " ")))))
       (insert (propertize "Columns" 'face 'bold))
       (insert ":\n")
       (let ((colinfo (list)))
@@ -3162,10 +3236,16 @@ inlined vector SVG image that is encoded as a data URI."
                         (cl-first row)
                         (cl-second row)
                         (if (cl-third row) "RECOVERING" "PRIMARY"))))
-      (let* ((sql "SELECT pg_catalog.pg_size_pretty(pg_catalog.pg_database_size($1))")
+      ;; PostgreSQL has a function pg_size_pretty() that we could also use, but it's not implemented
+      ;; in all semi-compatible variants.
+      (let* ((sql "SELECT pg_catalog.pg_database_size($1)")
              (res (pg-exec-prepared con sql `((,dbname . "text"))))
              (size (cl-first (pg-result res :tuple 0))))
-        (insert (format "Total database size: %s\n" size))))
+        (when size
+          ;; We later use this information to decide whether to prefer fast-but-unreliable or
+          ;; slow-but-exact queries for table row count.
+          (put 'pgmacs--con 'database-size size)
+          (insert (format "Total database size: %s\n" (file-size-human-readable size 'iec " "))))))
     ;; Perhaps also display output from
     ;; select state, count(*) from pg_stat_activity where pid <> pg_backend_pid() group by 1 order by 1;'
     ;; see https://gitlab.com/posetgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
@@ -3177,6 +3257,14 @@ inlined vector SVG image that is encoded as a data URI."
         (insert "\n")))
     (insert "\n\n")
     (pgmacstbl-insert pgmacstbl)
+    ;; Now update the "estimated rows" column of the list of tables. We make these queries as a
+    ;; second step because they might be slow on large tables.
+    (dolist (row (pgmacstbl-objects pgmacstbl))
+      (let* ((table (cl-first row))
+             (estimated-count (pgmacs--estimate-row-count table))
+             (updated-row (copy-sequence row)))
+        (setf (nth 1 updated-row) estimated-count)
+        (pgmacstbl-update-object pgmacstbl updated-row row)))
     (pgmacs--stop-progress-reporter)))
 
 
