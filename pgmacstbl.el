@@ -1,7 +1,7 @@
 ;;; pgmacstbl.el --- Displaying data in tables  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022-2024 Free Software Foundation, Inc.
-;; Copyright (C) 2024 Eric Marsden
+;; Copyright (C) 2024-2025 Eric Marsden
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This library is distributed under the terms of the GNU General Public License
@@ -339,7 +339,7 @@ If it can't be found, return nil and don't move point."
         (error "Can't find the old object"))
       (setcar (cdr objects) object))
     ;; Then update the cache...
-    (let* ((line-number (seq-position old-object (car (pgmacstbl--cache table))))
+    (let* ((line-number (cl-position old-object (car (pgmacstbl--cache table)) :key #'cl-first))
            (line (elt (car (pgmacstbl--cache table)) line-number)))
       (unless line
         (error "Can't find cached object"))
