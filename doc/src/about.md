@@ -46,7 +46,17 @@ it to modify real PostgreSQL databases used in production.
 pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
 Windows and MacOS. It works both in graphical mode and in the terminal.
 
-**PostgreSQL version**: PGmacs is mostly tested with PostgreSQL versions 17.0 and 16.4, but should
+~~~admonish note title="Better network performance with Emacs 31 (unreleased)"
+
+When connecting to PostgreSQL over the network (rather than over a local Unix connection), you will
+see far better performance using the unreleased Emacs 31. This version (which you will need to build
+from source) supports disabling the Nagle algorithm (the `TCP_NODELAY` option on network sockets,
+which increases performance by a factor of 12 when running the test suite.
+
+~~~
+
+
+**PostgreSQL version**: PGmacs is mostly tested with PostgreSQL versions 17.2 and 16.4, but should
 work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate with
 PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
@@ -61,6 +71,15 @@ on-disk size of tables, and these functions are not always implemented. What we 
 - [ParadeDB](https://www.paradedb.com/) v0.9.1 seems to work fine in limited testing (it’s really a
   PostgreSQL extension rather than a fully separate product).
   
+- [IvorySQL](https://www.ivorysql.org/) version 3.4 works perfectly (this fork of PostgreSQL adds
+  some features for compatibility with Oracle).
+
+- The [Timescale DB](https://www.timescale.com/) extension for time series data works perfectly
+  (last tested with version 2.16.1).
+
+- The [CitusDB](https://github.com/citusdata/citus) extension for sharding PostgreSQL over multiple
+  hosts works perfectly (last tested with Citus version 12.1.5, which is based on PostgreSQL 16.6).
+
 - The [Timescale DB](https://www.timescale.com/) extension for time series data works perfectly
   (tested with version 2.16.1).
 
@@ -72,13 +91,14 @@ on-disk size of tables, and these functions are not always implemented. What we 
   SQL command that adds a PRIMARY KEY to an existing table, nor to display total database size on
   disk, for example.
   
-- [CrateDB](https://crate.io/) v5.8.3 does not currently work; it does not implement PostgreSQL
-  functions that we use to query table metainformation.
+- [CrateDB](https://crate.io/) v5.8.5 is supported with some workarounds (it does not currently
+  implement PostgreSQL functions and system tables that we use to query table metainformation, so
+  some display features are limited).
 
-- [CockroachDB](https://github.com/cockroachdb/cockroach) version 24.2 does not work with PGmacs:
-  our query for `pg-table-owner` triggers an internal error, there is no implementation of the
-  function `pg_size_pretty`, and the database fails on basic SQL such as the boolean vector syntax
-  `b'1001000'`.
+- [CockroachDB](https://github.com/cockroachdb/cockroach) version 24.2 is supported with some
+  limitations and workarounds (it does not currently implement PostgreSQL functions and system
+  tables that we use to query table metainformation, or our queries generate internal errors, so
+  some display features are limited).
 
 - [QuestDB](https://questdb.io/): tested against version 6.5.4. This has very limited PostgreSQL
   support, and does not support the `integer` type for example.
@@ -94,14 +114,14 @@ on-disk size of tables, and these functions are not always implemented. What we 
   PostgreSQL compatibility and does not work with PGmacs. The system tables that we query to obtain
   the list of tables in the current database are not implemented.
 
-- ClickHouse v24.5 does not work: its implementation of the wire protocol is very limited, with no
-  support for the `pg_type` metadata and no support for basic PostgreSQL-flavoured SQL commands such
-  as `SET`.
+- ClickHouse v24.5 does not work: its implementation of the PostgreSQL wire protocol is very
+  limited, with no support for the `pg_type` metadata and no support for basic PostgreSQL-flavoured
+  SQL commands such as `SET`.
 
 
 ## License
 
 PGmacs is distributed under the terms of the GNU General Public License, version 3.
 
-Copyright 2023-2024 Eric Marsden.
+Copyright 2023-2025 Eric Marsden.
 

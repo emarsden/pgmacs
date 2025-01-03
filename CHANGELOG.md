@@ -5,10 +5,10 @@
 
 - New customizable user option `pgmacs-large-database-threshold`. For a database larger than this
   value (queried via `pg_database_size`), PGmacs will estimate table row counts using an imprecise
-  method that does not require a full table scan, but will provide invalid results for tables that
-  have not been VACUUMed or ANALYZEd. For sizes below this threshold, a more accurate `SELECT
-  COUNT(*) FROM table_name` query will be used. If set to zero, full table scans will never be
-  issued (this may be a good choice on large production databases).
+  method that does not require a full index (or table) scan, but will provide invalid results for
+  tables that have not been VACUUMed or ANALYZEd. For sizes below this threshold, a more accurate
+  `SELECT COUNT(*) FROM table_name` query will be used. If set to zero, full index/table scans will
+  never be issued (this may be a good choice on large production databases).
 
 - Further workarounds for semi-compatible PostgreSQL variants that don't implement all the system
   tables that we query to obtain metainformation concerning sizes, contraints, comments and so on.

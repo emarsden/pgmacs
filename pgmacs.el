@@ -113,17 +113,17 @@ PostgreSQL over a slow network link."
   :group 'pgmacs)
 
 (defcustom pgmacs-large-database-threshold 100000000
-  "Avoid table scans for databases above this size in octets.
+  "Avoid index/table scans for databases above this size in octets.
 
 For a database larger than this value (queried via
 pg_database_size), PGmacs will estimate table row counts using an
-imprecise method that does not require a full table scan, but
-will provide invalid results for tables that have not been
-VACUUMed or ANALYZEd. For sizes below this threshold, a more
+imprecise method that does not require a full index (or table)
+scan, but will provide invalid results for tables that have not
+been VACUUMed or ANALYZEd. For sizes below this threshold, a more
 accurate SELECT COUNT(*) FROM table_name query will be used.
 
-If set to zero, full table scans will never be issued (this may
-be a safe option on large production databases)."
+If set to zero, full index/table scans will never be issued (this
+may be a safe option on large production databases)."
   :type 'number
   :group 'pgmacs)
 
@@ -1596,8 +1596,8 @@ Uses PostgreSQL connection CON."
 
 ;; The count of table rows using COUNT(*) is imperfect for a number of reasons: it's not using a
 ;; parameterized query (not possible for a DDL query), and it's slow on large tables, requiring a
-;; full table scan. However, alternatives are not reliable and will return incorrect results for
-;; tables that haven't yet been VACCUMed or ANALYZEd.
+;; full index or table scan. However, alternatives are not reliable and will return incorrect
+;; results for tables that haven't yet been VACCUMed or ANALYZEd.
 (defun pgmacs--estimate-row-count/expensive (table)
   (let* ((tid (pg-escape-identifier table))
          (res (pg-exec pgmacs--con (format "SELECT COUNT(*) FROM %s" tid)))
@@ -1624,7 +1624,7 @@ Uses PostgreSQL connection CON."
     (cl-first (pg-result res :tuple 0))))
 
 ;; If the database size is "large" (according to customizable variable
-;; pgmacs-large-database-threshold), avoid table scans and use a fast but unreliable method of
+;; pgmacs-large-database-threshold), avoid index/table scans and use a fast but unreliable method of
 ;; estimating the row count. Otherwise, use a naïve COUNT(*) query which is expensive but always
 ;; returns valid results.
 (defun pgmacs--estimate-row-count (table)
