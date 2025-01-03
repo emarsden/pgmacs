@@ -50,7 +50,7 @@ Windows and MacOS. It works both in graphical mode and in the terminal.
 
 When connecting to PostgreSQL over the network (rather than over a local Unix connection), you will
 see far better performance using the unreleased Emacs 31. This version (which you will need to build
-from source) supports disabling the Nagle algorithm (the `TCP_NODELAY` option on network sockets,
+from source) supports disabling the Nagle algorithm (the `TCP_NODELAY` option on network sockets),
 which increases performance by a factor of 12 when running the test suite.
 
 ~~~
