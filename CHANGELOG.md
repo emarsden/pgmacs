@@ -9,10 +9,10 @@
   tables that have not been VACUUMed or ANALYZEd. For sizes below this threshold, a more accurate
   `SELECT COUNT(*) FROM table_name` query will be used. If set to zero, full index/table scans will
   never be issued (this may be a good choice on large production databases). Problem noted by
-  @akurth, input from @ak-ionis.
+  @akurth.
 
 - Further workarounds for semi-compatible PostgreSQL variants that don't implement all the system
-  tables that we query to obtain metainformation concerning sizes, contraints, comments and so on.
+  tables that we query to obtain metainformation concerning sizes, constraints, comments and so on.
   PGmacs provides a more spartan display for such databases.
 
 
