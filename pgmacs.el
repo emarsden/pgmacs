@@ -1649,7 +1649,7 @@ This function called for PostgreSQL variants that don't provide full compatibili
         (push (list table rows 0 "" "") entries)))
     entries))
 
-;; TODO also include VIEWs
+;; TODO: also include VIEWs
 ;;   SELECT * FROM information_schema.views
 (defun pgmacs--list-tables-full ()
   "Return a list of table-names and associated metadata for the current database.
@@ -1657,11 +1657,8 @@ Table names are schema-qualified if the schema is non-default."
   (let ((entries (list)))
     (dolist (table (pg-tables pgmacs--con))
       (let* ((tid (pg-escape-identifier table))
-             (sql (format "SELECT
-                            pg_catalog.pg_total_relation_size($1),
-                            obj_description($1::regclass::oid, 'pg_class')
-                           FROM %s"
-                          tid))
+             (sql "SELECT pg_catalog.pg_total_relation_size($1),
+                          obj_description($1::regclass::oid, 'pg_class')")
              (res (pg-exec-prepared pgmacs--con sql `((,tid . "text"))))
              (tuple (pg-result res :tuple 0))
              (row-count 0)
