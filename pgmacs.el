@@ -259,6 +259,10 @@ e.g. 'UTC' or 'Europe/Berlin'. Nil for local OS timezone."
 	(pgmacs-shortcut-button
 	 :label "Display running queries"
          :action #'pgmacs--display-running-queries)
+        (pgmacs-shortcut-button
+         :label "Disconnect"
+         :action #'pgmacs-disconnect
+         :help-echo "Close this connection to PostgreSQL")
 	(pgmacs-shortcut-button
 	 :label "More backend information"
          :action #'pgmacs--display-backend-information)
@@ -488,6 +492,13 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 (defun pgmacs--lookup-column-displayer (table column)
   (gethash (cons table column) pgmacs--column-display-functions nil))
 
+
+(defun pgmacs-disconnect (&rest _ignore)
+  (unless pgmacs--con
+    (user-error "This function must be called from a PGmacs buffer"))
+  (pg-disconnect pgmacs--con)
+  (setq pgmacs--con nil)
+  (kill-buffer (current-buffer)))
 
 ;; We can have several table-list buffers open, corresponding to different PostgreSQL databases. The
 ;; buffer-local pgmacs--db-buffer is kept up to date in each PGmacs buffer to point to its main
@@ -1550,6 +1561,8 @@ over the PostgreSQL connection CON."
          (column-info (make-hash-table :test #'equal))
          (type-name (pg-lookup-type-name con oid)))
     (puthash "TYPE" type-name column-info)
+    (when defaults
+      (puthash "DEFAULT" defaults column-info))
     column-info))
 
 (defun pgmacs--column-info (con table column)
