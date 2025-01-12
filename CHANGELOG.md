@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.21] - Unreleased
+## [0.21] - 2025-01-12
 
 - New customizable user option `pgmacs-large-database-threshold`. For a database larger than this
   value (queried via `pg_database_size`), PGmacs will estimate table row counts using an imprecise
@@ -14,6 +14,8 @@
 - Further workarounds for semi-compatible PostgreSQL variants that don't implement all the system
   tables that we query to obtain metainformation concerning sizes, constraints, comments and so on.
   PGmacs provides a more spartan display for such databases.
+
+- Add a “Disconnect” button to the main PGmacs table list buffer (suggestion from @akurth).
 
 
 ## [0.20] - 2025-01-02
