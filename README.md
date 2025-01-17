@@ -55,7 +55,7 @@ from the git repository, as well as the [pg-el dependency](https://github.com/em
     (unless (package-installed-p 'pg)
        (package-vc-install "https://github.com/emarsden/pg-el" nil nil 'pg))
     (unless (package-installed-p 'pgmacs)
-       (package-vc-install "https://github.com/emarsden/pgmacs"))
+       (package-vc-install "https://github.com/emarsden/pgmacs" nil nil 'pgmacs))
 
     (require 'pgmacs)
 
