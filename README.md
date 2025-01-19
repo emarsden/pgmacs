@@ -141,10 +141,10 @@ The following PostgreSQL-compatible databases have been tested:
 - [YugabyteDB](https://yugabyte.com/) works to a limited extent: we are not able to run the SQL
   command that adds a PRIMARY KEY to an existing table, nor to display total database size on disk,
   for example. It does support some extensions such as pgvector, for example. Last tested with
-  v2.23.
+  v2.25.
   
 - [CrateDB](https://crate.io/) does not currently work; it does not implement PostgreSQL
-  functions that we use to query table metainformation. Last tested with v5.9.5.
+  functions that we use to query table metainformation. Last tested with v5.9.6.
 
 - [CockroachDB](https://github.com/cockroachdb/cockroach) does not work with PGmacs:
   our query for `pg-table-owner` triggers an internal error, there is no implementation of the
