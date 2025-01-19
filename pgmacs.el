@@ -296,11 +296,15 @@ e.g. 'UTC' or 'Europe/Berlin'. Nil for local OS timezone."
          :action #'pgmacs--run-count
          :help-echo "Count rows in this table")
         (pgmacs-shortcut-button
+         ;; CrateDB only supports ANALYZE on the whole database, not on a single table.
+         :condition (lambda () (not (eq (pgcon-server-variant pgmacs--con) 'cratedb)))
          :label "ANALYZE this table"
          :action #'pgmacs--run-analyze
          :help-echo "Run ANALYZE on this table")
         (pgmacs-shortcut-button
-         :condition (lambda () (null (pg-table-comment pgmacs--con pgmacs--table)))
+         :condition (lambda ()
+                      (unless (eq (pgcon-server-variant pgmacs--con) 'cratedb)
+                        (null (pg-table-comment pgmacs--con pgmacs--table))))
          :label "Add table comment"
          :action (lambda (&rest _ignore)
                    (let ((comment (read-from-minibuffer "Table comment: ")))
@@ -470,8 +474,8 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 
 (defun pgmacs--stop-progress-reporter ()
   "Stop the progress reporter."
-  (message "Stopping the PGmacs progress reporter")
   (when pgmacs--progress
+    (message "Stopping the PGmacs progress reporter")
     (progress-reporter-done pgmacs--progress))
   (when pgmacs--progress-timer
     (cancel-timer pgmacs--progress-timer)
@@ -499,6 +503,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 (defun pgmacs-disconnect (&rest _ignore)
   (unless pgmacs--con
     (user-error "This function must be called from a PGmacs buffer"))
+  (pgmacs--stop-progress-reporter)
   (pg-disconnect pgmacs--con)
   (setq pgmacs--con nil)
   (kill-buffer (current-buffer)))
@@ -603,7 +608,7 @@ Applies format string FMT to ARGS."
 ;; user. We only want to show the outer ?" characters if they are necessary (if some characters in
 ;; the identifier require quoting).
 (defun pgmacs--display-identifier (name)
-  "Return the identifier NAME in a form suitable for display to the user."
+  "Return the PostgreSQL identifier NAME in a form suitable for display to the user."
   (cl-labels ((safe-p (ch)
                 (string-match-p "[0-9a-zA-Z_]" (string ch)))
               (user-facing (nm)
@@ -1687,7 +1692,7 @@ Table names are schema-qualified if the schema is non-default."
     entries))
 
 (defun pgmacs--list-tables ()
-  (if (member (pgcon-server-variant pgmacs--con) '(cratedb cockroachdb spanner ydb))
+  (if (member (pgcon-server-variant pgmacs--con) '(cratedb cockroachdb spanner ydb questdb))
       (pgmacs--list-tables-basic)
     (pgmacs--list-tables-full)))
 
@@ -1722,6 +1727,8 @@ Table names are schema-qualified if the schema is non-default."
 
 (defun pgmacs--table-to-csv (&rest _ignore)
   "Dump the current PostgreSQL table in CSV format into an Emacs buffer."
+  (when (eq (pgcon-server-variant pgmacs--con) 'cratedb)
+    (user-error "CrateDB does not support COPY TO STDOUT"))
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
          (table pgmacs--table)
@@ -1741,6 +1748,7 @@ Table names are schema-qualified if the schema is non-default."
     (pg-copy-to-buffer con sql buf)
     (goto-char (point-min))))
 
+;; Note that CrateDB does not support "GENERATED ALWAYS AS IDENTITY" columns, as of 2025-01.
 (defun pgmacs--add-primary-key (&rest _ignore)
   "Add a PRIMARY KEY to the current PostgreSQL table."
   (let ((pk (pgmacs--table-primary-keys pgmacs--con pgmacs--table)))
@@ -3239,7 +3247,7 @@ inlined vector SVG image that is encoded as a data URI."
                               ("Size on disk" (cl-third object))
                               ("Owner" (cl-fourth object))
                               ("Comment" (cl-fifth object)))))))
-    (unless (member (pgcon-server-variant con) '(cratedb cockroachdb spanner ydb))
+    (unless (member (pgcon-server-variant con) '(cratedb cockroachdb spanner ydb questdb))
       (let* ((res (pg-exec con "SELECT current_user, pg_backend_pid(), pg_is_in_recovery()"))
              (row (pg-result res :tuple 0)))
         (insert (format "\nConnected to database %s%s as %s%s (pid %d %s)\n"
