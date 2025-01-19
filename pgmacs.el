@@ -115,12 +115,13 @@ PostgreSQL over a slow network link."
 (defcustom pgmacs-large-database-threshold 100000000
   "Avoid index/table scans for databases above this size in octets.
 
-For a database larger than this value (queried via
-pg_database_size), PGmacs will estimate table row counts using an
-imprecise method that does not require a full index (or table)
-scan, but will provide invalid results for tables that have not
-been VACUUMed or ANALYZEd. For sizes below this threshold, a more
-accurate SELECT COUNT(*) FROM table_name query will be used.
+For a database larger than this value (queried via PostgreSQL
+function pg_database_size), PGmacs will estimate table row counts
+using an imprecise method that does not require a full index (or
+table) scan, but will provide invalid results for tables that
+have not been VACUUMed or ANALYZEd. For sizes below this
+threshold, a more accurate SELECT COUNT(*) FROM table_name query
+will be used.
 
 If set to zero, full index/table scans will never be issued (this
 may be a safe option on large production databases)."
@@ -459,7 +460,8 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (setq pgmacs--progress-timer
         (run-with-timer 0.2 0.2 (lambda ()
                                   (when pgmacs--progress
-                                    (progress-reporter-update pgmacs--progress))))))
+                                    (progress-reporter-update pgmacs--progress)))))
+  (run-with-timer 10 nil #'pgmacs--stop-progress-reporter))
 
 (defun pgmacs--update-progress (msg)
   "Update the progress reporter with message MSG."
@@ -468,6 +470,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 
 (defun pgmacs--stop-progress-reporter ()
   "Stop the progress reporter."
+  (message "Stopping the PGmacs progress reporter")
   (when pgmacs--progress
     (progress-reporter-done pgmacs--progress))
   (when pgmacs--progress-timer

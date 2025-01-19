@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.22] - Unreleased
+
+- The progress reporter will automatically be stopped after 10 seconds, if it's still running. This
+  ensures that it is stopped even when the connection to PostgreSQL fails.
+
+
 ## [0.21] - 2025-01-12
 
 - New customizable user option `pgmacs-large-database-threshold`. For a database larger than this
