@@ -134,6 +134,10 @@ The following PostgreSQL-compatible databases have been tested:
 - The [PgBouncer](https://www.pgbouncer.org/) connection pooler for PostgreSQL works fine (last
   tested with version 1.23 in the default session pooling mode).
 
+- [Google AlloyDB Omni](https://cloud.google.com/alloydb/omni/docs/quickstart) is a proprietary fork
+  of PostgreSQL with Google-developed extensions, including a columnar storage extension, adaptive
+  autovacuum, and an index advisor. It works perfectly with pg-el as of 2025-01.
+
 - [Xata](https://xata.io/) “serverless PostgreSQL” has many limitations including lack of support
   for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
   for `EXPLAIN`, for `CREATE EXTENSION`, for functions such as `pg_notify`.
@@ -174,7 +178,7 @@ The following PostgreSQL-compatible databases have been tested:
   Hat build of PostgreSQL 16.4 on Linux/Aarch64 and works fine.
 
 - Untested but likely to work: Amazon RDS, Google Cloud SQL, Azure Database for PostgreSQL, Amazon
-  Auroa, Google AlloyDB, Materialize. You may however encounter difficulties with TLS connections,
+  Auroa, Materialize. You may however encounter difficulties with TLS connections,
   as noted above.
 
 
@@ -182,5 +186,5 @@ The following PostgreSQL-compatible databases have been tested:
 
 PGmacs is distributed under the terms of the GNU General Public License, version 3.
 
-Copyright 2023-2024 Eric Marsden.
+Copyright 2023-2025 Eric Marsden.
 
