@@ -83,6 +83,13 @@ on-disk size of tables, and these functions are not always implemented. What we 
 - The [Timescale DB](https://www.timescale.com/) extension for time series data works perfectly
   (tested with version 2.16.1).
 
+- The [Microsoft DocumentDB](https://github.com/microsoft/documentdb) extension for MongoDB-like
+  queries works perfectly. Note that this is not the same product as Amazon DocumentDB.
+
+- [Google AlloyDB Omni](https://cloud.google.com/alloydb/omni/docs/quickstart) is a proprietary fork
+  of PostgreSQL with Google-developed extensions, including a columnar storage extension, adaptive
+  autovacuum, and an index advisor. It works perfectly with PGmacs as of 2025-01.
+
 - [Xata](https://xata.io/) “serverless PostgreSQL” has many limitations including lack of support
   for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
   for `EXPLAIN`, for `CREATE EXTENSION`, for functions such as `pg_notify`.
@@ -91,9 +98,9 @@ on-disk size of tables, and these functions are not always implemented. What we 
   SQL command that adds a PRIMARY KEY to an existing table, nor to display total database size on
   disk, for example.
   
-- [CrateDB](https://crate.io/) v5.8.5 is supported with some workarounds (it does not currently
-  implement PostgreSQL functions and system tables that we use to query table metainformation, so
-  some display features are limited).
+- [CrateDB](https://crate.io/) v5.9.6 is supported with some workarounds (it does not currently
+  implement certain PostgreSQL functions and system tables that we use to query table
+  metainformation, so some display features are limited).
 
 - [CockroachDB](https://github.com/cockroachdb/cockroach) version 24.2 is supported with some
   limitations and workarounds (it does not currently implement PostgreSQL functions and system

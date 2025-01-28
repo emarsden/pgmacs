@@ -131,6 +131,9 @@ The following PostgreSQL-compatible databases have been tested:
 - The [IvorySQL](https://www.ivorysql.org/) Oracle-compatible flavour of PostgreSQL works perfectly
   (last tested with version 3.4).
 
+- The [Microsoft DocumentDB](https://github.com/microsoft/documentdb) extension for MongoDB-like
+  queries works perfectly. Note that this is not the same product as Amazon DocumentDB.
+
 - The [PgBouncer](https://www.pgbouncer.org/) connection pooler for PostgreSQL works fine (last
   tested with version 1.23 in the default session pooling mode).
 
