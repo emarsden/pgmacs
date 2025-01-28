@@ -261,6 +261,9 @@ e.g. 'UTC' or 'Europe/Berlin'. Nil for local OS timezone."
 	 :label "Display running queries"
          :action #'pgmacs--display-running-queries)
         (pgmacs-shortcut-button
+         :label "Display databases"
+         :action #'pgmacs--display-database-list)
+        (pgmacs-shortcut-button
          :label "Disconnect"
          :action #'pgmacs-disconnect
          :help-echo "Close this connection to PostgreSQL")
@@ -1923,6 +1926,28 @@ Table names are schema-qualified if the schema is non-default."
       (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
       (insert "\n\n")
       (pgmacstbl-insert pgmacstbl))))
+
+(defun pgmacs--display-database-list (&rest ignore)
+  "Display the list of databases visible over our PostgreSQL connection."
+  (let* ((db-buffer pgmacs--db-buffer)
+         (con pgmacs--con)
+         (sql "SELECT d.datname FROM pg_catalog.pg_database d ORDER BY 1")
+         (res (pg-exec con sql))
+         (tuples (pg-result res :tuples)))
+    (let ((buf (get-buffer-create "*PostgreSQL databases*")))
+      (pop-to-buffer buf)
+      (kill-all-local-variables)
+      (setq-local pgmacs--con con
+                  pgmacs--db-buffer db-buffer
+                  buffer-read-only t
+                  truncate-lines t)
+      (pgmacs-mode)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (remove-overlays)
+        (insert (propertize "Databases visible to the current PostgreSQL user" 'face 'bold))
+        (insert "\n\n")
+        (pgmacs--show-pgresult buf res)))))
 
 (defun pgmacs--display-running-queries (&rest _ignore)
   "Display the list of queries running in PostgreSQL.

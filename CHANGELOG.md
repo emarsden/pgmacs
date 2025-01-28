@@ -8,6 +8,9 @@
 
 - Further workarounds for semi-compatible PostgreSQL variants QuestDB and CrateDB.
 
+- A new shortcut button in the table-list buffer shows the list of databases visible to the current
+  user.
+
 
 ## [0.21] - 2025-01-12
 
