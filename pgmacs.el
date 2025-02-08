@@ -30,7 +30,7 @@
 
 
 (defgroup pgmacs nil
-  "Edit a PostgreSQL database from Emacs."
+  "Browse and edit a PostgreSQL database from Emacs."
   :prefix "pgmacs-"
   :group 'tools
   :link '(url-link :tag "Github" "https://github.com/emarsden/pgmacs/"))
@@ -238,7 +238,8 @@ e.g. 'UTC' or 'Europe/Berlin'. Nil for local OS timezone."
    (action :initarg :action)
    (help-echo :initarg :help-echo :initform nil)))
 
-;; Insert OBJECT into the current buffer.
+;; Insert OBJECT into the current buffer. Returns non-nil if the content was inserted (if its
+;; condition slot evaluated to non-nil).
 (cl-defgeneric pgmacs--insert (object))
 
 (cl-defmethod pgmacs--insert ((btn pgmacs-shortcut-button))
@@ -255,9 +256,11 @@ e.g. 'UTC' or 'Europe/Berlin'. Nil for local OS timezone."
 ;; pgmacs-shortcut-button object) to the pgmacs-table-list-buttons list.
 (defvar pgmacs-table-list-buttons
   (list (pgmacs-shortcut-button
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner))))
 	 :label "Display procedures"
          :action #'pgmacs--display-procedures)
 	(pgmacs-shortcut-button
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner))))
 	 :label "Display running queries"
          :action #'pgmacs--display-running-queries)
         (pgmacs-shortcut-button
@@ -268,17 +271,21 @@ e.g. 'UTC' or 'Europe/Berlin'. Nil for local OS timezone."
          :action #'pgmacs-disconnect
          :help-echo "Close this connection to PostgreSQL")
 	(pgmacs-shortcut-button
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(spanner))))
 	 :label "More backend information"
          :action #'pgmacs--display-backend-information)
 	(pgmacs-shortcut-button
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb))))
 	 :label "PostgreSQL settings"
          :action (lambda (&rest _ignore)
                    (pgmacs-show-result pgmacs--con "SELECT * FROM pg_settings")))
 	(pgmacs-shortcut-button
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner))))
 	 :label "Stat activity"
          :action #'pgmacs--display-stat-activity
          :help-echo "Show information from the pg_stat_activity table")
 	(pgmacs-shortcut-button
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner))))
 	 :label "Replication stats"
 	 :action #'pgmacs--display-replication-stats
 	 :help-echo "Show information on PostgreSQL replication status"))
@@ -1354,7 +1361,7 @@ Updates the PostgreSQL database."
 
 ;; This SQL query adapted from https://stackoverflow.com/a/20537829
 ;;
-;; Note: query is not working on CrateDB and Spanner.
+;; Note: query is not working on CrateDB, Spanner, YDB.
 (defun pgmacs--table-primary-keys (con table)
   "Return the columns active as PRIMARY KEY in TABLE.
 Uses PostgreSQL connection CON."
@@ -1837,6 +1844,7 @@ Table names are schema-qualified if the schema is non-default."
       (insert (format ": %s\n" (cl-third tuple)))
       (shrink-window-if-larger-than-buffer))))
 
+;; TODO: this query fails with CrateDB (no pg_catalog.pg_language table).
 (defun pgmacs--display-procedures (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
   (let* ((db-buffer pgmacs--db-buffer)
@@ -2559,10 +2567,10 @@ Runs functions on `pgmacs-row-list-hook'."
         (insert "not enabled"))
       (insert "\n\n")
       (dolist (btn pgmacs-row-list-buttons)
-        (pgmacs--insert btn)
-        (insert "  ")
-        (when (> (current-column) (min (window-width) 90))
-          (insert "\n")))
+        (when (pgmacs--insert btn)
+          (insert "  ")
+          (when (> (current-column) (min (window-width) 90))
+            (insert "\n"))))
       (unless (bolp)
         (insert "\n"))
       ;; Make it visually clear to the user that a WHERE filter is active
@@ -2729,83 +2737,87 @@ Prompt for the table name in the minibuffer."
   "Create a buffer with information concerning the current PostgreSQL backend."
   (let ((con pgmacs--con)
         (db-buffer pgmacs--db-buffer))
-    (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
-    (kill-all-local-variables)
-    (buffer-disable-undo)
-    (setq-local pgmacs--db-buffer db-buffer)
-    (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
-           (row (pg-result res :tuple 0))
-           (addr (cl-first row))
-           (port (cl-second row))
-           (pid (cl-third row))
-           (inhibit-read-only t))
-      (erase-buffer)
-      (remove-overlays)
-      (insert (format "Connected to backend with pid %s" pid))
-      (if addr
-          (insert (format " at %s:%s\n" addr port))
-        (insert " over Unix-domain socket\n")))
-    (unless (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb))
-      (when (> (pgcon-server-version-major con) 11)
-        (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('ssl_library')"))
-               (row (pg-result res :tuple 0)))
-          (insert (format "Backend compiled with SSL library %s\n" (cl-first row))))))
-    (let* ((res (pg-exec con "SELECT current_user, pg_catalog.current_setting('is_superuser')"))
-           (row (pg-result res :tuple 0)))
-      (insert (format "Connected as user %s (%ssuperuser)\n"
-                      (cl-first row)
-                      (if (cl-second row) "" "not "))))
-    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('in_hot_standby')"))
-           (row (pg-result res :tuple 0)))
-      (insert (apply #'format "In hot standby: %s\n" row)))
-    (let* ((res (pg-exec con "SELECT pg_catalog.pg_postmaster_start_time()"))
-           (dtime (car (pg-result res :tuple 0)))
-           (fmt (funcall (pgmacs--value-formatter "timestamp") dtime)))
-      (insert (format "PostgreSQL running since %s\n" fmt)))
-    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('client_encoding')"))
-           (row (pg-result res :tuple 0)))
-      (insert (apply #'format "Client encoding: %s\n" row)))
-    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('server_encoding')"))
-           (row (pg-result res :tuple 0)))
-      (insert (apply #'format "Server encoding: %s\n" row)))
-    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('TimeZone')"))
-           (row (pg-result res :tuple 0)))
-      (insert (apply #'format "Server timezone: %s\n" row)))
-    (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('shared_memory_size')"))
-           (row (pg-result res :tuple 0)))
-      (insert (format "Server shared memory size: %s\n" (cl-first row))))
-    (let* ((res (pg-exec con "SELECT pg_catalog.pg_listening_channels()"))
-           (channels (pg-result res :tuples)))
-      (when channels
-        (insert "Asynchronous notification channels for the current session:\n")
-        (dolist (ch channels)
-          (insert "  " ch "\n"))))
-    (let* ((res (pg-exec con "SELECT name, default_version, installed_version FROM pg_available_extensions"))
-           (exts (pg-result res :tuples)))
-      (insert "PostgreSQL extensions:")
-      (if exts (insert "\n") (insert " (none)\n"))
-      (when exts
-        (push (list "Name" "Default version" "Installed version") exts))
-      (dolist (ext exts)
-        (insert (apply #'format "%30s %17s %18s" ext))
-        (unless (or (cl-third ext)
-                    (string= "Name" (cl-first ext)))
-          (insert "  ")
-          (insert-text-button
-           "Load extension"
-           'action (lambda (&rest _ignore)
-                     (message "Loading PostgreSQL extension %s" (car ext))
-                     (condition-case nil
-                         (pg-exec con (format "CREATE EXTENSION IF NOT EXISTS %s" (car ext)))
-                       (pg-error
-                        (lambda (err)
-                          (message "Loading extension %s failed: %s" (car ext) err)))))))
-        (insert "\n")))
-    (shrink-window-if-larger-than-buffer)
-    (goto-char (point-min))
-    (help-mode)
-    (setq buffer-read-only t)
-    (pgmacs-transient-mode)))
+    (cl-flet ((show (setting label)
+                (let* ((res (pg-exec-prepared con "SELECT pg_catalog.current_setting($1, true)"
+                                              `((,setting . "text"))))
+                       (tuples (pg-result res :tuples)))
+                  (when tuples
+                    (when-let* ((value (caar tuples)))
+                      (insert (format "%s: %s\n" label value)))))))
+      (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
+      (kill-all-local-variables)
+      (buffer-disable-undo)
+      (setq-local pgmacs--db-buffer db-buffer)
+      (unless (member (pgcon-server-variant con) '(cratedb questdb ydb spanner))
+        (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
+               (row (pg-result res :tuple 0))
+               (addr (cl-first row))
+               (port (cl-second row))
+               (pid (cl-third row))
+               (inhibit-read-only t))
+          (erase-buffer)
+          (remove-overlays)
+          (insert (format "Connected to backend with pid %s" pid))
+          (if addr
+              (insert (format " at %s:%s\n" addr port))
+            (insert " over Unix-domain socket\n"))))
+      (let ((variant (pgcon-server-variant con)))
+        (unless (eq variant 'postgresql)
+          (insert (format "Server appears to be the PostgreSQL variant %s\n" variant))))
+      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb))
+        (when (> (pgcon-server-version-major con) 11)
+          (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('ssl_library')"))
+                 (row (pg-result res :tuple 0)))
+            (insert (format "Backend compiled with SSL library %s\n" (cl-first row))))))
+      (let* ((res (pg-exec con "SELECT current_user, pg_catalog.current_setting('is_superuser', true)"))
+             (row (pg-result res :tuple 0)))
+        (insert (format "Connected as user %s (%ssuperuser)\n"
+                        (cl-first row)
+                        (if (cl-second row) "" "not "))))
+      (show "in_hot_standby" "In hot standby")
+      (unless (member (pgcon-server-variant con) '(cockroachdb))
+        (let* ((res (pg-exec con "SELECT pg_catalog.pg_postmaster_start_time()"))
+               (dtime (car (pg-result res :tuple 0)))
+               (fmt (funcall (pgmacs--value-formatter "timestamp") dtime)))
+          (insert (format "PostgreSQL running since %s\n" fmt))))
+      (show "client_encoding" "Client encoding")
+      (show "server_encoding" "Server encoding")
+      (show "TimeZone" "Server timezone")
+      (show "shared_memory_size" "Server shared memory size")
+      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb))
+        (let* ((res (pg-exec con "SELECT pg_catalog.pg_listening_channels()"))
+               (channels (pg-result res :tuples)))
+          (when channels
+            (insert "Asynchronous notification channels for the current session:\n")
+            (dolist (ch channels)
+              (insert "  " ch "\n")))))
+      (unless (member (pgcon-server-variant con) '(cratedb))
+        (let* ((res (pg-exec con "SELECT name, default_version, installed_version FROM pg_available_extensions"))
+               (exts (pg-result res :tuples)))
+          (insert "PostgreSQL extensions:")
+          (if exts (insert "\n") (insert " (none)\n"))
+          (when exts
+            (push (list "Name" "Default version" "Installed version") exts))
+          (dolist (ext exts)
+            (insert (apply #'format "%30s %17s %18s" ext))
+            (unless (or (cl-third ext)
+                        (string= "Name" (cl-first ext)))
+              (insert "  ")
+              (insert-text-button
+               "Load extension"
+               'action (lambda (&rest _ignore)
+                         (message "Loading PostgreSQL extension %s" (car ext))
+                         (condition-case nil
+                             (pg-exec con (format "CREATE EXTENSION IF NOT EXISTS %s" (car ext)))
+                           (pg-error
+                            (lambda (err)
+                              (message "Loading extension %s failed: %s" (car ext) err)))))))
+            (insert "\n"))))
+      (shrink-window-if-larger-than-buffer)
+      (goto-char (point-min))
+      (help-mode)
+      (setq buffer-read-only t)
+      (pgmacs-transient-mode))))
 
 
 (defvar pgmacs--stat-activity-columns

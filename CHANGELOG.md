@@ -6,7 +6,8 @@
 - The progress reporter will automatically be stopped after 10 seconds, if it's still running. This
   ensures that it is stopped even when the connection to PostgreSQL fails.
 
-- Further workarounds for semi-compatible PostgreSQL variants QuestDB and CrateDB.
+- Further workarounds for semi-compatible PostgreSQL variants QuestDB, CrateDB, CockroachDB, YDB and
+  Spanner.
 
 - A new shortcut button in the table-list buffer shows the list of databases visible to the current
   user.
