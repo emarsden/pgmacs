@@ -1040,7 +1040,7 @@ has primary keys, named in the list PRIMARY-KEYS."
                   pgmacs--table table)
       (when pgmacs-use-header-line
 	(setq-local header-line-format (format "%sUpdate PostgreSQL column %s"
-                                               (if (char-displayable-p ?🐘) " 🐘" "")
+                                               (if (char-displayable-p ?🐘) " 🐘 " "")
                                                col-name)))
       (pgmacs-mode)
       (widget-insert "\n")
@@ -1131,7 +1131,7 @@ keys, whose names are given by the list PRIMARY-KEYS."
              (res (pg-exec-prepared pgmacs--con sql where-values))
              (status (pg-result res :status)))
         (pgmacs--notify "%s" status)
-        (unless (string= "DELETE " (substring status 0 7))
+        (unless (string-prefix-p "DELETE " status)
           (error "Unexpected status %s for PostgreSQL DELETE command" status))
         (let ((rows (cl-parse-integer (substring status 7))))
           (cond ((eql 0 rows)
@@ -1217,8 +1217,8 @@ Uses the minibuffer to prompt for new values."
                           collect (cons v vt)))))
       (pgmacs--notify "%s" (pg-result res :status))
       ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
-      ;; However, we don't know what values were chosen for any columns that have a default, so we
-      ;; need to refetch the data from PostgreSQL.
+      ;; However, we don't know what values were chosen for any columns that have an SQL default, so
+      ;; we need to refetch the data from PostgreSQL.
       (setq pgmacs--marked-rows (list))
       (pgmacs--display-table pgmacs--table))))
 
@@ -1349,7 +1349,7 @@ Updates the PostgreSQL database."
                           collect (cons v vt)))))
       (pgmacs--notify "%s" (pg-result res :status))
       ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
-      ;; However, we don't know what values were chosen for any columns that have a default.
+      ;; However, we don't know what values were chosen for any columns that have an SQL default.
       ;; This means that we can't insert at the current-row position.
       (setq pgmacs--marked-rows (list))
       ;; Redisplay the table, but attempt to put point on the new row
