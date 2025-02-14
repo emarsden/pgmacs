@@ -56,7 +56,7 @@ which increases performance by a factor of 12 when running the test suite.
 ~~~
 
 
-**PostgreSQL version**: PGmacs is mostly tested with PostgreSQL versions 17.2 and 16.4, but should
+**PostgreSQL version**: PGmacs is mostly tested with PostgreSQL versions 17.3 and 16.4, but should
 work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate with
 PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 

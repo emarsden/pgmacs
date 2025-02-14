@@ -96,7 +96,7 @@ it to modify real PostgreSQL databases used in production.
 pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
 Windows and MacOS. It works both in graphical mode and in the terminal.
 
-**PostgreSQL version**: PGmacs is primarily tested with PostgreSQL versions 17.2 and 16.4, but
+**PostgreSQL version**: PGmacs is primarily tested with PostgreSQL versions 17.3 and 16.4, but
 should work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate
 with PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
