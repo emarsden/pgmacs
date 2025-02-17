@@ -6,6 +6,8 @@
 - The progress reporter will automatically be stopped after 10 seconds, if it's still running. This
   ensures that it is stopped even when the connection to PostgreSQL fails.
 
+- Widget-based editing is implemented for the `timestamp` and `timestamptz` types.
+
 - Further workarounds for semi-compatible PostgreSQL variants QuestDB, CrateDB, CockroachDB, YDB and
   Spanner.
 

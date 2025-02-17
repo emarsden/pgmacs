@@ -917,6 +917,32 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
                        (pg-date-parser str nil))
   :args '((string :inline t :size 20)))
 
+(define-widget 'pgmacs-timestamp-widget 'text
+  "Widget to edit a timestamp."
+  :tag "Timestamp"
+  :format "%v"
+  :offset 2
+  :value-to-internal (lambda (_widget val)
+                       (if (stringp val)
+                           val
+                         (format-time-string pgmacs-timestamp-format val)))
+  :value-to-external (lambda (_widget str)
+                       (pg-isodate-without-timezone-parser str nil))
+  :args '((string :inline t :size 25)))
+
+(define-widget 'pgmacs-timestamptz-widget 'text
+  "Widget to edit a timestamptz."
+  :tag "Timestamptz"
+  :format "%v"
+  :offset 2
+  :value-to-internal (lambda (_widget val)
+                       (if (stringp val)
+                           val
+                         (format-time-string pgmacs-timestamp-format val)))
+  :value-to-external (lambda (_widget str)
+                       (pg-isodate-with-timezone-parser str nil))
+  :args '((string :inline t :size 25)))
+
 ;; https://www.postgresql.org/docs/current/datatype-uuid.html
 (define-widget 'pgmacs-uuid-widget 'list
   "Widget to edit a PostgreSQL UUID column."
@@ -940,50 +966,48 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
 
 (defun pgmacs--widget-for (type current-value)
   "Create a widget for TYPE and CURRENT-VALUE in the current buffer."
-  (cond ((string= "bool" type)
-         (widget-create 'boolean (or current-value nil)))
-        ((or (string= "smallint" type)
-             (string= "int2" type)
-             (string= "int4" type)
-             (string= "int8" type)
-             (string= "oid" type))
-         (widget-create 'integer (or current-value "")))
-        ((or (string= type "numeric")
-             (string= type "float4")
-             (string= type "float8"))
-         (widget-create 'float (or current-value "")))
-        ((string= type "char")
-         (widget-create 'character (or current-value "")))
-        ;; blank-trimmed text
-        ((string= type "bpchar")
-         (widget-create 'character (or current-value "")))
-        ((or (string= "text" type)
-             (string= "varchar" type))
-         (let ((default (or current-value "")))
-           (widget-create 'string
-                          :size (max 80 (min 200 (+ 5 (length default))))
-                          :value default)))
-        ;; represented as "[44,33,5,78]" on the wire. Parsed to an elisp vector of integers.
-        ((string= "vector" type)
-         (widget-create '(vector integer) :value (or current-value (vector))))
-        ((string= "hstore" type)
-         (widget-create 'pgmacs-hstore-widget :value (or current-value (make-hash-table))))
-        ((or (string= "json" type)
-             (string= "jsonb" type))
-         (widget-create 'pgmacs-json-widget :value (or  current-value (make-hash-table))))
-        ((string= "date" type)
-         (widget-create 'pgmacs-date-widget (or current-value "")))
-        ;; TODO: timestamp, timestamptz
-        ((string= "uuid" type)
-         (widget-create 'pgmacs-uuid-widget :value (or current-value "")
-                        :action (lambda (wid &rest _ignore)
-                                  (if (widget-apply wid :validate)
-                                      (user-error "Invalid UUID: %s" (widget-get wid :error))
-                                    (message "%s is ok" (widget-value wid))))))
-        (t
-         (widget-create 'editable-field
-                        :size (min 200 (+ 5 (length current-value)))
-                        (format "%s" current-value)))))
+  (pcase type
+    ("bool"
+     (widget-create 'boolean (or current-value nil)))
+    ((or "smallint" "int2" "int4" "int8" "oid")
+     (widget-create 'integer (or current-value "")))
+    ((or "numeric" "float4" "float8")
+     (widget-create 'float (or current-value "")))
+    ((or "char" "bpchar")
+     (widget-create 'character (or current-value "")))
+    ((or "text" "varchar")
+     (let ((default (or current-value "")))
+       (widget-create 'string
+                      :size (max 80 (min 200 (+ 5 (length default))))
+                      :value default)))
+    ;; represented as "[44,33,5,78]" on the wire. Parsed to an elisp vector of integers.
+    ("vector"
+     (widget-create '(vector integer) :value (or current-value (vector))))
+    ("hstore"
+     (widget-create 'pgmacs-hstore-widget :value (or current-value (make-hash-table))))
+    ((or "json" "jsonb")
+     (widget-create 'pgmacs-json-widget :value (or current-value (make-hash-table))))
+    ("date"
+     (widget-create 'pgmacs-date-widget (or current-value "")))
+    ;; A timestamp and timestamptz is represented as an elisp timestamp, which is (v29) a cons of
+    ;; two integers. We want to edit it as a timestamp string.
+    ("timestamp"
+     (widget-create 'pgmacs-timestamp-widget :value (or current-value (current-time-string))))
+    ("timestamptz"
+     (widget-create 'pgmacs-timestamptz-widget :value (or current-value (current-time-string))))
+    ("uuid"
+     (widget-create 'pgmacs-uuid-widget :value (or current-value "")
+                    :action (lambda (wid &rest _ignore)
+                              (if (widget-apply wid :validate)
+                                  (user-error "Invalid UUID: %s" (widget-get wid :error))
+                                (message "%s is ok" (widget-value wid))))))
+    (_
+     (let ((current-string (if (stringp current-value)
+                               current-value
+                             (format "%s" current-value))))
+       (widget-create 'editable-field
+                      :size (min 200 (+ 5 (length current-string)))
+                      (format "%s" current-value))))))
 
 (defun pgmacs--edit-value-widget (row primary-keys)
   "Edit and update in PostgreSQL the value at point in ROW.
@@ -1935,13 +1959,12 @@ Table names are schema-qualified if the schema is non-default."
       (insert "\n\n")
       (pgmacstbl-insert pgmacstbl))))
 
-(defun pgmacs--display-database-list (&rest ignore)
+(defun pgmacs--display-database-list (&rest _ignore)
   "Display the list of databases visible over our PostgreSQL connection."
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
          (sql "SELECT d.datname FROM pg_catalog.pg_database d ORDER BY 1")
-         (res (pg-exec con sql))
-         (tuples (pg-result res :tuples)))
+         (res (pg-exec con sql)))
     (let ((buf (get-buffer-create "*PostgreSQL databases*")))
       (pop-to-buffer buf)
       (kill-all-local-variables)
