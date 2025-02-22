@@ -1870,8 +1870,86 @@ Table names are schema-qualified if the schema is non-default."
       (insert (format ": %s\n" (cl-third tuple)))
       (shrink-window-if-larger-than-buffer))))
 
-;; TODO: this query fails with CrateDB (no pg_catalog.pg_language table).
-(defun pgmacs--display-procedures (&rest _ignore)
+;; This variant uses the information schema support of the PostgreSQL variant, for variants that
+;; don't properly populate the pg_catalog.pg_proc table.
+(defun pgmacs--display-procedures/infschema (&rest _ignore)
+  "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
+  (let* ((db-buffer pgmacs--db-buffer)
+         (con pgmacs--con)
+         (sql "SELECT routine_schema,routine_name,routine_type,routine_body,routine_definition
+               FROM information_schema.routines
+               WHERE routine_type in ('function', 'procedure')")
+         (ps-name (pg-ensure-prepared-statement con "QRY-list-procedures-infschema" sql nil))
+         (res (pg-fetch-prepared con ps-name nil))
+         (pgmacstbl (make-pgmacstbl
+                     :insert nil
+                     :use-header-line nil
+                     :columns (list
+                               (make-pgmacstbl-column
+                                :name (propertize "Schema" 'face 'pgmacs-table-header)
+                                :width "15%"
+                                :align 'left)
+                               (make-pgmacstbl-column
+                                :name (propertize "Name" 'face 'pgmacs-table-header)
+                                :primary t
+                                :width "35%"
+                                :align 'left)
+                               (make-pgmacstbl-column
+                                :name (propertize "Signature" 'face 'pgmacs-table-header)
+                                :width "40%"
+                                :align 'left)
+                               (make-pgmacstbl-column
+                                :name (propertize "Type" 'face 'pgmacs-table-header)
+                                :width 9
+                                :align 'left)
+                               (make-pgmacstbl-column
+                                :name (propertize "Language" 'face 'pgmacs-table-header)
+                                :width 8 :align 'right))
+                     :row-colors pgmacs-row-colors
+                     :face 'pgmacs-table-data
+                     :objects (pg-result res :tuples)
+                     :actions '("h" pgmacs--proc-list-help
+                                "?" pgmacs--proc-list-help
+                                "RET" pgmacs--proc-list-RET
+                                "TAB" pgmacs--next-column
+                                ;; "<deletechar>" pgmacs--proc-list-delete
+                                ;; "r" pgmacs--proc-list-rename
+                                ;; "g" pgmacs--proc-list-redraw
+                                ;; the functions pgmacstbl-beginning-of-table and
+                                ;; pgmacstbl-end-of-table don't work when we have inserted text before
+                                ;; the pgmacstbl.
+                                "<" (lambda (&rest _ignored)
+                                      (text-property-search-backward 'pgmacstbl)
+                                      (forward-line))
+                                ">" (lambda (&rest _ignored)
+                                      (text-property-search-forward 'pgmacstbl)
+                                      (previous-line))
+                                "q"  (lambda (&rest _ignored) (bury-buffer)))
+                     :getter (lambda (object column pgmacstbl)
+                               (pcase (pgmacstbl-column pgmacstbl column)
+                                 ("Schema" (pgmacs--display-table-name (cl-first object)))
+                                 ("Name" (cl-second object))
+                                 ;; FIXME improve
+                                 ("Signature" (nth 3 object))
+                                 ("Type" "Unknown")
+                                 ("Language" (nth 5 object))))))
+         (buf (get-buffer-create "*PGmacs procedures*")))
+    (pop-to-buffer buf)
+    (kill-all-local-variables)
+    (setq-local pgmacs--con con
+                pgmacs--db-buffer db-buffer
+                buffer-read-only t
+                truncate-lines t)
+    (pgmacs-mode)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (remove-overlays)
+      (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
+      (insert "\n\n")
+      (pgmacstbl-insert pgmacstbl))))
+
+;; TODO: include a button or keybinding to delete the function/procedure at point (with DROP FUNCTION or DROP PROCEDURE)?
+(defun pgmacs--display-procedures/postgresql (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
@@ -1960,6 +2038,13 @@ Table names are schema-qualified if the schema is non-default."
       (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
       (insert "\n\n")
       (pgmacstbl-insert pgmacstbl))))
+
+(defun pgmacs--display-procedures (&rest args)
+  "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
+  (pcase (pgcon-server-variant pgmacs--con)
+    ('postgresql (pgmacs--display-procedures/postgresql args))
+    (_ (pgmacs--display-procedures/infschema args))))
+
 
 (defun pgmacs--display-database-list (&rest _ignore)
   "Display the list of databases visible over our PostgreSQL connection."
@@ -2763,6 +2848,7 @@ Prompt for the table name in the minibuffer."
   (let ((con pgmacs--con)
         (db-buffer pgmacs--db-buffer))
     (cl-flet ((show (setting label)
+                ;; FIXME: YDB does not allow access to the current_setting() function
                 (let* ((res (pg-exec-prepared con "SELECT pg_catalog.current_setting($1, true)"
                                               `((,setting . "text"))))
                        (tuples (pg-result res :tuples)))
