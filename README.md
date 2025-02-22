@@ -139,7 +139,7 @@ The following PostgreSQL-compatible databases have been tested:
 
 - [Google AlloyDB Omni](https://cloud.google.com/alloydb/omni/docs/quickstart) is a proprietary fork
   of PostgreSQL with Google-developed extensions, including a columnar storage extension, adaptive
-  autovacuum, and an index advisor. It works perfectly with pg-el as of 2025-01.
+  autovacuum, and an index advisor. It works perfectly with PGmacs as of 2025-02.
 
 - [Xata](https://xata.io/) “serverless PostgreSQL” has many limitations including lack of support
   for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
@@ -150,23 +150,21 @@ The following PostgreSQL-compatible databases have been tested:
   for example. It does support some extensions such as pgvector, for example. Last tested with
   v2.25.
   
-- [CrateDB](https://crate.io/) does not currently work; it does not implement PostgreSQL
-  functions that we use to query table metainformation. Last tested with v5.9.6.
+- [CrateDB](https://crate.io/) works with limited functionality: for example querying the list of
+  defined procedures and functions triggers an internal error in CrateDB. Last tested 2025-02 with
+  v5.9.9.
 
-- [CockroachDB](https://github.com/cockroachdb/cockroach) does not work with PGmacs:
-  our query for `pg-table-owner` triggers an internal error, there is no implementation of the
-  function `pg_size_pretty`, and the database fails on basic SQL such as the boolean vector syntax
-  `b'1001000'`. Lasted tested with version 24.3.
+- [CockroachDB](https://github.com/cockroachdb/cockroach) works with limited functionality: for
+  example the list of defined procedures and functions is not properly populated. Lasted tested
+  2025-02 with version 24.3.
 
 - [QuestDB](https://questdb.io/) has very limited PostgreSQL support, and does not support the
   `integer` type for example. Last tested against version 6.5.4.
 
 - [Google Spanner](https://cloud.google.com/spanner), or at least the Spanner emulator (that reports
   itself as `PostgreSQL 14.1`) and the PGAdapter library that enables support for the PostgreSQL
-  wire protocol, do not work with PGmacs. Spanner has only limited PostgreSQL compatibility, for
-  example refusing to create tables that do not have a primary key. It does not implement some
-  functions we use to query the current user and database status, such as `current_user`,
-  `pg_backend_pid`, `pg_is_in_recovery`.
+  wire protocol, is supported with limited functionality by PGmacs. Spanner has only limited
+  PostgreSQL compatibility, for example refusing to create tables that do not have a primary key.
 
 - [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) has very limited
   PostgreSQL compatibility and does not work with PGmacs. The system tables that we query to obtain
