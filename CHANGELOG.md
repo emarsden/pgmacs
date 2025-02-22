@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.22] - Unreleased
+## [0.22] - 2025-02-22
 
 - The progress reporter will automatically be stopped after 10 seconds, if it's still running. This
   ensures that it is stopped even when the connection to PostgreSQL fails.
