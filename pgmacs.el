@@ -215,7 +215,7 @@ concerning a specific table, rather than the entire database."
 
 (defcustom pgmacs-timestamp-zone nil
   "Time zone to be used for timestamp/timestamptz/datetime output,
-e.g. 'UTC' or 'Europe/Berlin'. Nil for local OS timezone."
+e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
   :type 'string
   :group 'pgmacs)
 
@@ -881,13 +881,15 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
                          (dolist (kv alist)
                            (puthash (car kv) (cdr kv) ht))
                          ht))
-  :args '((editable-list :inline t
+  :args `((editable-list :inline t
                          ;; don't display the [INS] button on each line (which would be inserted if
                          ;; the %i escape were present here), because the order of entries in the
                          ;; HSTORE is not relevant.
                          :entry-format "%d %v\n"
                          (cons :format "%v"
-                               (editable-field :size 25 :tag "Key" :format "%v ⟶ ")
+                               (editable-field :size 25
+                                                :tag "Key"
+                                                :format ,(if (char-displayable-p ?⟶) "%v ⟶ " "%v --> "))
                                (editable-field :size 40 :tag "Value")))))
 
 (define-widget 'pgmacs-json-widget 'text
