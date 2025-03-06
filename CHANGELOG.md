@@ -1,6 +1,11 @@
 # Changelog
 
 
+## [0.23] - Unreleased
+
+- Further workarounds for semi-compatible PostgreSQL variant Materialize.
+
+
 ## [0.22] - 2025-02-22
 
 - The progress reporter will automatically be stopped after 10 seconds, if it's still running. This

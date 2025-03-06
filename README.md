@@ -92,9 +92,9 @@ it to modify real PostgreSQL databases used in production.
 
 ## Supported platforms
 
-**Emacs version**: PGmacs requires Emacs version 29. It has also been tested on the
-pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
-Windows and MacOS. It works both in graphical mode and in the terminal.
+**Emacs version**: PGmacs requires Emacs version 29. It is tested mostly on Emacs 30.1 and 29.4. It
+has mostly been tested on Linux, but should work as expected on Microsoft Windows and MacOS. It
+works both in graphical mode and in the terminal.
 
 **PostgreSQL version**: PGmacs is primarily tested with PostgreSQL versions 17.4 and 16.4, but
 should work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate
@@ -151,8 +151,8 @@ The following PostgreSQL-compatible databases have been tested:
   v2.25.
   
 - [CrateDB](https://crate.io/) works with limited functionality: for example querying the list of
-  defined procedures and functions triggers an internal error in CrateDB. Last tested 2025-02 with
-  v5.9.9.
+  defined procedures and functions triggers an internal error in CrateDB. Last tested 2025-03 with
+  v5.10.2.
 
 - [CockroachDB](https://github.com/cockroachdb/cockroach) works with limited functionality: for
   example the list of defined procedures and functions is not properly populated. Lasted tested
@@ -165,6 +165,11 @@ The following PostgreSQL-compatible databases have been tested:
   itself as `PostgreSQL 14.1`) and the PGAdapter library that enables support for the PostgreSQL
   wire protocol, is supported with limited functionality by PGmacs. Spanner has only limited
   PostgreSQL compatibility, for example refusing to create tables that do not have a primary key.
+
+- The [Materialize](https://materialize.com/) operational database (a proprietary differential
+  dataflow database) has many limitations in its PostgreSQL compatibility: no support for primary
+  keys, unique constraints, check constraints, for the 'bit' type for example. It works with these
+  limitations with PGmacs (last tested 2025-03 with Materialize v0.135).
 
 - [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) has very limited
   PostgreSQL compatibility and does not work with PGmacs. The system tables that we query to obtain
@@ -179,8 +184,7 @@ The following PostgreSQL-compatible databases have been tested:
   Hat build of PostgreSQL 16.4 on Linux/Aarch64 and works fine.
 
 - Untested but likely to work: Amazon RDS, Google Cloud SQL, Azure Database for PostgreSQL, Amazon
-  Auroa, Materialize. You may however encounter difficulties with TLS connections,
-  as noted above.
+  Aurora. You may however encounter difficulties with TLS connections, as noted above.
 
 
 ## License

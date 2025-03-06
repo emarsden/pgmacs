@@ -256,11 +256,11 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 ;; pgmacs-shortcut-button object) to the pgmacs-table-list-buttons list.
 (defvar pgmacs-table-list-buttons
   (list (pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner materialize))))
 	 :label "Display procedures"
          :action #'pgmacs--display-procedures)
 	(pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize))))
 	 :label "Display running queries"
          :action #'pgmacs--display-running-queries)
         (pgmacs-shortcut-button
@@ -280,12 +280,12 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :action (lambda (&rest _ignore)
                    (pgmacs-show-result pgmacs--con "SELECT * FROM pg_settings")))
 	(pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize))))
 	 :label "Stat activity"
          :action #'pgmacs--display-stat-activity
          :help-echo "Show information from the pg_stat_activity table")
 	(pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize))))
 	 :label "Replication stats"
 	 :action #'pgmacs--display-replication-stats
 	 :help-echo "Show information on PostgreSQL replication status"))
@@ -1704,9 +1704,9 @@ compatibility."
     (dolist (table (pg-tables pgmacs--con))
       (let* ((tid (pg-escape-identifier table))
              (res (pg-exec pgmacs--con (format "SELECT COUNT(*) FROM %s" tid)))
-             (tuple (pg-result res :tuple 0))
-             (rows (cl-first tuple)))
-        (push (list table rows 0 "" "") entries)))
+             (rows (cl-first (pg-result res :tuple 0)))
+             (comment (pg-table-comment pgmacs--con table)))
+        (push (list table rows 0 "" comment) entries)))
     entries))
 
 ;; TODO: also include VIEWs
@@ -2862,7 +2862,7 @@ Prompt for the table name in the minibuffer."
       (kill-all-local-variables)
       (buffer-disable-undo)
       (setq-local pgmacs--db-buffer db-buffer)
-      (unless (member (pgcon-server-variant con) '(cratedb questdb ydb spanner))
+      (unless (member (pgcon-server-variant con) '(cratedb questdb ydb spanner materialize))
         (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
                (row (pg-result res :tuple 0))
                (addr (cl-first row))
@@ -2898,14 +2898,14 @@ Prompt for the table name in the minibuffer."
       (show "server_encoding" "Server encoding")
       (show "TimeZone" "Server timezone")
       (show "shared_memory_size" "Server shared memory size")
-      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb))
+      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb materialize))
         (let* ((res (pg-exec con "SELECT pg_catalog.pg_listening_channels()"))
                (channels (pg-result res :tuples)))
           (when channels
             (insert "Asynchronous notification channels for the current session:\n")
             (dolist (ch channels)
               (insert "  " ch "\n")))))
-      (unless (member (pgcon-server-variant con) '(cratedb))
+      (unless (member (pgcon-server-variant con) '(cratedb materialize))
         (let* ((res (pg-exec con "SELECT name, default_version, installed_version FROM pg_available_extensions"))
                (exts (pg-result res :tuples)))
           (insert "PostgreSQL extensions:")
@@ -3398,7 +3398,7 @@ inlined vector SVG image that is encoded as a data URI."
                               ("Size on disk" (cl-third object))
                               ("Owner" (cl-fourth object))
                               ("Comment" (cl-fifth object)))))))
-    (unless (member (pgcon-server-variant con) '(cratedb cockroachdb spanner ydb questdb))
+    (unless (member (pgcon-server-variant con) '(cratedb cockroachdb spanner ydb questdb materialize))
       (let* ((res (pg-exec con "SELECT current_user, pg_backend_pid(), pg_is_in_recovery()"))
              (row (pg-result res :tuple 0)))
         (insert (format "\nConnected to database %s%s as %s%s (pid %d %s)\n"
