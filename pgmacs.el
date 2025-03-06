@@ -620,7 +620,7 @@ Applies format string FMT to ARGS."
 ;; user. We only want to show the outer ?" characters if they are necessary (if some characters in
 ;; the identifier require quoting).
 (defun pgmacs--display-identifier (name)
-  "Return the PostgreSQL identifier NAME in a form suitable for display to the user."
+  "Return PostgreSQL identifier NAME in a form suitable for display to user."
   (cl-labels ((safe-p (ch)
                 (string-match-p "[0-9a-zA-Z_]" (string ch)))
               (user-facing (nm)
@@ -1695,10 +1695,11 @@ Uses PostgreSQL connection CON."
 ;; This function called for semi-compatible PostgreSQL variants that only partially implement the
 ;; system tables that we use to query for metainformation concerning SQL tables.
 (defun pgmacs--list-tables-basic ()
-  "Return a list of table-names and associated metadata for the current database.
+  "Return a list of table-names and associated metadata for current database.
 Table names are schema-qualified if the schema is non-default.
 
-This function called for PostgreSQL variants that don't provide full compatibility."
+This function called for PostgreSQL variants that don't provide full
+compatibility."
   (let ((entries (list)))
     (dolist (table (pg-tables pgmacs--con))
       (let* ((tid (pg-escape-identifier table))
