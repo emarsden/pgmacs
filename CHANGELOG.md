@@ -5,6 +5,11 @@
 
 - Further workarounds for semi-compatible PostgreSQL variant Materialize.
 
+- When adding a PRIMARY KEY to a table, use a column of type `UUID` with an automatically generated
+  random value, for PostgreSQL variants that do not support `GENERATED ALWAYS AS IDENTITY`. This is
+  the case for different distributed databases, for which autoincremented integers are difficult to
+  manage.
+
 
 ## [0.22] - 2025-02-22
 

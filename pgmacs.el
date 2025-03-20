@@ -294,6 +294,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 (defvar pgmacs-row-list-buttons
   (list (pgmacs-shortcut-button
          :label "Export table to CSV buffer"
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb))))
          :action #'pgmacs--table-to-csv
          :help-echo  "Export this table to a CSV buffer")
         (pgmacs-shortcut-button
@@ -307,7 +308,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :help-echo "Count rows in this table")
         (pgmacs-shortcut-button
          ;; CrateDB only supports ANALYZE on the whole database, not on a single table.
-         :condition (lambda () (not (eq (pgcon-server-variant pgmacs--con) 'cratedb)))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb))))
          :label "ANALYZE this table"
          :action #'pgmacs--run-analyze
          :help-echo "Run ANALYZE on this table")
@@ -1388,11 +1389,7 @@ Updates the PostgreSQL database."
           (recenter))))))
 
 ;; This SQL query adapted from https://stackoverflow.com/a/20537829
-;;
-;; Note: query is not working on CrateDB, Spanner, YDB.
-(defun pgmacs--table-primary-keys (con table)
-  "Return the columns active as PRIMARY KEY in TABLE.
-Uses PostgreSQL connection CON."
+(defun pgmacs--table-primary-keys/full (con table)
   (let* ((schema (if (pg-qualified-name-p table)
                      (pg-qualified-name-schema table)
                    "public"))
@@ -1410,6 +1407,16 @@ Uses PostgreSQL connection CON."
          (ps-name (pg-ensure-prepared-statement con "QRY-tbl-primary-keys" sql argument-types))
          (res (pg-fetch-prepared con ps-name params)))
     (mapcar #'cl-first (pg-result res :tuples))))
+
+(defun pgmacs--table-primary-keys (con table)
+  "Return the columns active as PRIMARY KEY in TABLE.
+Uses PostgreSQL connection CON."
+  (pcase (pgcon-server-variant con)
+    ('questdb nil)
+    ('cratedb nil)
+    ('spanner nil)
+    ('ydb nil)
+    (_ (pgmacs--table-primary-keys/full con table))))
 
 (defun pgmacs--table-indexes/full (con table)
   "Return details of the indexes present on TABLE.
@@ -1455,6 +1462,7 @@ Uses PostgreSQL connection CON."
 Uses PostgreSQL connection CON."
   (pcase (pgcon-server-variant con)
     ('cratedb nil)
+    ('questdb nil)
     (_ (pgmacs--table-indexes/full con table))))
 
 (defun pgmacs--column-nullable-p (con table column)
@@ -1617,7 +1625,8 @@ The metainformation includes the type name, whether the column is a PRIMARY KEY,
 whether it is affected by constraints such as UNIQUE.  Information is retrieved
 over the PostgreSQL connection CON."
   (pcase (pgcon-server-variant con)
-    ('cratedb (pgmacs--column-info/basic con table column))
+    ((or 'cratedb 'questdb)
+     (pgmacs--column-info/basic con table column))
     (_ (pgmacs--column-info/full con table column))))
 
 ;; Format the column-info hashtable as a string
@@ -1705,7 +1714,7 @@ compatibility."
       (let* ((tid (pg-escape-identifier table))
              (res (pg-exec pgmacs--con (format "SELECT COUNT(*) FROM %s" tid)))
              (rows (cl-first (pg-result res :tuple 0)))
-             (comment (pg-table-comment pgmacs--con table)))
+             (comment (or (pg-table-comment pgmacs--con table) "")))
         (push (list table rows 0 "" comment) entries)))
     entries))
 
@@ -1716,10 +1725,19 @@ compatibility."
 Table names are schema-qualified if the schema is non-default."
   (let ((entries (list)))
     (dolist (table (pg-tables pgmacs--con))
-      (let* ((tid (pg-escape-identifier table))
-             (sql "SELECT pg_catalog.pg_total_relation_size($1),
-                          obj_description($1::regclass::oid, 'pg_class')")
-             (res (pg-exec-prepared pgmacs--con sql `((,tid . "text"))))
+      (let* ((schema (if (pg-qualified-name-p table)
+                         (pg-qualified-name-schema table)
+                       "public"))
+             (tname (if (pg-qualified-name-p table)
+                        (pg-qualified-name-name table)
+                      table))
+             (sql "SELECT
+                     pg_catalog.pg_total_relation_size(c.oid),
+                     obj_description(c.oid, 'pg_class')
+                   FROM pg_class c
+                   JOIN pg_namespace n ON c.relnamespace = n.oid
+                   WHERE (n.nspname, c.relname) = ($1, $2)")
+             (res (pg-exec-prepared pgmacs--con sql `((,schema . "text") (,tname . "text"))))
              (tuple (pg-result res :tuple 0))
              (row-count 0)
              (size (and (cl-first tuple) (file-size-human-readable (cl-first tuple) 'iec " ")))
@@ -1787,7 +1805,10 @@ Table names are schema-qualified if the schema is non-default."
     (pg-copy-to-buffer con sql buf)
     (goto-char (point-min))))
 
-;; Note that CrateDB does not support "GENERATED ALWAYS AS IDENTITY" columns, as of 2025-01.
+;; Note that CrateDB does not support "GENERATED ALWAYS AS IDENTITY" columns, as of 2025-01. For
+;; some distributed databases such as CrateDB and Materialize, we use a UUID column as a primary key
+;; with a generated random UUID, instead of a BIGINT of type SERIAL or GENERATED AS IDENTITY.
+;; Autoincremented columns are difficult to manage for distributed databases.
 (defun pgmacs--add-primary-key (&rest _ignore)
   "Add a PRIMARY KEY to the current PostgreSQL table."
   (let ((pk (pgmacs--table-primary-keys pgmacs--con pgmacs--table)))
@@ -1796,9 +1817,24 @@ Table names are schema-qualified if the schema is non-default."
   (cl-flet ((exists (name) (cl-find name (pg-columns pgmacs--con pgmacs--table) :test #'string=)))
     (let* ((colname (or (cl-find-if-not #'exists (list "id" "idpk" "idcol" "pk" "_id" "newpk"))
                         (error "Can't autogenerate a name for primary key")))
-           (sql (format "ALTER TABLE %s ADD COLUMN %s BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
+           (coltype (pcase (pgcon-server-variant pgmacs--con)
+                      ('postgresql
+                       (if (< (pgcon-server-version-major pgmacs--con) 12)
+                           "SERIAL"
+                         "BIGINT GENERATED ALWAYS AS IDENTITY"))
+                      ;; See https://github.com/crate/crate/issues/11020 and
+                      ;; https://github.com/crate/crate/issues/11032
+                      ('cratedb "TEXT DEFAULT gen_random_text_uuid()")
+                      ;; https://www.cockroachlabs.com/docs/stable/serial.html#generated-values-for-mode-sql_sequence
+                      ('cockroachdb "UUID NOT NULL DEFAULT gen_random_uuid()")
+                      ('risingwave "UUID NOT NULL DEFAULT gen_random_uuid()")
+                      ('questdb "UUID NOT NULL DEFAULT gen_random_uuid()")
+                      ('materialize "UUID NOT NULL DEFAULT gen_random_uuid()")
+                      (_ "SERIAL")))
+           (sql (format "ALTER TABLE %s ADD COLUMN %s %s PRIMARY KEY"
                         (pg-escape-identifier pgmacs--table)
-                        (pg-escape-identifier colname))))
+                        (pg-escape-identifier colname)
+                        coltype)))
       (when (y-or-n-p (format "Really run SQL '%s'?" sql))
         (let ((res (pg-exec pgmacs--con sql)))
           (pgmacs--notify "%s" (pg-result res :status))))))
@@ -2138,7 +2174,7 @@ Opens a dedicated buffer if the query list is not empty."
     (pgmacs--notify "Table %s has %s row%s"
                     pgmacs--table
                     count
-                    (if (> count 1) "s" ""))))
+                    (if (= count 1) "" "s"))))
 
 (defun pgmacs--find-completable-symbol ()
   (let ((bounds (bounds-of-thing-at-point 'symbol)))
@@ -2430,8 +2466,16 @@ specied by PRIMARY-KEYS."
 
 ;; Used to retrieve rows in a row-list buffer.
 (defun pgmacs--select-rows-offset (con table-name-escaped offset row-count)
-  (let ((sql (format "SELECT * FROM %s OFFSET %s" table-name-escaped offset)))
-    (pg-exec-prepared con sql (list) :max-rows row-count)))
+  (pcase (pgcon-server-variant con)
+    ;; QuestDB does not support OFFSET.
+    ;; https://questdb.com/docs/reference/sql/limit/
+    ('questdb
+     (let ((sql (format "SELECT * FROM %s LIMIT %s,%s"
+                        table-name-escaped offset (+ offset row-count))))
+       (pg-exec con sql)))
+    (_
+     (let ((sql (format "SELECT * FROM %s OFFSET %s" table-name-escaped offset)))
+       (pg-exec-prepared con sql (list) :max-rows row-count)))))
 
 (defun pgmacs--select-rows-where (con table-name-escaped where-filter row-count)
   (when (cl-search ";" where-filter)
@@ -2630,7 +2674,7 @@ Runs functions on `pgmacs-row-list-hook'."
                                       (pgmacs--display-table table))
                             'help-echo "Modify the table comment")
         (insert "\n"))
-      (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb))
+      (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb questdb))
         (let* ((sql "SELECT pg_catalog.pg_total_relation_size($1),
                           pg_catalog.pg_indexes_size($1)")
                (res (pg-exec-prepared con sql `((,t-id . "text"))))
@@ -3417,11 +3461,11 @@ inlined vector SVG image that is encoded as a data URI."
           ;; We later use this information to decide whether to prefer fast-but-unreliable or
           ;; slow-but-exact queries for table row count.
           (put 'pgmacs--con 'database-size size)
-          (insert (format "Total database size: %s\n" (file-size-human-readable size 'iec " "))))))
+          (insert (format "Total database size: %s" (file-size-human-readable size 'iec " "))))))
     ;; Perhaps also display output from
     ;; select state, count(*) from pg_stat_activity where pid <> pg_backend_pid() group by 1 order by 1;'
     ;; see https://gitlab.com/posetgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
-    (insert "\n")
+    (insert "\n\n")
     (dolist (btn pgmacs-table-list-buttons)
       (pgmacs--insert btn)
       (insert "  ")
