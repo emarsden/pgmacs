@@ -1,9 +1,12 @@
 # Changelog
 
 
-## [0.23] - Unreleased
+## [0.23] - 2025-03-23
 
 - Further workarounds for semi-compatible PostgreSQL variant Materialize.
+
+- Updating the version requirement on the pg-el library to benefit from improved compatibility with
+  multiple PostgreSQL variants: QuestDB, Spanner, YugabyteDB and CrateDB.
 
 - When adding a PRIMARY KEY to a table, use a column of type `UUID` with an automatically generated
   random value, for PostgreSQL variants that do not support `GENERATED ALWAYS AS IDENTITY`. This is
