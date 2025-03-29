@@ -1,6 +1,11 @@
 # Changelog
 
 
+## [0.24] - Unreleased
+
+- Further workarounds for semi-compatible PostgreSQL variants YDB, Materialize and Spanner.
+
+
 ## [0.23] - 2025-03-23
 
 - Further workarounds for semi-compatible PostgreSQL variant Materialize.

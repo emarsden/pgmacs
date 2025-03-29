@@ -294,11 +294,14 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 (defvar pgmacs-row-list-buttons
   (list (pgmacs-shortcut-button
          :label "Export table to CSV buffer"
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb materialize))))
          :action #'pgmacs--table-to-csv
          :help-echo  "Export this table to a CSV buffer")
+        ;; Materialize does not support ALTER TABLE ADD COLUMN. Spanner does not allow the addition
+        ;; of primary keys with ALTER TABLE.
         (pgmacs-shortcut-button
-         :condition (lambda () (null (pgmacs--table-primary-keys pgmacs--con pgmacs--table)))
+         :condition (lambda () (and (not (member (pgcon-server-variant pgmacs--con) '(materialize spanner)))
+                               (null (pgmacs--table-primary-keys pgmacs--con pgmacs--table))))
          :label "Add primary key to table"
          :action #'pgmacs--add-primary-key
          :help-echo "Add a PRIMARY KEY to enable editing")
@@ -308,13 +311,13 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :help-echo "Count rows in this table")
         (pgmacs-shortcut-button
          ;; CrateDB only supports ANALYZE on the whole database, not on a single table.
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb materialize spanner))))
          :label "ANALYZE this table"
          :action #'pgmacs--run-analyze
          :help-echo "Run ANALYZE on this table")
         (pgmacs-shortcut-button
          :condition (lambda ()
-                      (unless (memq (pgcon-server-variant pgmacs--con) '(cratedb ydb))
+                      (unless (memq (pgcon-server-variant pgmacs--con) '(cratedb ydb spanner))
                         (null (pg-table-comment pgmacs--con pgmacs--table))))
          :label "Add table comment"
          :action (lambda (&rest _ignore)
@@ -1464,6 +1467,8 @@ Uses PostgreSQL connection CON."
     ('cratedb nil)
     ('questdb nil)
     ('ydb nil)
+    ('materialize nil)
+    ('spanner nil)
     (_ (pgmacs--table-indexes/full con table))))
 
 (defun pgmacs--column-nullable-p (con table column)
@@ -1626,7 +1631,7 @@ The metainformation includes the type name, whether the column is a PRIMARY KEY,
 whether it is affected by constraints such as UNIQUE.  Information is retrieved
 over the PostgreSQL connection CON."
   (pcase (pgcon-server-variant con)
-    ((or 'cratedb 'questdb 'ydb)
+    ((or 'cratedb 'questdb 'ydb 'materialize 'spanner)
      (pgmacs--column-info/basic con table column))
     (_ (pgmacs--column-info/full con table column))))
 
@@ -1750,7 +1755,7 @@ Table names are schema-qualified if the schema is non-default."
     entries))
 
 (defun pgmacs--list-tables ()
-  (if (member (pgcon-server-variant pgmacs--con) '(cratedb cockroachdb spanner ydb questdb))
+  (if (member (pgcon-server-variant pgmacs--con) '(cratedb cockroachdb spanner ydb questdb materialize spanner))
       (pgmacs--list-tables-basic)
     (pgmacs--list-tables-full)))
 
@@ -1787,6 +1792,8 @@ Table names are schema-qualified if the schema is non-default."
   "Dump the current PostgreSQL table in CSV format into an Emacs buffer."
   (when (eq (pgcon-server-variant pgmacs--con) 'cratedb)
     (user-error "CrateDB does not support COPY TO STDOUT"))
+  (when (eq (pgcon-server-variant pgmacs--con) 'materialize)
+    (user-error "Materialize does not support COPY TO STDOUT"))
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
          (table pgmacs--table)
@@ -1830,7 +1837,6 @@ Table names are schema-qualified if the schema is non-default."
                       ('cockroachdb "UUID NOT NULL DEFAULT gen_random_uuid()")
                       ('risingwave "UUID NOT NULL DEFAULT gen_random_uuid()")
                       ('questdb "UUID NOT NULL DEFAULT gen_random_uuid()")
-                      ('materialize "UUID NOT NULL DEFAULT gen_random_uuid()")
                       (_ "SERIAL")))
            (sql (format "ALTER TABLE %s ADD COLUMN %s %s PRIMARY KEY"
                         (pg-escape-identifier pgmacs--table)
@@ -2680,7 +2686,7 @@ Runs functions on `pgmacs-row-list-hook'."
                                       (pgmacs--display-table table))
                             'help-echo "Modify the table comment")
         (insert "\n"))
-      (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb questdb))
+      (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb questdb materialize spanner))
         (let* ((sql "SELECT pg_catalog.pg_total_relation_size($1),
                           pg_catalog.pg_indexes_size($1)")
                (res (pg-exec-prepared con sql `((,t-id . "text"))))
@@ -3232,6 +3238,8 @@ inlined vector SVG image that is encoded as a data URI."
     (user-error "SchemaSpy will only work on a graphical terminal"))
   (unless (image-type-available-p 'svg)
     (user-error "SchemaSpy support needs SVG support in your Emacs"))
+  (when (member (pgcon-server-variant con) '(spanner))
+    (error "The Spanner database does not implement system tables needed by SchemaSpy"))
   (let* ((tmpdir (temporary-file-directory))
          (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
     (when (file-directory-p schemaspy-dir)
