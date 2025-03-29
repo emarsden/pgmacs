@@ -256,7 +256,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 ;; pgmacs-shortcut-button object) to the pgmacs-table-list-buttons list.
 (defvar pgmacs-table-list-buttons
   (list (pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner materialize))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner materialize ydb))))
 	 :label "Display procedures"
          :action #'pgmacs--display-procedures)
 	(pgmacs-shortcut-button
@@ -294,7 +294,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 (defvar pgmacs-row-list-buttons
   (list (pgmacs-shortcut-button
          :label "Export table to CSV buffer"
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb))))
          :action #'pgmacs--table-to-csv
          :help-echo  "Export this table to a CSV buffer")
         (pgmacs-shortcut-button
@@ -308,13 +308,13 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :help-echo "Count rows in this table")
         (pgmacs-shortcut-button
          ;; CrateDB only supports ANALYZE on the whole database, not on a single table.
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb))))
          :label "ANALYZE this table"
          :action #'pgmacs--run-analyze
          :help-echo "Run ANALYZE on this table")
         (pgmacs-shortcut-button
          :condition (lambda ()
-                      (unless (eq (pgcon-server-variant pgmacs--con) 'cratedb)
+                      (unless (memq (pgcon-server-variant pgmacs--con) '(cratedb ydb))
                         (null (pg-table-comment pgmacs--con pgmacs--table))))
          :label "Add table comment"
          :action (lambda (&rest _ignore)
@@ -639,7 +639,7 @@ Applies format string FMT to ARGS."
           (t
            (user-facing name)))))
 
-(defun pgmacs--row-as-json (current-row)
+(cl-defun pgmacs--row-as-json (current-row)
   "Copy the CURRENT-ROW as JSON to the kill ring."
   (unless (json-available-p)
     (message "Emacs is not compiled with JSON support")
@@ -1463,6 +1463,7 @@ Uses PostgreSQL connection CON."
   (pcase (pgcon-server-variant con)
     ('cratedb nil)
     ('questdb nil)
+    ('ydb nil)
     (_ (pgmacs--table-indexes/full con table))))
 
 (defun pgmacs--column-nullable-p (con table column)
@@ -1625,7 +1626,7 @@ The metainformation includes the type name, whether the column is a PRIMARY KEY,
 whether it is affected by constraints such as UNIQUE.  Information is retrieved
 over the PostgreSQL connection CON."
   (pcase (pgcon-server-variant con)
-    ((or 'cratedb 'questdb)
+    ((or 'cratedb 'questdb 'ydb)
      (pgmacs--column-info/basic con table column))
     (_ (pgmacs--column-info/full con table column))))
 
@@ -2467,6 +2468,11 @@ specied by PRIMARY-KEYS."
 ;; Used to retrieve rows in a row-list buffer.
 (defun pgmacs--select-rows-offset (con table-name-escaped offset row-count)
   (pcase (pgcon-server-variant con)
+    ;; YDB (as of 2025-03) triggers an error when using OFFSET without using LIMIT...
+    ('ydb
+     (let ((sql (format "SELECT * FROM %s LIMIT %s OFFSET %s"
+                        table-name-escaped row-count offset)))
+       (pg-exec con sql)))
     ;; QuestDB does not support OFFSET.
     ;; https://questdb.com/docs/reference/sql/limit/
     ('questdb

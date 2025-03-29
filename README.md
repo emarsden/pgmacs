@@ -171,9 +171,9 @@ The following PostgreSQL-compatible databases have been tested:
   keys, unique constraints, check constraints, for the 'bit' type for example. It works with these
   limitations with PGmacs (last tested 2025-03 with Materialize v0.135).
 
-- [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) has very limited
-  PostgreSQL compatibility and does not work with PGmacs. The system tables that we query to obtain
-  the list of tables in the current database are not implemented. Lasted tested with version 23-4.
+- [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) has limited PostgreSQL
+  compatibility (for example, it does not support foreign key references), but works with limited
+  functionality with PGmacs. Lasted tested 2025-03 with version 23-4.
 
 - ClickHouse does not work: its implementation of the wire protocol is very limited, with no support
   for the `pg_type` metadata and no support for basic PostgreSQL-flavoured SQL commands such as
