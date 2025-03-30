@@ -3253,7 +3253,7 @@ inlined vector SVG image that is encoded as a data URI."
     (user-error "SchemaSpy will only work on a graphical terminal"))
   (unless (image-type-available-p 'svg)
     (user-error "SchemaSpy support needs SVG support in your Emacs"))
-  (when (member (pgcon-server-variant con) '(spanner))
+  (when (member (pgcon-server-variant pgmacs--con) '(spanner))
     (error "The Spanner database does not implement system tables needed by SchemaSpy"))
   (let* ((tmpdir (temporary-file-directory))
          (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
