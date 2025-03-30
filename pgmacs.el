@@ -514,6 +514,16 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (gethash (cons table column) pgmacs--column-display-functions nil))
 
 
+(defun pgmacs-flush-table (con table)
+  "Force database to make recent insertions to TABLE visible.
+This is needed for certain distributed PostgreSQL variants that provide
+eventually-consistent semantics (at least CrateDB and RisingWave)."
+  (pcase (pgcon-server-variant con)
+    ('cratedb
+     (pg-exec con (format "REFRESH TABLE %s" (pg-escape-identifier table))))
+    ('risingwave
+     (pg-exec con "FLUSH"))))
+
 (defun pgmacs-disconnect (&rest _ignore)
   (unless pgmacs--con
     (user-error "This function must be called from a PGmacs buffer"))
@@ -727,6 +737,7 @@ FUNCTION is called on (old-value col-name col-type) and returns the new value."
              (res (pg-exec-prepared pgmacs--con sql
                                     `((,new-value . ,col-type)
                                       (,pk-value . ,pk-col-type)))))
+        (pgmacs-flush-table pgmacs--con pgmacs--table)
         (pgmacs--notify "%s" (pg-result res :status)))
       (let ((new-row (copy-sequence current-row)))
         (setf (nth col-id new-row) new-value)
@@ -1055,6 +1066,7 @@ has primary keys, named in the list PRIMARY-KEYS."
                              (res (pg-exec-prepared con sql
                                                     `((,new-value . ,col-type)
                                                       (,pk-value . ,pk-col-type)))))
+                        (pgmacs-flush-table con pgmacs--table)
                         (pgmacs--notify "%s" (pg-result res :status))
                         (let ((new-row (copy-sequence current-row)))
                           (setf (nth col-id new-row) new-value)
@@ -1162,6 +1174,7 @@ keys, whose names are given by the list PRIMARY-KEYS."
              (_ (pg-exec pgmacs--con "START TRANSACTION"))
              (res (pg-exec-prepared pgmacs--con sql where-values))
              (status (pg-result res :status)))
+        (pgmacs-flush-table pgmacs--con pgmacs--table)
         (pgmacs--notify "%s" status)
         (unless (string-prefix-p "DELETE " status)
           (error "Unexpected status %s for PostgreSQL DELETE command" status))
@@ -2416,6 +2429,7 @@ specied by PRIMARY-KEYS."
              (_ (pg-exec pgmacs--con "START TRANSACTION"))
              (res (pg-exec-prepared pgmacs--con sql where-values-all))
              (status (pg-result res :status)))
+        (pgmacs-flush-table pgmacs--con pgmacs--table)
         (pgmacs--notify "%s" status)
         (unless (string= "DELETE " (substring status 0 7))
           (error "Unexpected status %s for PostgreSQL DELETE command" status))
@@ -3168,6 +3182,7 @@ Uses PostgreSQL connection CON."
          (new-id (pg-escape-identifier new)))
     (let* ((sql (format "ALTER TABLE %s RENAME TO %s" t-id new-id))
            (res (pg-exec pgmacs--con sql)))
+      (pgmacs-flush-table pgmacs--con t-id)
       (pgmacs--notify "%s" (pg-result res :status))
       (let ((new-row (copy-sequence table-row)))
 	(setf (cl-first new-row) new)

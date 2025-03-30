@@ -5,6 +5,9 @@
 
 - Further workarounds for semi-compatible PostgreSQL variants YDB, Materialize and Spanner.
 
+- Send a `REFRESH` or `FLUSH` command after inserting a new row or updating data, for PostgreSQL
+  variants that offer eventually-consistent semantics (at least CrateDB and Materialize).
+
 
 ## [0.23] - 2025-03-23
 
