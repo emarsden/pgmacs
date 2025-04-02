@@ -8,6 +8,9 @@
 - Send a `REFRESH` or `FLUSH` command after inserting a new row or updating data, for PostgreSQL
   variants that offer eventually-consistent semantics (at least CrateDB and Materialize).
 
+- In row-list buffers, if a comment is present on a table column, it is displayed in the
+  metainformation header.
+
 
 ## [0.23] - 2025-03-23
 

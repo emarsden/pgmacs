@@ -275,7 +275,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 	 :label "More backend information"
          :action #'pgmacs--display-backend-information)
 	(pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb ydb))))
 	 :label "PostgreSQL settings"
          :action (lambda (&rest _ignore)
                    (pgmacs-show-result pgmacs--con "SELECT * FROM pg_settings")))
@@ -1622,6 +1622,8 @@ over the PostgreSQL connection CON."
       (puthash "maxlen" (cl-first maxlen) column-info))
     (when defaults
       (puthash "DEFAULT" defaults column-info))
+    (when-let ((comment (pg-column-comment con table column)))
+      (puthash "COMMENT" comment column-info))
     column-info))
 
 (defun pgmacs--column-info/basic (con table column)
@@ -1636,6 +1638,8 @@ over the PostgreSQL connection CON."
     (puthash "TYPE" type-name column-info)
     (when defaults
       (puthash "DEFAULT" defaults column-info))
+    (when-let ((comment (pg-column-comment con table column)))
+      (puthash "COMMENT" comment column-info))
     column-info))
 
 (defun pgmacs--column-info (con table column)
