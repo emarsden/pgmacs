@@ -26,7 +26,7 @@
 # but this server is often unable to serve requests.
 
 
-FROM docker.io/alpine:latest as builder
+FROM docker.io/alpine:edge as builder
 LABEL stage=builder
 WORKDIR /src
 RUN apk update && \
@@ -47,12 +47,12 @@ RUN apk update && \
       --eval '(byte-compile-file "/src/pgmacs/pgmacs.el")'
 
 
-FROM docker.io/alpine:latest
+FROM docker.io/alpine:edge
 LABEL org.opencontainers.image.description "The Emacs-based browser/editor for PostgreSQL."
 LABEL org.opencontainers.image.title "PGmacs"
 LABEL org.opencontainers.image.url "https://github.com/emarsden/pgmacs"
 LABEL org.opencontainers.image.source "https://github.com/emarsden/pgmacs"
-LABEL org.opencontainers.image.version "0.23"
+LABEL org.opencontainers.image.version "0.24"
 LABEL org.opencontainers.image.authors "eric.marsden@risk-engineering.org"
 LABEL org.opencontainers.image.licenses "GPLv3"
 
