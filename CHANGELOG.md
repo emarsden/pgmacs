@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.24] - Unreleased
+## [0.24] - 2025-04-19
 
 - Further workarounds for semi-compatible PostgreSQL variants YDB, Materialize, Spanner and
   Risingwave.
