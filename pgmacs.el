@@ -256,11 +256,11 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 ;; pgmacs-shortcut-button object) to the pgmacs-table-list-buttons list.
 (defvar pgmacs-table-list-buttons
   (list (pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner materialize ydb))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner materialize ydb risingwave))))
 	 :label "Display procedures"
          :action #'pgmacs--display-procedures)
 	(pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize risingwave))))
 	 :label "Display running queries"
          :action #'pgmacs--display-running-queries)
         (pgmacs-shortcut-button
@@ -276,12 +276,12 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :action (lambda (&rest _ignore)
                    (pgmacs-show-result pgmacs--con "SELECT * FROM pg_settings")))
 	(pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize risingwave))))
 	 :label "Stat activity"
          :action #'pgmacs--display-stat-activity
          :help-echo "Show information from the pg_stat_activity table")
 	(pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize risingwave))))
 	 :label "Replication stats"
 	 :action #'pgmacs--display-replication-stats
 	 :help-echo "Show information on PostgreSQL replication status")
@@ -301,7 +301,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
         ;; of primary keys with ALTER TABLE. CrateDB does not allow a primary key column to be added
         ;; to a table that is not empty.
         (pgmacs-shortcut-button
-         :condition (lambda () (and (not (member (pgcon-server-variant pgmacs--con) '(materialize spanner cratedb)))
+         :condition (lambda () (and (not (member (pgcon-server-variant pgmacs--con) '(materialize spanner cratedb risingwave)))
                                (null (pgmacs--table-primary-keys pgmacs--con pgmacs--table))))
          :label "Add primary key to table"
          :action #'pgmacs--add-primary-key
@@ -1854,7 +1854,6 @@ Table names are schema-qualified if the schema is non-default."
                       ('cratedb "TEXT DEFAULT gen_random_text_uuid()")
                       ;; https://www.cockroachlabs.com/docs/stable/serial.html#generated-values-for-mode-sql_sequence
                       ('cockroachdb "UUID NOT NULL DEFAULT gen_random_uuid()")
-                      ('risingwave "UUID NOT NULL DEFAULT gen_random_uuid()")
                       ('questdb "UUID NOT NULL DEFAULT gen_random_uuid()")
                       (_ "SERIAL")))
            (sql (format "ALTER TABLE %s ADD COLUMN %s %s PRIMARY KEY"
@@ -2927,7 +2926,8 @@ Prompt for the table name in the minibuffer."
   (let ((con pgmacs--con)
         (db-buffer pgmacs--db-buffer))
     (cl-flet ((show (setting label)
-                ;; FIXME: YDB does not allow access to the current_setting() function
+                ;; FIXME: YDB does not allow access to the current_setting() function. Also,
+                ;; RisingWave does not implement the two-argument version of current_setting().
                 (let* ((res (pg-exec-prepared con "SELECT pg_catalog.current_setting($1, true)"
                                               `((,setting . "text"))))
                        (tuples (pg-result res :tuples)))
@@ -2938,7 +2938,7 @@ Prompt for the table name in the minibuffer."
       (kill-all-local-variables)
       (buffer-disable-undo)
       (setq-local pgmacs--db-buffer db-buffer)
-      (unless (member (pgcon-server-variant con) '(cratedb questdb ydb spanner materialize))
+      (unless (member (pgcon-server-variant con) '(cratedb questdb ydb spanner materialize risingwave))
         (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
                (row (pg-result res :tuple 0))
                (addr (cl-first row))
@@ -2954,7 +2954,7 @@ Prompt for the table name in the minibuffer."
       (let ((variant (pgcon-server-variant con)))
         (unless (eq variant 'postgresql)
           (insert (format "Server appears to be the PostgreSQL variant %s\n" variant))))
-      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb))
+      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb risingwave))
         (when (> (pgcon-server-version-major con) 11)
           (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('ssl_library')"))
                  (row (pg-result res :tuple 0)))
@@ -3502,10 +3502,10 @@ inlined vector SVG image that is encoded as a data URI."
     ;; see https://gitlab.com/posetgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
     (insert "\n\n")
     (dolist (btn pgmacs-table-list-buttons)
-      (pgmacs--insert btn)
-      (insert "  ")
-      (when (> (current-column) (min (window-width) 90))
-        (insert "\n")))
+      (when (pgmacs--insert btn)
+        (insert "  ")
+        (when (> (current-column) (min (window-width) 90))
+          (insert "\n"))))
     (insert "\n\n")
     (pgmacstbl-insert pgmacstbl)
     ;; Now update the "estimated rows" column of the list of tables. We make these queries as a
