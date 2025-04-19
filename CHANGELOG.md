@@ -3,7 +3,8 @@
 
 ## [0.24] - Unreleased
 
-- Further workarounds for semi-compatible PostgreSQL variants YDB, Materialize and Spanner.
+- Further workarounds for semi-compatible PostgreSQL variants YDB, Materialize, Spanner and
+  Risingwave.
 
 - Send a `REFRESH` or `FLUSH` command after inserting a new row or updating data, for PostgreSQL
   variants that offer eventually-consistent semantics (at least CrateDB and Materialize).

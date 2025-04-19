@@ -266,17 +266,13 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
         (pgmacs-shortcut-button
          :label "Display databases"
          :action #'pgmacs--display-database-list)
-        (pgmacs-shortcut-button
-         :label "Disconnect"
-         :action #'pgmacs-disconnect
-         :help-echo "Close this connection to PostgreSQL")
 	(pgmacs-shortcut-button
          :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(spanner))))
 	 :label "More backend information"
          :action #'pgmacs--display-backend-information)
 	(pgmacs-shortcut-button
          :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb ydb))))
-	 :label "PostgreSQL settings"
+	 :label (concat (if (char-displayable-p #x2699) "⚙️ " "")  "PostgreSQL settings")
          :action (lambda (&rest _ignore)
                    (pgmacs-show-result pgmacs--con "SELECT * FROM pg_settings")))
 	(pgmacs-shortcut-button
@@ -288,31 +284,36 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize))))
 	 :label "Replication stats"
 	 :action #'pgmacs--display-replication-stats
-	 :help-echo "Show information on PostgreSQL replication status"))
+	 :help-echo "Show information on PostgreSQL replication status")
+        (pgmacs-shortcut-button
+         :label (concat (if (char-displayable-p #x1f5d9) "🗙 " "") "Disconnect")
+         :action #'pgmacs-disconnect
+         :help-echo "Close this connection to PostgreSQL"))
   "List of shortcut buttons to display on the main table-list buffer.")
 
 (defvar pgmacs-row-list-buttons
   (list (pgmacs-shortcut-button
          :label "Export table to CSV buffer"
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb materialize))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb materialize risingwave))))
          :action #'pgmacs--table-to-csv
          :help-echo  "Export this table to a CSV buffer")
         ;; Materialize does not support ALTER TABLE ADD COLUMN. Spanner does not allow the addition
-        ;; of primary keys with ALTER TABLE.
+        ;; of primary keys with ALTER TABLE. CrateDB does not allow a primary key column to be added
+        ;; to a table that is not empty.
         (pgmacs-shortcut-button
-         :condition (lambda () (and (not (member (pgcon-server-variant pgmacs--con) '(materialize spanner)))
+         :condition (lambda () (and (not (member (pgcon-server-variant pgmacs--con) '(materialize spanner cratedb)))
                                (null (pgmacs--table-primary-keys pgmacs--con pgmacs--table))))
          :label "Add primary key to table"
          :action #'pgmacs--add-primary-key
          :help-echo "Add a PRIMARY KEY to enable editing")
         (pgmacs-shortcut-button
-         :label "Count rows"
+         :label (concat (if (char-displayable-p #x2211) "∑ " "") "Count rows")
          :action #'pgmacs--run-count
          :help-echo "Count rows in this table")
         (pgmacs-shortcut-button
          ;; CrateDB only supports ANALYZE on the whole database, not on a single table.
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb materialize spanner))))
-         :label "ANALYZE this table"
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb materialize spanner risingwave))))
+         :label (concat (if (char-displayable-p #x1f48a) "💊 " "") "ANALYZE this table")
          :action #'pgmacs--run-analyze
          :help-echo "Run ANALYZE on this table")
         (pgmacs-shortcut-button
@@ -1482,6 +1483,7 @@ Uses PostgreSQL connection CON."
     ('ydb nil)
     ('materialize nil)
     ('spanner nil)
+    ('risingwave nil)
     (_ (pgmacs--table-indexes/full con table))))
 
 (defun pgmacs--column-nullable-p (con table column)
@@ -1648,7 +1650,7 @@ The metainformation includes the type name, whether the column is a PRIMARY KEY,
 whether it is affected by constraints such as UNIQUE.  Information is retrieved
 over the PostgreSQL connection CON."
   (pcase (pgcon-server-variant con)
-    ((or 'cratedb 'questdb 'ydb 'materialize 'spanner)
+    ((or 'cratedb 'questdb 'ydb 'materialize 'spanner 'risingwave)
      (pgmacs--column-info/basic con table column))
     (_ (pgmacs--column-info/full con table column))))
 
@@ -1772,7 +1774,7 @@ Table names are schema-qualified if the schema is non-default."
     entries))
 
 (defun pgmacs--list-tables ()
-  (if (member (pgcon-server-variant pgmacs--con) '(cratedb cockroachdb spanner ydb questdb materialize spanner))
+  (if (member (pgcon-server-variant pgmacs--con) '(cratedb cockroachdb spanner ydb questdb materialize spanner risingwave))
       (pgmacs--list-tables-basic)
     (pgmacs--list-tables-full)))
 
@@ -2704,7 +2706,7 @@ Runs functions on `pgmacs-row-list-hook'."
                                       (pgmacs--display-table table))
                             'help-echo "Modify the table comment")
         (insert "\n"))
-      (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb questdb materialize spanner))
+      (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb questdb materialize spanner risingwave))
         (let* ((sql "SELECT pg_catalog.pg_total_relation_size($1),
                           pg_catalog.pg_indexes_size($1)")
                (res (pg-exec-prepared con sql `((,t-id . "text"))))
@@ -3371,7 +3373,7 @@ inlined vector SVG image that is encoded as a data URI."
 
 
 (defun pgmacs--tls-status (con)
-  (if (and (not (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb)))
+  (if (and (not (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb risingwave)))
            (> (pgcon-server-version-major con) 11))
       (let ((res (pg-exec con "SHOW ssl")))
         (cl-first (pg-result res :tuple 0)))
@@ -3475,7 +3477,7 @@ inlined vector SVG image that is encoded as a data URI."
                               ("Size on disk" (cl-third object))
                               ("Owner" (cl-fourth object))
                               ("Comment" (cl-fifth object)))))))
-    (unless (member (pgcon-server-variant con) '(cratedb cockroachdb spanner ydb questdb materialize))
+    (unless (member (pgcon-server-variant con) '(cratedb cockroachdb spanner ydb questdb materialize risingwave))
       (let* ((res (pg-exec con "SELECT current_user, pg_backend_pid(), pg_is_in_recovery()"))
              (row (pg-result res :tuple 0)))
         (insert (format "\nConnected to database %s%s as %s%s (pid %d %s)\n"
