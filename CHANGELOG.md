@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.25] - Unreleased
+
+- Table on disk size information is now printed for QuestDB and CrateDB, using specific per-variant
+  SQL queries.
+
+
 ## [0.24] - 2025-04-19
 
 - Further workarounds for semi-compatible PostgreSQL variants YDB, Materialize, Spanner and

@@ -318,7 +318,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :help-echo "Run ANALYZE on this table")
         (pgmacs-shortcut-button
          :condition (lambda ()
-                      (unless (memq (pgcon-server-variant pgmacs--con) '(cratedb ydb spanner))
+                      (unless (memq (pgcon-server-variant pgmacs--con) '(cratedb ydb spanner questdb))
                         (null (pg-table-comment pgmacs--con pgmacs--table))))
          :label "Add table comment"
          :action (lambda (&rest _ignore)
@@ -1726,6 +1726,41 @@ Uses PostgreSQL connection CON."
         (pgmacs--estimate-row-count/fast table)
       (pgmacs--estimate-row-count/expensive table))))
 
+(defun pgmacs--table-size-ondisk (con table)
+  (pcase (pgcon-server-variant con)
+    ('postgresql
+     (let* ((schema (if (pg-qualified-name-p table)
+                        (pg-qualified-name-schema table)
+                      "public"))
+            (tname (if (pg-qualified-name-p table)
+                       (pg-qualified-name-name table)
+                     table))
+            (sql "SELECT
+                     pg_catalog.pg_total_relation_size(c.oid)
+                   FROM pg_class c
+                   JOIN pg_namespace n ON c.relnamespace = n.oid
+                   WHERE (n.nspname, c.relname) = ($1, $2)")
+            (res (pg-exec-prepared con sql `((,schema . "text") (,tname . "text"))))
+            (tuple (pg-result res :tuple 0)))
+       (cl-first tuple)))
+    ('questdb
+     (let* ((sql "SELECT diskSize FROM table_storage() WHERE tableName=$1")
+            (res (pg-exec-prepared con sql `((,table . "text"))))
+            (tuple (pg-result res :tuple 0)))
+       (cl-first tuple)))
+    ('cratedb
+     (let* ((schema (if (pg-qualified-name-p table)
+                        (pg-qualified-name-schema table)
+                      (pg-current-schema con)))
+            (tname (if (pg-qualified-name-p table)
+                       (pg-qualified-name-name table)
+                     table))
+            (sql "SELECT SUM(size) FROM sys.shards WHERE schema_name=$1 AND table_name=$2")
+            (res (pg-exec-prepared con sql `((,schema . "text") (,tname . "text"))))
+            (tuple (pg-result res :tuple 0)))
+       (cl-first tuple)))
+    (_ nil)))
+
 ;; This function called for semi-compatible PostgreSQL variants that only partially implement the
 ;; system tables that we use to query for metainformation concerning SQL tables.
 (defun pgmacs--list-tables-basic ()
@@ -1738,9 +1773,12 @@ compatibility."
     (dolist (table (pg-tables pgmacs--con))
       (let* ((tid (pg-escape-identifier table))
              (res (pg-exec pgmacs--con (format "SELECT COUNT(*) FROM %s" tid)))
-             (rows (cl-first (pg-result res :tuple 0)))
+             (row-count (cl-first (pg-result res :tuple 0)))
+             (size-disk (pgmacs--table-size-ondisk pgmacs--con table))
+             (size-pretty (if size-disk (file-size-human-readable size-disk 'iec " ")
+                            ""))
              (comment (or (pg-table-comment pgmacs--con table) "")))
-        (push (list table rows 0 "" comment) entries)))
+        (push (list table row-count size-pretty "" comment) entries)))
     entries))
 
 ;; TODO: also include VIEWs
@@ -1774,7 +1812,8 @@ Table names are schema-qualified if the schema is non-default."
     entries))
 
 (defun pgmacs--list-tables ()
-  (if (member (pgcon-server-variant pgmacs--con) '(cratedb cockroachdb spanner ydb questdb materialize spanner risingwave))
+  (if (member (pgcon-server-variant pgmacs--con)
+              '(cratedb cockroachdb spanner ydb questdb materialize spanner risingwave))
       (pgmacs--list-tables-basic)
     (pgmacs--list-tables-full)))
 
@@ -2103,6 +2142,8 @@ Table names are schema-qualified if the schema is non-default."
       (insert "\n\n")
       (pgmacstbl-insert pgmacstbl))))
 
+;; TODO: in CockroachDB the command "SHOW FUNCTIONS" displays user-defined functions, but not
+;; builtin functions.
 (defun pgmacs--display-procedures (&rest args)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
   (pcase (pgcon-server-variant pgmacs--con)
@@ -2131,6 +2172,7 @@ Table names are schema-qualified if the schema is non-default."
         (insert "\n\n")
         (pgmacs--show-pgresult buf res)))))
 
+;; TODO: for QuestDB we could use the custom query "SELECT * FROM query_activity()"
 (defun pgmacs--display-running-queries (&rest _ignore)
   "Display the list of queries running in PostgreSQL.
 Opens a dedicated buffer if the query list is not empty."
@@ -2705,14 +2747,18 @@ Runs functions on `pgmacs-row-list-hook'."
                                       (pgmacs--display-table table))
                             'help-echo "Modify the table comment")
         (insert "\n"))
-      (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb questdb materialize spanner risingwave))
-        (let* ((sql "SELECT pg_catalog.pg_total_relation_size($1),
-                          pg_catalog.pg_indexes_size($1)")
-               (res (pg-exec-prepared con sql `((,t-id . "text"))))
-               (row (pg-result res  :tuple 0)))
+      (let* ((size/disk (pgmacs--table-size-ondisk con table))
+             (size-pretty (and size/disk (file-size-human-readable size/disk 'iec " "))))
+        (when size-pretty
           (insert (propertize "On-disk-size" 'face 'bold))
-          (insert (format ": %s" (file-size-human-readable (cl-first row) 'iec " ")))
-          (insert (format " (indexes %s)\n" (file-size-human-readable (cl-second row) 'iec " ")))))
+          (insert ": " size-pretty "\n")))
+;;       (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb questdb materialize spanner risingwave))
+;;         (let* ((sql "SELECT pg_catalog.pg_total_relation_size($1),
+;;                           pg_catalog.pg_indexes_size($1)")
+;;                (res (pg-exec-prepared con sql `((,t-id . "text"))))
+;;                (row (pg-result res  :tuple 0)))
+;;           (insert (format ": %s" (file-size-human-readable (cl-first row) 'iec " ")))
+;;           (insert (format " (indexes %s)\n" (file-size-human-readable (cl-second row) 'iec " ")))))
       (insert (propertize "Columns" 'face 'bold))
       (insert ":\n")
       (let ((colinfo (list)))
@@ -3422,6 +3468,11 @@ inlined vector SVG image that is encoded as a data URI."
   (let ((inhibit-read-only t))
     (erase-buffer)
     (insert (pg-backend-version con)))
+  (when (eq 'questdb (pgcon-server-variant con))
+    (let* ((res (pg-exec con "SELECT build()"))
+           (row (pg-result res :tuple 0))
+           (inhibit-read-only t))
+      (insert "\n" (cl-first row))))
   (let* ((dbname (pgcon-dbname con))
          (inhibit-read-only t)
          (pgmacstbl (make-pgmacstbl
