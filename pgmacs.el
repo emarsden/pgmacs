@@ -1759,6 +1759,12 @@ Uses PostgreSQL connection CON."
             (res (pg-exec-prepared con sql `((,schema . "text") (,tname . "text"))))
             (tuple (pg-result res :tuple 0)))
        (cl-first tuple)))
+    ('cockroachdb
+     ;; CockroachDB doesn't accept a prepared statement for the SHOW RANGES query.
+     (let* ((sql "SELECT sum(range_size_mb) FROM [SHOW RANGES FROM TABLE %s WITH DETAILS]")
+            (res (pg-exec con (format sql (pg-escape-identifier table))))
+            (tuple (pg-result res :tuple 0)))
+       (* 1000000 (cl-first tuple))))
     (_ nil)))
 
 ;; This function called for semi-compatible PostgreSQL variants that only partially implement the
