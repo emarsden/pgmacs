@@ -1220,6 +1220,7 @@ keys, whose names are given by the list PRIMARY-KEYS."
                  (cl-loop for v in values
                           for vt in value-types
                           collect (cons v vt)))))
+      (pgmacs-flush-table pgmacs--con pgmacs--table)
       (pgmacs--notify "%s" (pg-result res :status))
       ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
       ;; However, we don't know what values were chosen for any columns that have a default, so we
@@ -1261,6 +1262,7 @@ Uses the minibuffer to prompt for new values."
                  (cl-loop for v in values
                           for vt in value-types
                           collect (cons v vt)))))
+      (pgmacs-flush-table pgmacs--con pgmacs--table)
       (pgmacs--notify "%s" (pg-result res :status))
       ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of the pgmacstbl.
       ;; However, we don't know what values were chosen for any columns that have an SQL default, so
@@ -1310,6 +1312,7 @@ PostgreSQL database."
                                           (string-join target-cols ",")
                                           (string-join placeholders ",")))
                              (res (pg-exec-prepared pgmacs--con sql values)))
+                        (pgmacs-flush-table pgmacs--con pgmacs--table)
                         (pgmacs--notify "%s" (pg-result res :status))
                         ;; It's tempting to use pgmacstbl-insert-object here to avoid a full refresh of
                         ;; the pgmacstbl. However, we don't know what values were chosen for any columns
