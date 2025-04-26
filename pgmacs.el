@@ -2148,12 +2148,11 @@ Table names are schema-qualified if the schema is non-default."
       (insert "\n\n")
       (pgmacstbl-insert pgmacstbl))))
 
-;; TODO: in CockroachDB the command "SHOW FUNCTIONS" displays user-defined functions, but not
-;; builtin functions.
 (defun pgmacs--display-procedures (&rest args)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
   (pcase (pgcon-server-variant pgmacs--con)
-    ('postgresql (pgmacs--display-procedures/postgresql args))
+    ((or 'postgresql 'cockroachdb)
+     (pgmacs--display-procedures/postgresql args))
     (_ (pgmacs--display-procedures/infschema args))))
 
 
@@ -2484,7 +2483,7 @@ specied by PRIMARY-KEYS."
              (status (pg-result res :status)))
         (pgmacs-flush-table pgmacs--con pgmacs--table)
         (pgmacs--notify "%s" status)
-        (unless (string= "DELETE " (substring status 0 7))
+        (unless (string-prefix-p "DELETE " status)
           (error "Unexpected status %s for PostgreSQL DELETE command" status))
         (let ((rows-affected (cl-parse-integer (substring status 7))))
           (cond ((eql 0 rows-affected)
@@ -2778,6 +2777,7 @@ Runs functions on `pgmacs-row-list-hook'."
                 (insert (propertize "├ " 'face 'shadow))
               (insert (propertize "| " 'face 'shadow)))
             (insert c)
+            ;; TODO insert rename-column button here
             (insert "\n"))
           (if (char-displayable-p ?└)
               (insert (propertize "└ " 'face 'shadow))
