@@ -156,10 +156,10 @@ The following PostgreSQL-compatible databases have been tested:
 
 - [CockroachDB](https://github.com/cockroachdb/cockroach) works with limited functionality: for
   example the list of defined procedures and functions is not properly populated. Lasted tested
-  2025-02 with version 24.3.
+  2025-04 with version 25.1.
 
 - [QuestDB](https://questdb.io/) has very limited PostgreSQL support, and does not support the
-  `integer` type for example. Last tested against version 6.5.4.
+  `integer` type for example. Last tested 2024-04 against version 8.3.3.
 
 - [Google Spanner](https://cloud.google.com/spanner), or at least the Spanner emulator (that reports
   itself as `PostgreSQL 14.1`) and the PGAdapter library that enables support for the PostgreSQL
@@ -169,7 +169,7 @@ The following PostgreSQL-compatible databases have been tested:
 - The [Materialize](https://materialize.com/) operational database (a proprietary differential
   dataflow database) has many limitations in its PostgreSQL compatibility: no support for primary
   keys, unique constraints, check constraints, for the 'bit' type for example. It works with these
-  limitations with PGmacs (last tested 2025-03 with Materialize v0.139).
+  limitations with PGmacs (last tested 2025-04 with Materialize v0.142).
 
 - [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) has limited PostgreSQL
   compatibility (for example, it does not support foreign key references), but works with limited
