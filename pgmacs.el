@@ -1770,6 +1770,26 @@ Uses PostgreSQL connection CON."
        (* 1000000 (cl-first tuple))))
     (_ nil)))
 
+(defun pgmacs--index-size-ondisk (con table)
+  (pcase (pgcon-server-variant con)
+    ('postgresql
+     (let* ((schema (if (pg-qualified-name-p table)
+                        (pg-qualified-name-schema table)
+                      "public"))
+            (tname (if (pg-qualified-name-p table)
+                       (pg-qualified-name-name table)
+                     table))
+            (sql "SELECT
+                     pg_catalog.pg_indexes_size(c.oid)
+                   FROM pg_class c
+                   JOIN pg_namespace n ON c.relnamespace = n.oid
+                   WHERE (n.nspname, c.relname) = ($1, $2)")
+            (res (pg-exec-prepared con sql `((,schema . "text") (,tname . "text"))))
+            (tuple (pg-result res :tuple 0)))
+       (cl-first tuple)))
+    (_ nil)))
+
+
 ;; This function called for semi-compatible PostgreSQL variants that only partially implement the
 ;; system tables that we use to query for metainformation concerning SQL tables.
 (defun pgmacs--list-tables-basic ()
@@ -2756,45 +2776,75 @@ Runs functions on `pgmacs-row-list-hook'."
                             'help-echo "Modify the table comment")
         (insert "\n"))
       (let* ((size/disk (pgmacs--table-size-ondisk con table))
-             (size-pretty (and size/disk (file-size-human-readable size/disk 'iec " "))))
-        (when size-pretty
+             (size/pretty (and size/disk (file-size-human-readable size/disk 'iec " ")))
+             (idx/disk (pgmacs--index-size-ondisk con table))
+             (idx/pretty (and idx/disk (file-size-human-readable idx/disk 'iec " "))))
+        (when size/pretty
           (insert (propertize "On-disk-size" 'face 'bold))
-          (insert ": " size-pretty "\n")))
-;;       (unless (member (pgcon-server-variant con) '(cratedb cockroachdb ydb questdb materialize spanner risingwave))
-;;         (let* ((sql "SELECT pg_catalog.pg_total_relation_size($1),
-;;                           pg_catalog.pg_indexes_size($1)")
-;;                (res (pg-exec-prepared con sql `((,t-id . "text"))))
-;;                (row (pg-result res  :tuple 0)))
-;;           (insert (format ": %s" (file-size-human-readable (cl-first row) 'iec " ")))
-;;           (insert (format " (indexes %s)\n" (file-size-human-readable (cl-second row) 'iec " ")))))
-      (insert (propertize "Columns" 'face 'bold))
-      (insert ":\n")
-      (let ((colinfo (list)))
-        (dolist (col column-names)
-          (let* ((ci (gethash col column-info))
-                 (cif (pgmacs--format-column-info ci)))
-            (push (format "%s: %s" col cif) colinfo)))
-        (let ((last (pop colinfo)))
-          (dolist (c (reverse colinfo))
-            (if (char-displayable-p ?├)
-                (insert (propertize "├ " 'face 'shadow))
-              (insert (propertize "| " 'face 'shadow)))
-            (insert c)
-            ;; TODO insert rename-column button here
-            (insert "\n"))
-          (if (char-displayable-p ?└)
-              (insert (propertize "└ " 'face 'shadow))
-            (insert (propertize "` " 'face 'shadow)))
-          (insert last)
+          (insert ": " size/pretty)
+          (when idx/pretty
+            (insert (format " (indexes %s)" idx/pretty)))
           (insert "\n")))
+      (insert (propertize "Columns" 'face 'bold) ":\n")
+      (cl-loop
+       for col in column-names
+       for col-count from 1
+       do (let* ((structure-char (if (eql col-count (length column-names))
+                                     (if (char-displayable-p ?└) ?└ ?`)
+                                   (if (char-displayable-p ?├) ?├ ?|)))
+                 (ci (gethash col column-info))
+                 (cif (pgmacs--format-column-info ci)))
+            (insert (propertize (format "%c " structure-char) 'face 'shadow))
+            (insert (format "%s: %s  " col cif))
+            (insert-text-button "Rename column"
+                                'action `(lambda (&rest _ignore)
+                                           (let* ((prompt (format "New name for column %s: " ,col))
+                                                  (new (read-from-minibuffer prompt))
+                                                  (sql (format "ALTER TABLE %s RENAME %s TO %s"
+                                                               (pg-escape-identifier ,table)
+                                                               (pg-escape-identifier ,col)
+                                                               (pg-escape-identifier new)))
+                                                  (res (pg-exec ,con sql)))
+                                             (pgmacs--notify "%s" (pg-result res :status))
+                                             (pgmacs--display-table ,table)))
+                                'help-echo "Rename this column")
+            (insert "   ")
+            (cond ((pg-column-comment con table col)
+                   (insert-text-button
+                    "Modify column comment"
+                    'action `(lambda (&rest _ignore)
+                               (let* ((prompt (format "New column comment for %s: " ,col))
+                                      (new (read-from-minibuffer prompt)))
+                                 (setf (pg-column-comment ,con ,table ,col) new)
+                                 (pgmacs--notify "Column comment updated")
+                                 (pgmacs--display-table ,table)))
+                   (insert "   ")
+                   (insert-text-button
+                    "Delete column comment"
+                    'action `(lambda (&rest _ignore)
+                               (when (y-or-n-p (format "Really delete comment on column %s?" ,col))
+                                 (setf (pg-column-comment ,con ,table ,col) nil)
+                                 (pgmacs--notify "Column comment deleted")
+                                 (pgmacs--display-table ,table)))
+                    'help-echo "Delete comment on column")))
+                  ;; And if there is no existing column comment
+                  (t
+                   (insert-text-button
+                    "Add column comment"
+                    'action `(lambda (&rest _ignore)
+                               (let* ((prompt (format "New comment for column %s: " ,col))
+                                      (new (read-from-minibuffer prompt)))
+                                 (setf (pg-column-comment ,con ,table ,col) new)
+                                 (pgmacs--notify "Column comment updated")
+                                 (pgmacs--display-table ,table))))))
+            (insert "\n")))
       (let ((fkc (pgmacs--fk-constraints con table)))
         (when fkc
           (insert (propertize "Foreign key constraints" 'face 'bold) ":\n")
           (dolist (c fkc)
             (insert "  " (cl-first c) " " (cl-second c) "\n"))))
       (when indexes
-        (insert (propertize "Indexes" 'face 'bold))
-        (insert ":\n")
+        (insert (propertize "Indexes" 'face 'bold) ":\n")
         (dolist (idx indexes)
           (cl-multiple-value-bind (name unique-p primary-p clustered-p valid-p _def type cols) idx
               (insert (format "  %s %s%s%s%s %s (cols: %s)\n"
@@ -2818,10 +2868,8 @@ Runs functions on `pgmacs-row-list-hook'."
         (insert "\n"))
       ;; Make it visually clear to the user that a WHERE filter is active
       (when where-filter
-        (insert (propertize "WHERE filter" 'face 'bold))
-        (insert ": ")
-        (insert (propertize where-filter 'face 'pgmacs-where-filter))
-        (insert "\n\n"))
+        (insert (propertize "WHERE filter" 'face 'bold) ": ")
+        (insert (propertize where-filter 'face 'pgmacs-where-filter) "\n\n"))
       (when pgmacs--offset
         (pgmacs-paginated-mode)
         (when (>= pgmacs--offset pgmacs-row-limit)
