@@ -158,6 +158,11 @@ The following PostgreSQL-compatible databases have been tested:
   example the list of defined procedures and functions is not properly populated. Lasted tested
   2025-04 with version 25.1.
 
+- The [RisingWave](https://github.com/risingwavelabs/risingwave) event streaming database (Apache
+  license) is mostly working. It does not support `GENERATED ALWAYS AS IDENTITY` or `SERIAL`
+  columns, nor `VACUUM ANALYZE`. The database does not implement column renaming. Last tested
+  2025-04 with v2.3.1.
+
 - [QuestDB](https://questdb.io/) has very limited PostgreSQL support, and does not support the
   `integer` type for example. Last tested 2024-04 against version 8.3.3.
 
