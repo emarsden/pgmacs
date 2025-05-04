@@ -2530,7 +2530,7 @@ specied by PRIMARY-KEYS."
          (col (nth col-id cols))
          (col-name (pgmacstbl-column-name col))
          (new (read-string (format "Rename column %s to: " col-name)))
-         (sql (format "ALTER TABLE %s RENAME %s TO %s"
+         (sql (format "ALTER TABLE %s RENAME COLUMN %s TO %s"
                       (pg-escape-identifier pgmacs--table)
                       (pg-escape-identifier col-name)
                       (pg-escape-identifier new)))
@@ -2800,7 +2800,7 @@ Runs functions on `pgmacs-row-list-hook'."
                                 'action `(lambda (&rest _ignore)
                                            (let* ((prompt (format "New name for column %s: " ,col))
                                                   (new (read-from-minibuffer prompt))
-                                                  (sql (format "ALTER TABLE %s RENAME %s TO %s"
+                                                  (sql (format "ALTER TABLE %s RENAME COLUMN %s TO %s"
                                                                (pg-escape-identifier ,table)
                                                                (pg-escape-identifier ,col)
                                                                (pg-escape-identifier new)))
