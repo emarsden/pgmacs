@@ -2010,7 +2010,7 @@ Table names are schema-qualified if the schema is non-default."
          (con pgmacs--con)
          (sql "SELECT routine_schema,routine_name,routine_type,routine_body,routine_definition
                FROM information_schema.routines
-               WHERE routine_type in ('function', 'procedure')")
+               WHERE UPPER(routine_type) in ('FUNCTION', 'PROCEDURE')")
          (ps-name (pg-ensure-prepared-statement con "QRY-list-procedures-infschema" sql nil))
          (res (pg-fetch-prepared con ps-name nil))
          (pgmacstbl (make-pgmacstbl
