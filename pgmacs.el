@@ -133,6 +133,16 @@ may be a safe option on large production databases)."
   :type 'number
   :group 'pgmacs)
 
+(defcustom pgmacs-row-list-table-name-width 20
+  "The number of characters used to display table names in row-list buffers."
+  :type 'number
+  :group 'pgmacs)
+
+(defcustom pgmacs-row-list-comment-width 30
+  "The number of characters used to display table comments in row-list buffers."
+  :type 'number
+  :group 'pgmacs)
+
 (defcustom pgmacs-enable-query-logging nil
   "Whether SQL queries sent to PostgreSQL should be logged."
   :type 'boolean
@@ -203,8 +213,13 @@ concerning a specific table, rather than the entire database."
   :type 'hook
   :group 'pgmacs)
 
+(defcustom pgmacs-table-list-hook nil
+  "Functions to run after opening or refreshing the PGmacs table-list buffer."
+  :type 'hook
+  :group 'pgmacs)
+
 (defcustom pgmacs-row-list-hook nil
-  "Functions to run after opening a PGmacs row-list buffer."
+  "Functions to run after opening or refreshing a PGmacs row-list buffer."
   :type 'hook
   :group 'pgmacs)
 
@@ -2916,7 +2931,7 @@ Runs functions on `pgmacs-row-list-hook'."
 
 (defun pgmacs--row-list-redraw (&rest _ignore)
   "Refresh a PostgreSQL row-list buffer.
-This refetches data from PostgreSQL."
+This refetches data from PostgreSQL and runs hooks on `pgmacs-row-list-hook'."
   (interactive)
   (let ((table pgmacs--table)
         (offset pgmacs--offset)
@@ -2931,7 +2946,8 @@ This refetches data from PostgreSQL."
     ;; PostgreSQL.
     (with-current-buffer parent-buffer
       (pgmacs--display-table table :where-filter where-filter)
-      (setq pgmacs--offset offset))))
+      (setq pgmacs--offset offset))
+    (run-hooks 'pgmacs-row-list-hook)))
 
 ;; Shrink the current column size to the smallest possible for the values that are currently visible.
 (defun pgmacs--shrink-column (&rest _ignore)
@@ -3301,12 +3317,12 @@ Uses PostgreSQL connection CON."
       (pgmacs--redraw-pgmacstbl))))
 
 (defun pgmacs--table-list-redraw (&rest _ignore)
-  "Refresh the PostgreSQL table-list buffer."
+  "Refresh the PostgreSQL table-list buffer.
+Runs functions on `pgmacs-table-list-hook'."
   (interactive)
   (let ((con pgmacs--con))
     (kill-buffer)
     (pgmacs-open con)))
-
 
 (defun pgmacs--table-list-help (&rest _ignore)
   "Show keybindings active in a table-list buffer."
@@ -3538,7 +3554,7 @@ inlined vector SVG image that is encoded as a data URI."
                   :columns (list
                             (make-pgmacstbl-column
                              :name (propertize "Table" 'face 'pgmacs-table-header)
-                             :width 20
+                             :width pgmacs-row-list-table-name-width
                              :primary t
                              :align 'left)
                             (make-pgmacstbl-column
@@ -3552,10 +3568,9 @@ inlined vector SVG image that is encoded as a data URI."
                              :width 13 :align 'right)
                             (make-pgmacstbl-column
                              :name (propertize "Comment" 'face 'pgmacs-table-header)
-                             :width 30 :align 'left))
+                             :width pgmacs-row-list-comment-width :align 'left))
                   :row-colors pgmacs-row-colors
                   :face 'pgmacs-table-data
-                  ;; :column-colors '("#202020" "#404040")
                   :objects (pgmacs--list-tables)
                   :actions '("h" pgmacs--table-list-help
                              "?" pgmacs--table-list-help
@@ -3624,7 +3639,8 @@ inlined vector SVG image that is encoded as a data URI."
              (updated-row (copy-sequence row)))
         (setf (nth 1 updated-row) estimated-count)
         (pgmacstbl-update-object pgmacstbl updated-row row)))
-    (pgmacs--stop-progress-reporter)))
+    (pgmacs--stop-progress-reporter)
+    (run-hooks 'pgmacs-table-list-hook)))
 
 
 (defvar pgmacs--open-history (list))

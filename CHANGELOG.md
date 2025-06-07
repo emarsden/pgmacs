@@ -6,6 +6,16 @@
 - Table on disk size information is now printed for QuestDB and CrateDB, using specific per-variant
   SQL queries.
 
+- In row-list buffers, add buttons in the column metainformation section allowing the user to rename
+  a column and to add or remove a column comment.
+
+- New customizable variables `pgmacs-row-list-table-name-width` and `pgmacs-row-list-comment-width`
+  allow the user to specify the number of characters to be used to display table names and table
+  comments, in the table-list buffer.
+
+- New hook `pgmacs-row-list-hook` allows the user to specify functions to be run after opening or
+  refreshing the table-list buffer.
+
 
 ## [0.24] - 2025-04-19
 
