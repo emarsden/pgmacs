@@ -339,26 +339,28 @@ If it can't be found, return nil and don't move point."
         (error "Can't find the old object"))
       (setcar (cdr objects) object))
     ;; Then update the cache...
-    (let* ((line-number (cl-position old-object (car (pgmacstbl--cache table)) :key #'cl-first))
-           (line (elt (car (pgmacstbl--cache table)) line-number)))
-      (unless line
-        (error "Can't find cached object"))
-      (setcar line object)
-      (setcdr line (pgmacstbl--compute-cached-line table object))
-      ;; ... and redisplay the line in question.
-      (save-excursion
-        (pgmacstbl-goto-object old-object)
-        (let ((keymap (get-text-property (point) 'keymap))
-              (start (point)))
-          (delete-line)
-          (pgmacstbl--insert-line table line line-number
-                               (nth 1 (pgmacstbl--cache table))
-                               (pgmacstbl--spacer table))
-          (add-text-properties start (point) (list 'keymap keymap
-                                                   'pgmacstbl table))))
-      ;; We may have inserted a non-numerical value into a previously
-      ;; all-numerical table, so recompute.
-      (pgmacstbl--recompute-numerical table (cdr line)))))
+    (if-let* ((line-number (cl-position old-object (car (pgmacstbl--cache table))
+                                        :key #'car
+                                        :test #'equal))
+              (line (elt (car (pgmacstbl--cache table)) line-number)))
+        (progn
+          (setcar line object)
+          (setcdr line (pgmacstbl--compute-cached-line table object))
+          ;; ... and redisplay the line in question.
+          (save-excursion
+            (pgmacstbl-goto-object old-object)
+            (let ((keymap (get-text-property (point) 'keymap))
+                  (start (point)))
+              (delete-line)
+              (pgmacstbl--insert-line table line line-number
+                                   (nth 1 (pgmacstbl--cache table))
+                                   (pgmacstbl--spacer table))
+              (add-text-properties start (point) (list 'keymap keymap
+                                                       'pgmacstbl table))))
+          ;; We may have inserted a non-numerical value into a previously
+          ;; all-numerical table, so recompute.
+          (pgmacstbl--recompute-numerical table (cdr line)))
+      (error "Can't find cached object in pgmacstbl"))))
 
 (defun pgmacstbl-remove-object (table object)
   "Remove OBJECT from TABLE.
@@ -969,6 +971,7 @@ Interactively, N is the prefix argument."
     (when (pgmacstbl-objects-function table)
       (setf (pgmacstbl-objects table) (funcall (pgmacstbl-objects-function table))))
     (pgmacstbl--clear-cache table))
+  (pgmacstbl--ensure-cache table)
   (pgmacstbl-revert))
 
 (defun pgmacstbl-sort-by-current-column ()
