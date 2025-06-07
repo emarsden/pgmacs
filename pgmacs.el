@@ -757,9 +757,7 @@ FUNCTION is called on (old-value col-name col-type) and returns the new value."
         (pgmacs--notify "%s" (pg-result res :status)))
       (let ((new-row (copy-sequence current-row)))
         (setf (nth col-id new-row) new-value)
-        ;; pgmacstbl-update-object doesn't work, so insert then delete old row
-        (pgmacstbl-insert-object pgmacstbl new-row current-row)
-        (pgmacstbl-remove-object pgmacstbl current-row)
+        (pgmacstbl-update-object pgmacstbl new-row current-row)
         ;; redrawing is necessary to ensure that all keybindings are present for the newly inserted
         ;; row.
         (forward-line -1)
@@ -1086,9 +1084,7 @@ has primary keys, named in the list PRIMARY-KEYS."
                         (pgmacs--notify "%s" (pg-result res :status))
                         (let ((new-row (copy-sequence current-row)))
                           (setf (nth col-id new-row) new-value)
-                          ;; pgmacstbl-update-object doesn't work, so insert then delete old row
-                          (pgmacstbl-insert-object pgmacstbl new-row current-row)
-                          (pgmacstbl-remove-object pgmacstbl current-row)
+                          (pgmacstbl-update-object pgmacstbl new-row current-row)
                           (forward-line -1)
                           (pgmacs--redraw-pgmacstbl))))))
       (switch-to-buffer "*PGmacs update widget*")
@@ -3277,9 +3273,7 @@ Uses PostgreSQL connection CON."
                  (new-row (copy-sequence table-row)))
              (setf (pg-table-comment pgmacs--con table) comment)
              (setf (nth col-id new-row) comment)
-             ;; pgmacstbl-update-object doesn't work, so insert then delete old row
-             (pgmacstbl-insert-object tbl new-row table-row)
-             (pgmacstbl-remove-object tbl table-row)
+             (pgmacstbl-update-object tbl new-row table-row)
              (pgmacs--redraw-pgmacstbl)))
           ;; TODO perhaps allow changes to table owner (if we are superuser)
           (t
@@ -3311,8 +3305,7 @@ Uses PostgreSQL connection CON."
       (pgmacs--notify "%s" (pg-result res :status))
       (let ((new-row (copy-sequence table-row)))
 	(setf (cl-first new-row) new)
-	(pgmacstbl-insert-object pgmacstbl new-row table-row)
-	(pgmacstbl-remove-object pgmacstbl table-row))
+        (pgmacstbl-update-object pgmacstbl new-row table-row))
       ;; Redraw in the table-list buffer.
       (pgmacs--redraw-pgmacstbl))))
 
