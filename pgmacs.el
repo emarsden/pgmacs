@@ -2828,7 +2828,7 @@ Runs functions on `pgmacs-row-list-hook'."
                                       (new (read-from-minibuffer prompt)))
                                  (setf (pg-column-comment ,con ,table ,col) new)
                                  (pgmacs--notify "Column comment updated")
-                                 (pgmacs--display-table ,table)))
+                                 (pgmacs--display-table ,table))))
                    (insert "   ")
                    (insert-text-button
                     "Delete column comment"
@@ -2837,7 +2837,7 @@ Runs functions on `pgmacs-row-list-hook'."
                                  (setf (pg-column-comment ,con ,table ,col) nil)
                                  (pgmacs--notify "Column comment deleted")
                                  (pgmacs--display-table ,table)))
-                    'help-echo "Delete comment on column")))
+                    'help-echo "Delete comment on column"))
                   ;; And if there is no existing column comment
                   (t
                    (insert-text-button
