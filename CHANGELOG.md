@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.25] - Unreleased
+## [0.25] - 2025-06-08
 
 - Table on disk size information is now printed for QuestDB and CrateDB, using specific per-variant
   SQL queries.
@@ -15,6 +15,9 @@
 
 - New hook `pgmacs-row-list-hook` allows the user to specify functions to be run after opening or
   refreshing the table-list buffer.
+
+- In the backend-information buffer, redraw the buffer when the "Load extension" button is used, so
+  that the extension status displayed is correct.
 
 
 ## [0.24] - 2025-04-19
