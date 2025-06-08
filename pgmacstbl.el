@@ -338,10 +338,10 @@ If it can't be found, return nil and don't move point."
       (unless objects
         (error "Can't find the old object"))
       (setcar (cdr objects) object))
-    ;; Then update the cache...
+    ;; Then update the cache.
     (if-let* ((line-number (cl-position old-object (car (pgmacstbl--cache table))
                                         :key #'car
-                                        :test #'equal))
+                                        :test #'eq))
               (line (elt (car (pgmacstbl--cache table)) line-number)))
         (progn
           (setcar line object)
@@ -970,8 +970,8 @@ Interactively, N is the prefix argument."
   (let ((table (pgmacstbl-current-table)))
     (when (pgmacstbl-objects-function table)
       (setf (pgmacstbl-objects table) (funcall (pgmacstbl-objects-function table))))
-    (pgmacstbl--clear-cache table))
-  (pgmacstbl--ensure-cache table)
+    (pgmacstbl--clear-cache table)
+    (pgmacstbl--ensure-cache table))
   (pgmacstbl-revert))
 
 (defun pgmacstbl-sort-by-current-column ()
