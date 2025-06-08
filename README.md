@@ -139,7 +139,7 @@ The following PostgreSQL-compatible databases have been tested:
 
 - [Google AlloyDB Omni](https://cloud.google.com/alloydb/omni/docs/quickstart) is a proprietary fork
   of PostgreSQL with Google-developed extensions, including a columnar storage extension, adaptive
-  autovacuum, and an index advisor. It works perfectly with PGmacs as of 2025-02.
+  autovacuum, and an index advisor. It works perfectly with PGmacs as of 2025-06.
 
 - [Xata](https://xata.io/) “serverless PostgreSQL” has many limitations including lack of support
   for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
@@ -147,8 +147,8 @@ The following PostgreSQL-compatible databases have been tested:
 
 - [YugabyteDB](https://yugabyte.com/) works to a limited extent: we are not able to run the SQL
   command that adds a PRIMARY KEY to an existing table, nor to display total database size on disk,
-  for example. It does support some extensions such as pgvector, for example. Last tested with
-  v2.25.
+  for example. It does support some extensions such as pgvector, for example. Last tested 2025-06
+  with v2.25.
   
 - [CrateDB](https://crate.io/) works with limited functionality: for example querying the list of
   defined procedures and functions triggers an internal error in CrateDB. Last tested 2025-03 with
@@ -156,12 +156,12 @@ The following PostgreSQL-compatible databases have been tested:
 
 - [CockroachDB](https://github.com/cockroachdb/cockroach) works with limited functionality: for
   example the list of defined procedures and functions is not properly populated. Lasted tested
-  2025-04 with version 25.1.
+  2025-06 with version 25.2.
 
 - The [RisingWave](https://github.com/risingwavelabs/risingwave) event streaming database (Apache
   license) is mostly working. It does not support `GENERATED ALWAYS AS IDENTITY` or `SERIAL`
   columns, nor `VACUUM ANALYZE`. The database does not implement column renaming. Last tested
-  2025-04 with v2.3.1.
+  2025-06 with v2.1.1.
 
 - [QuestDB](https://questdb.io/) has very limited PostgreSQL support, and does not support the
   `integer` type for example. Last tested 2024-04 against version 8.3.3.
@@ -174,11 +174,11 @@ The following PostgreSQL-compatible databases have been tested:
 - The [Materialize](https://materialize.com/) operational database (a proprietary differential
   dataflow database) has many limitations in its PostgreSQL compatibility: no support for primary
   keys, unique constraints, check constraints, for the 'bit' type for example. It works with these
-  limitations with PGmacs (last tested 2025-04 with Materialize v0.142).
+  limitations with PGmacs (last tested 2025-06 with Materialize v0.146).
 
 - [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) has limited PostgreSQL
   compatibility (for example, it does not support foreign key references), but works with limited
-  functionality with PGmacs. Lasted tested 2025-03 with version 23-4.
+  functionality with PGmacs. Lasted tested 2025-06 with version 23-4.
 
 - ClickHouse does not work: its implementation of the wire protocol is very limited, with no support
   for the `pg_type` metadata and no support for basic PostgreSQL-flavoured SQL commands such as
