@@ -2534,6 +2534,7 @@ specied by PRIMARY-KEYS."
                  (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))
     (setq pgmacs--marked-rows (list))))
 
+;; FIXME this SQL query does not work with YDB (BAD_REQUEST message)
 (defun pgmacs--row-list-rename-column (&rest _ignore)
   "Rename the current PostgreSQL column."
   (let* ((col-id (pgmacstbl-current-column))
@@ -2840,6 +2841,7 @@ Runs functions on `pgmacs-row-list-hook'."
                     'help-echo "Delete comment on column"))
                   ;; And if there is no existing column comment
                   (t
+                   ;; FIXME this functionality is not implemented for YDB
                    (insert-text-button
                     "Add column comment"
                     'action `(lambda (&rest _ignore)
@@ -3039,7 +3041,8 @@ Prompt for the table name in the minibuffer."
 (defun pgmacs--display-backend-information (&rest _ignore)
   "Create a buffer with information concerning the current PostgreSQL backend."
   (let ((con pgmacs--con)
-        (db-buffer pgmacs--db-buffer))
+        (db-buffer pgmacs--db-buffer)
+        (inhibit-read-only t))
     (cl-flet ((show (setting label)
                 ;; FIXME: YDB does not allow access to the current_setting() function. Also,
                 ;; RisingWave does not implement the two-argument version of current_setting().
@@ -3050,18 +3053,20 @@ Prompt for the table name in the minibuffer."
                     (when-let* ((value (caar tuples)))
                       (insert (format "%s: %s\n" label value)))))))
       (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
+      (setq buffer-read-only nil)
+      (erase-buffer)
+      (remove-overlays)
       (kill-all-local-variables)
+      (setq-local pgmacs--con con
+                  pgmacs--db-buffer db-buffer
+                  buffer-read-only nil)
       (buffer-disable-undo)
-      (setq-local pgmacs--db-buffer db-buffer)
       (unless (member (pgcon-server-variant con) '(cratedb questdb ydb spanner materialize risingwave))
         (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
                (row (pg-result res :tuple 0))
                (addr (cl-first row))
                (port (cl-second row))
-               (pid (cl-third row))
-               (inhibit-read-only t))
-          (erase-buffer)
-          (remove-overlays)
+               (pid (cl-third row)))
           (insert (format "Connected to backend with pid %s" pid))
           (if addr
               (insert (format " at %s:%s\n" addr port))
@@ -3116,13 +3121,16 @@ Prompt for the table name in the minibuffer."
                              (pg-exec con (format "CREATE EXTENSION IF NOT EXISTS %s" (car ext)))
                            (pg-error
                             (lambda (err)
-                              (message "Loading extension %s failed: %s" (car ext) err)))))))
+                              (message "Loading extension %s failed: %s" (car ext) err))))
+                         ;; Refresh the buffer and move to the relevant line showing the extension
+                         (pgmacs--display-backend-information)
+                         (search-forward (car ext))
+                         (recenter))))
             (insert "\n"))))
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min))
-      (help-mode)
-      (setq buffer-read-only t)
-      (pgmacs-transient-mode))))
+      (pgmacs-transient-mode)
+      (setq buffer-read-only t))))
 
 
 (defvar pgmacs--stat-activity-columns
@@ -3273,6 +3281,7 @@ Uses PostgreSQL connection CON."
                  (new-row (copy-sequence table-row)))
              (setf (pg-table-comment pgmacs--con table) comment)
              (setf (nth col-id new-row) comment)
+             (message "Updating table comment for %s" table)
              (pgmacstbl-update-object tbl new-row table-row)
              (pgmacs--redraw-pgmacstbl)))
           ;; TODO perhaps allow changes to table owner (if we are superuser)
