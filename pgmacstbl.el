@@ -387,7 +387,9 @@ This will also remove the displayed line."
     (save-excursion
       (pgmacstbl-goto-table table)
       (when (pgmacstbl-goto-object object)
-        (delete-line)))))
+        (delete-line))))
+  ;; Redraw the table to fix the alternating row colors
+  (pgmacstbl-revert))
 
 (defun pgmacstbl-insert-object (table object &optional after-object)
   "Insert OBJECT into TABLE after AFTER-OBJECT.
