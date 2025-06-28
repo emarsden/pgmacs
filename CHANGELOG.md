@@ -1,6 +1,14 @@
 # Changelog
 
 
+## [0.26] - Unreleased
+
+- Add workarounds for showing current database settings with PostgreSQL variant YDB (work around the
+  missing two-parameter version of `current_setting` function).
+
+- Fix sorting by size on disk in the main table-list buffer.
+
+
 ## [0.25] - 2025-06-08
 
 - Table on disk size information is now printed for QuestDB and CrateDB, using specific per-variant

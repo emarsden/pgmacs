@@ -1819,11 +1819,9 @@ compatibility."
       (let* ((tid (pg-escape-identifier table))
              (res (pg-exec pgmacs--con (format "SELECT COUNT(*) FROM %s" tid)))
              (row-count (cl-first (pg-result res :tuple 0)))
-             (size-disk (pgmacs--table-size-ondisk pgmacs--con table))
-             (size-pretty (if size-disk (file-size-human-readable size-disk 'iec " ")
-                            ""))
+             (size (pgmacs--table-size-ondisk pgmacs--con table))
              (comment (or (pg-table-comment pgmacs--con table) "")))
-        (push (list table row-count size-pretty "" comment) entries)))
+        (push (list table row-count size "" comment) entries)))
     entries))
 
 ;; TODO: also include VIEWs
@@ -1848,7 +1846,7 @@ Table names are schema-qualified if the schema is non-default."
              (res (pg-exec-prepared pgmacs--con sql `((,schema . "text") (,tname . "text"))))
              (tuple (pg-result res :tuple 0))
              (row-count 0)
-             (size (and (cl-first tuple) (file-size-human-readable (cl-first tuple) 'iec " ")))
+             (size (cl-first tuple))
              ;; We could use function `pg-table-comment', but that would imply an additional SQL
              ;; query and this function is speed critical.
              (comment (cl-second tuple))
@@ -3589,7 +3587,11 @@ inlined vector SVG image that is encoded as a data URI."
                              :width 7 :align 'right)
                             (make-pgmacstbl-column
                              :name (propertize "Size on disk" 'face 'pgmacs-table-header)
-                             :width 13 :align 'right)
+                             :width 13 :align 'right
+                             :formatter (lambda (octets)
+                                          (if octets
+                                              (file-size-human-readable octets 'iec " ")
+                                            "")))
                             (make-pgmacstbl-column
                              :name (propertize "Owner" 'face 'pgmacs-table-header)
                              :width 13 :align 'right)
