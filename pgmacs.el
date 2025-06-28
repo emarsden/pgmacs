@@ -1980,6 +1980,7 @@ Table names are schema-qualified if the schema is non-default."
 ;; at https://stackoverflow.com/questions/12148914/get-definition-of-function-sequence-type-etc-in-postgresql-with-sql-query
 (defun pgmacs--proc-list-RET (proc-row)
   "Handle RET on a row in the proc-list buffer PROC-ROW."
+  (pgmacs--start-progress-reporter "Retrieving procedure data from PostgreSQL")
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
          (oid (nth 6 proc-row))
@@ -2014,7 +2015,8 @@ Table names are schema-qualified if the schema is non-default."
       (insert (format ": %s\n" (cl-second tuple)))
       (insert (propertize "Definition" 'face 'bold))
       (insert (format ": %s\n" (cl-third tuple)))
-      (shrink-window-if-larger-than-buffer))))
+      (shrink-window-if-larger-than-buffer)))
+  (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--proc-list-delete (proc-row)
   (let* ((db-buffer pgmacs--db-buffer)
@@ -2044,6 +2046,7 @@ Table names are schema-qualified if the schema is non-default."
 ;; don't properly populate the pg_catalog.pg_proc table.
 (defun pgmacs--display-procedures/infschema (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
+  (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
          (sql "SELECT routine_schema,routine_name,routine_type,routine_body,routine_definition
@@ -2117,10 +2120,12 @@ Table names are schema-qualified if the schema is non-default."
       (remove-overlays)
       (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
       (insert "\n\n")
-      (pgmacstbl-insert pgmacstbl))))
+      (pgmacstbl-insert pgmacstbl)))
+  (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--display-procedures/postgresql (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
+  (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
          (sql "SELECT n.nspname AS schema_name,
@@ -2208,7 +2213,8 @@ Table names are schema-qualified if the schema is non-default."
       (remove-overlays)
       (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
       (insert "\n\n")
-      (pgmacstbl-insert pgmacstbl))))
+      (pgmacstbl-insert pgmacstbl)))
+  (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--display-procedures (&rest args)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
@@ -2243,6 +2249,7 @@ Table names are schema-qualified if the schema is non-default."
 (defun pgmacs--display-running-queries (&rest _ignore)
   "Display the list of queries running in PostgreSQL.
 Opens a dedicated buffer if the query list is not empty."
+  (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
          (sql "SELECT pid, age(clock_timestamp(), query_start) AS duration, usename, query, state
@@ -2268,7 +2275,9 @@ Opens a dedicated buffer if the query list is not empty."
                (remove-overlays)
                (insert (propertize "Queries running in this PostgreSQL backend" 'face 'bold))
                (insert "\n\n")
-               (pgmacs--show-pgresult buf res)))))))
+               (pgmacs--show-pgresult buf res))))))
+  (pgmacs--stop-progress-reporter))
+
 
 (defun pgmacs--display-replication-stats (&rest _ignore)
   "Display the replication status of this PostgreSQL instance."
@@ -2302,13 +2311,15 @@ Opens a dedicated buffer if the query list is not empty."
 
 (defun pgmacs--run-count (&rest _ignore)
   "Count the number of rows in the current PostgreSQL table."
+  (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   (let* ((sql (format "SELECT COUNT(*) FROM %s" (pg-escape-identifier pgmacs--table)))
          (res (pg-exec pgmacs--con sql))
          (count (cl-first (pg-result res :tuple 0))))
     (pgmacs--notify "Table %s has %s row%s"
                     pgmacs--table
                     count
-                    (if (= count 1) "" "s"))))
+                    (if (= count 1) "" "s")))
+  (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--find-completable-symbol ()
   (let ((bounds (bounds-of-thing-at-point 'symbol)))
