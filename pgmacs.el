@@ -1968,7 +1968,7 @@ Table names are schema-qualified if the schema is non-default."
         (shw "}" "Grow the horizontal space used by the current column")
         ;; (shw "r" "Redraw the table without refetching data from PostgreSQL")
         ;; (shw "g" "Redraw the table (refetches data from PostgreSQL)")
-        ;; (shw "T" "Switch to the main table-list buffer for this database")
+        (shw "T" "Switch to the main table-list buffer for this database")
         (shw "q" "Bury this buffer")
         (shrink-window-if-larger-than-buffer)
         (goto-char (point-min))))))
@@ -2094,6 +2094,7 @@ Table names are schema-qualified if the schema is non-default."
                                 ">" (lambda (&rest _ignored)
                                       (text-property-search-forward 'pgmacstbl)
                                       (previous-line))
+                                "T" pgmacs--switch-to-database-buffer
                                 "q"  (lambda (&rest _ignored) (bury-buffer)))
                      :getter (lambda (object column pgmacstbl)
                                (pcase (pgmacstbl-column pgmacstbl column)
@@ -2118,7 +2119,6 @@ Table names are schema-qualified if the schema is non-default."
       (insert "\n\n")
       (pgmacstbl-insert pgmacstbl))))
 
-;; TODO: include a button or keybinding to delete the function/procedure at point (with DROP FUNCTION or DROP PROCEDURE)?
 (defun pgmacs--display-procedures/postgresql (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
   (let* ((db-buffer pgmacs--db-buffer)
@@ -2186,6 +2186,7 @@ Table names are schema-qualified if the schema is non-default."
                                 ">" (lambda (&rest _ignored)
                                       (text-property-search-forward 'pgmacstbl)
                                       (previous-line))
+                                "T" pgmacs--switch-to-database-buffer
                                 "q"  (lambda (&rest _ignored) (bury-buffer)))
                      :getter (lambda (object column pgmacstbl)
                                (pcase (pgmacstbl-column pgmacstbl column)
