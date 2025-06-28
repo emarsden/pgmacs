@@ -8,6 +8,8 @@
 
 - Fix sorting by size on disk in the main table-list buffer.
 
+- In the procedure-list buffer, the `DEL` key allows you to delete the function or procedure at point.
+
 
 ## [0.25] - 2025-06-08
 

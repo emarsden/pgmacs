@@ -1638,7 +1638,7 @@ over the PostgreSQL connection CON."
       (puthash "maxlen" (cl-first maxlen) column-info))
     (when defaults
       (puthash "DEFAULT" defaults column-info))
-    (when-let ((comment (pg-column-comment con table column)))
+    (when-let* ((comment (pg-column-comment con table column)))
       (puthash "COMMENT" comment column-info))
     column-info))
 
@@ -1654,7 +1654,7 @@ over the PostgreSQL connection CON."
     (puthash "TYPE" type-name column-info)
     (when defaults
       (puthash "DEFAULT" defaults column-info))
-    (when-let ((comment (pg-column-comment con table column)))
+    (when-let* ((comment (pg-column-comment con table column)))
       (puthash "COMMENT" comment column-info))
     column-info))
 
@@ -2016,6 +2016,30 @@ Table names are schema-qualified if the schema is non-default."
       (insert (format ": %s\n" (cl-third tuple)))
       (shrink-window-if-larger-than-buffer))))
 
+(defun pgmacs--proc-list-delete (proc-row)
+  (let* ((db-buffer pgmacs--db-buffer)
+         (pgmacstbl (pgmacstbl-current-table))
+         (con pgmacs--con)
+         (oid (nth 6 proc-row))
+         (sql "SELECT pg_catalog.pg_get_function_arguments(p.oid)
+               FROM pg_catalog.pg_proc p
+               WHERE p.oid = $1")
+         (ps-name (pg-ensure-prepared-statement con "QRY-proc-list-get-arguments" sql (list "int4")))
+         (res (pg-fetch-prepared con ps-name `((,oid . "int4"))))
+         (arglist (cl-first (pg-result res :tuple 0)))
+         (schema (nth 0 proc-row))
+         (name (nth 1 proc-row))
+         ;; DROP ROUTINE deletes both functions and procedures
+         (sql (format "DROP ROUTINE %s.%s(%s)" schema name arglist)))
+    (when (yes-or-no-p (format "Really delete PostgreSQL routine %s.%s? " schema name))
+      (condition-case err
+          (let* ((res (pg-exec con (format "DROP ROUTINE %s.%s(%s)" schema name arglist)))
+                 (status (pg-result res :status)))
+            (pgmacs--notify "%s" status)
+            (pgmacstbl-remove-object pgmacstbl proc-row))
+        (pg-error
+         (message "Couldn't delete routine: %s" err))))))
+
 ;; This variant uses the information schema support of the PostgreSQL variant, for variants that
 ;; don't properly populate the pg_catalog.pg_proc table.
 (defun pgmacs--display-procedures/infschema (&rest _ignore)
@@ -2058,7 +2082,7 @@ Table names are schema-qualified if the schema is non-default."
                                 "?" pgmacs--proc-list-help
                                 "RET" pgmacs--proc-list-RET
                                 "TAB" pgmacs--next-column
-                                ;; "<deletechar>" pgmacs--proc-list-delete
+                                "<deletechar>" pgmacs--proc-list-delete
                                 ;; "r" pgmacs--proc-list-rename
                                 ;; "g" pgmacs--proc-list-redraw
                                 ;; the functions pgmacstbl-beginning-of-table and
@@ -2150,7 +2174,7 @@ Table names are schema-qualified if the schema is non-default."
                                 "?" pgmacs--proc-list-help
                                 "RET" pgmacs--proc-list-RET
                                 "TAB" pgmacs--next-column
-                                ;; "<deletechar>" pgmacs--proc-list-delete
+                                "<deletechar>" pgmacs--proc-list-delete
                                 ;; "r" pgmacs--proc-list-rename
                                 ;; "g" pgmacs--proc-list-redraw
                                 ;; the functions pgmacstbl-beginning-of-table and
