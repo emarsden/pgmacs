@@ -1779,6 +1779,11 @@ Uses PostgreSQL connection CON."
             (res (pg-exec con (format sql (pg-escape-identifier table))))
             (tuple (pg-result res :tuple 0)))
        (* 1000000 (cl-first tuple))))
+    ('yugabyte
+     (let* ((sql "SELECT pg_catalog.pg_table_size($1)")
+            (res (pg-exec-prepared con sql `((,table . "text"))))
+            (tuple (pg-result res :tuple 0)))
+       (cl-first tuple)))
     (_ nil)))
 
 (defun pgmacs--index-size-ondisk (con table)
@@ -3038,20 +3043,38 @@ Prompt for the table name in the minibuffer."
     (when column
       (pgmacstbl-goto-column column))))
 
+(defun pgmacs--read-current-user (con)
+  (let* ((res (pg-exec con "SELECT current_user"))
+         (row (pg-result res :tuple 0)))
+    (cl-first row)))
+
+(defun pgmacs--read-current-setting (con setting)
+  (pcase (pgcon-server-variant con)
+    ;; RisingWave does not implement the two-argument version of current_setting()
+    ('risingwave
+     (ignore-errors
+       (let* ((res (pg-exec-prepared con "SELECT pg_catalog.current_setting($1)"
+                                     `((,setting . "text"))))
+              (tuples (pg-result res :tuples)))
+         (caar tuples))))
+    ;; YDB does not allow access to the current_setting function
+    ('ydb nil)
+    (_
+     ;; The second argument of true means don't raise an error if the setting is not defined.
+     (let* ((res (pg-exec-prepared con "SELECT pg_catalog.current_setting($1, true)"
+                                   `((,setting . "text"))))
+            (tuples (pg-result res :tuples)))
+       (caar tuples)))))
+
 (defun pgmacs--display-backend-information (&rest _ignore)
   "Create a buffer with information concerning the current PostgreSQL backend."
   (let ((con pgmacs--con)
         (db-buffer pgmacs--db-buffer)
         (inhibit-read-only t))
     (cl-flet ((show (setting label)
-                ;; FIXME: YDB does not allow access to the current_setting() function. Also,
-                ;; RisingWave does not implement the two-argument version of current_setting().
-                (let* ((res (pg-exec-prepared con "SELECT pg_catalog.current_setting($1, true)"
-                                              `((,setting . "text"))))
-                       (tuples (pg-result res :tuples)))
-                  (when tuples
-                    (when-let* ((value (caar tuples)))
-                      (insert (format "%s: %s\n" label value)))))))
+                (let ((value (pgmacs--read-current-setting con setting)))
+                  (when value
+                    (insert (format "%s: %s\n" label value))))))
       (pop-to-buffer (get-buffer-create "*PostgreSQL backend information*"))
       (setq buffer-read-only nil)
       (erase-buffer)
@@ -3079,11 +3102,10 @@ Prompt for the table name in the minibuffer."
           (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('ssl_library')"))
                  (row (pg-result res :tuple 0)))
             (insert (format "Backend compiled with SSL library %s\n" (cl-first row))))))
-      (let* ((res (pg-exec con "SELECT current_user, pg_catalog.current_setting('is_superuser', true)"))
-             (row (pg-result res :tuple 0)))
+      (let* ((superuser-p (pgmacs--read-current-setting con "is_superuser")))
         (insert (format "Connected as user %s (%ssuperuser)\n"
-                        (cl-first row)
-                        (if (cl-second row) "" "not "))))
+                        (pgmacs--read-current-user con)
+                        (if superuser-p "" "not "))))
       (show "in_hot_standby" "In hot standby")
       (unless (member (pgcon-server-variant con) '(cockroachdb))
         (let* ((res (pg-exec con "SELECT pg_catalog.pg_postmaster_start_time()"))
@@ -3493,6 +3515,7 @@ inlined vector SVG image that is encoded as a data URI."
     (concat maybe-icon name)))
 
 
+;; TODO: On CrateDB we could query "SELECT ssl FROM sys.sessions WHERE id=<todo>"
 (defun pgmacs--tls-status (con)
   (if (and (not (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb risingwave)))
            (> (pgcon-server-version-major con) 11))
@@ -3542,6 +3565,8 @@ inlined vector SVG image that is encoded as a data URI."
   ;; PostgreSQL.
   (let ((inhibit-read-only t))
     (erase-buffer)
+    (unless (eq 'postgresql (pgcon-server-variant con))
+      (insert (format "Connected to PostgreSQL variant %s\n" (pgcon-server-variant con))))
     (insert (pg-backend-version con)))
   (when (eq 'questdb (pgcon-server-variant con))
     (let* ((res (pg-exec con "SELECT build()"))
@@ -3614,6 +3639,8 @@ inlined vector SVG image that is encoded as a data URI."
                         (if (cl-third row) "RECOVERING" "PRIMARY"))))
       ;; PostgreSQL has a function pg_size_pretty() that we could also use, but it's not implemented
       ;; in all semi-compatible variants.
+      ;;
+      ;; TODO: we could implement pg_database_size ourselves for YugabyteDB as per https://yugabytedb.tips/display-ysql-database-size/
       (let* ((sql "SELECT pg_catalog.pg_database_size($1)")
              (res (pg-exec-prepared con sql `((,dbname . "text"))))
              (size (cl-first (pg-result res :tuple 0))))
