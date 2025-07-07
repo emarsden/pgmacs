@@ -243,6 +243,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 (defvar-local pgmacs--where-filter nil)
 (defvar-local pgmacs--marked-rows (list))
 (defvar-local pgmacs--completions nil)
+(defvar-local pgmacs--table-primary-keys nil)
 
 (defclass pgmacs-shortcut-button ()
   ((label :initarg :label :type string)
@@ -724,6 +725,8 @@ FUNCTION takes a single argument which is the value of the cell at point."
 (defun pgmacs--setf-cell (row primary-keys function)
   "Call FUNCTION on current cell and update the database.
 FUNCTION is called on (old-value col-name col-type) and returns the new value."
+  (when (null primary-keys)
+    (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((pgmacstbl (or (pgmacstbl-current-table)
                         (user-error "Cursor is not in a pgmacstbl")))
          (current-row (or (pgmacstbl-current-object)
@@ -742,8 +745,6 @@ FUNCTION is called on (old-value col-name col-type) and returns the new value."
     (let* ((current (funcall (pgmacstbl-column-formatter col)
                              (nth col-id current-row)))
            (new-value (funcall function current col-name col-type)))
-      (when (null primary-keys)
-        (user-error "Can't edit content of a table that has no PRIMARY KEY"))
       (unless pk-value
         (error "Can't find value for primary key %s" pk))
       (let* ((sql (format "UPDATE %s SET %s = $1 WHERE %s = $2"
@@ -764,24 +765,23 @@ FUNCTION is called on (old-value col-name col-type) and returns the new value."
         (pgmacs--redraw-pgmacstbl))
       new-value)))
 
-(defun pgmacs--edit-value-minibuffer (row primary-keys)
+(defun pgmacs--edit-value-minibuffer (row)
   "Edit and update in PostgreSQL the column value at point.
 The new value in database row ROW is read in the minibuffer.
-Editing requires the database table to have primary keys named in the list
-PRIMARY-KEYS."
-  (unless primary-keys
+Editing requires the database table to have a primary key."
+  (unless pgmacs--table-primary-keys
     (user-error "Cannot edit a table that has no PRIMARY KEY"))
   (let ((get-value (lambda (old-value col-name col-type)
                      (pgmacs--read-value (substring-no-properties col-name)
                                          (substring-no-properties col-type)
                                          "Change %s (%s) to: "
                                          old-value))))
-  (pgmacs--setf-cell row primary-keys get-value)))
+  (pgmacs--setf-cell row pgmacs--table-primary-keys get-value)))
 
 
 (defvar pgmacs--shell-command-history nil)
 
-(defun pgmacs--shell-command-on-value (current-row primary-keys)
+(defun pgmacs--shell-command-on-value (current-row)
   "Run a Unix filter shell command with the current cell value as input.
 
 When called without a prefix argument, output is diplayed in the
@@ -803,7 +803,9 @@ the value in the database), use
 
    C-u ! rev
 
-Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
+Works on the CURRENT-ROW. The table must have a primary key."
+  (when (null pgmacs--table-primary-keys)
+    (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let ((get-value
          (lambda (old-value &rest _ignore)
            (let* ((prompt "Shell command: ")
@@ -823,7 +825,7 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
           (message "PostgreSQL shell: %s" result))
       ;; With a prefix argument, we update the value in the PostgreSQL database and in the
       ;; displayed pgmacstbl.
-      (pgmacs--setf-cell current-row primary-keys get-value))))
+      (pgmacs--setf-cell current-row pgmacs--table-primary-keys get-value))))
 
 (defvar pgmacs--async-command-history nil)
 
@@ -847,9 +849,11 @@ Works on the CURRENT-ROW and on a table with PRIMARY-KEYS."
             (buf (get-buffer-create "*PGmacs async command*")))
        (start-process "PGmacs-async-command" buf cmd cell-value)))))
 
-(defun pgmacs--downcase-value (current-row primary-keys)
+(defun pgmacs--downcase-value (current-row)
   "Downcase the value in the cell at point and update PostgreSQL.
-Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
+Operates on the CURRENT-ROW. The table must have a primary key."
+  (when (null pgmacs--table-primary-keys)
+    (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let ((get-value
          (lambda (old-value _col-name col-type)
            (unless (or (string= "text" col-type)
@@ -860,11 +864,13 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
              (insert old-value)
              (downcase-region (point-min) (point-max))
              (buffer-substring-no-properties (point-min) (point-max))))))
-    (pgmacs--setf-cell current-row primary-keys get-value)))
+    (pgmacs--setf-cell current-row pgmacs--table-primary-keys get-value)))
 
-(defun pgmacs--upcase-value (current-row primary-keys)
+(defun pgmacs--upcase-value (current-row)
   "Upcase the value in the cell at point and update PostgreSQL.
-Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
+Operates on the CURRENT-ROW. The table must have a primary key."
+  (when (null pgmacs--table-primary-keys)
+    (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let ((get-value
          (lambda (old-value _col-name col-type)
            (unless (or (string= "text" col-type)
@@ -872,14 +878,16 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
                        (string= "name" col-type))
              (user-error "Can only upcase text values"))
            (with-temp-buffer
-            (insert old-value)
-            (upcase-region (point-min) (point-max))
-            (buffer-substring-no-properties (point-min) (point-max))))))
-    (pgmacs--setf-cell current-row primary-keys get-value)))
+             (insert old-value)
+             (upcase-region (point-min) (point-max))
+             (buffer-substring-no-properties (point-min) (point-max))))))
+    (pgmacs--setf-cell current-row pgmacs--table-primary-keys get-value)))
 
-(defun pgmacs--capitalize-value (current-row primary-keys)
+(defun pgmacs--capitalize-value (current-row)
   "Capitalize the value in the cell at point and update PostgreSQL.
-Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
+Operates on the CURRENT-ROW. The table must have a primary key."
+  (when (null pgmacs--table-primary-keys)
+    (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let ((get-value
          (lambda (old-value _col-name col-type)
            (unless (or (string= "text" col-type)
@@ -890,7 +898,7 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
              (insert old-value)
              (capitalize-region (point-min) (point-max))
              (buffer-substring-no-properties (point-min) (point-max))))))
-    (pgmacs--setf-cell current-row primary-keys get-value)))
+    (pgmacs--setf-cell current-row pgmacs--table-primary-keys get-value)))
 
 
 (define-widget 'pgmacs-hstore-widget 'list
@@ -1042,11 +1050,11 @@ Operates on the CURRENT-ROW and on a table with PRIMARY-KEYS."
                       :size (min 200 (+ 5 (length current-string)))
                       (format "%s" current-value))))))
 
-(defun pgmacs--edit-value-widget (row primary-keys)
+(defun pgmacs--edit-value-widget (row)
   "Edit and update in PostgreSQL the value at point in ROW.
 Uses a dedicated widget buffer.  Editing is only possible if the current table
-has primary keys, named in the list PRIMARY-KEYS."
-  (when (null primary-keys)
+has a primary key."
+  (when (null pgmacs--table-primary-keys)
     (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
@@ -1058,7 +1066,7 @@ has primary keys, named in the list PRIMARY-KEYS."
          (col (nth col-id cols))
          (col-name (pgmacstbl-column-name col))
          (col-type (aref pgmacs--column-type-names col-id))
-         (pk (cl-first primary-keys))
+         (pk (cl-first pgmacs--table-primary-keys))
          (pk-col-id (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=))
          (pk-col-type (aref pgmacs--column-type-names pk-col-id))
          (pk-value (and pk-col-id (nth pk-col-id row))))
@@ -1158,11 +1166,11 @@ Point is located in CURRENT-ROW."
     (setq buffer-read-only t)
     (goto-char (point-min))))
 
-(defun pgmacs--delete-row (row primary-keys)
+(defun pgmacs--delete-row (row)
   "Delete ROW from the current table.
 Deletion is only possible when the current table has primary
-keys, whose names are given by the list PRIMARY-KEYS."
-  (when (null primary-keys)
+key."
+  (when (null pgmacs--table-primary-keys)
     (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (when (y-or-n-p (format "Really delete PostgreSQL row %s?" row))
     (let* ((pgmacstbl (pgmacstbl-current-table))
@@ -1170,7 +1178,7 @@ keys, whose names are given by the list PRIMARY-KEYS."
            (where-clauses (list))
            (where-values (list))
            (counter 0))
-      (dolist (pk primary-keys)
+      (dolist (pk pgmacs--table-primary-keys)
         (let* ((col-name (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=))
                (col-type (and col-name (aref pgmacs--column-type-names col-name)))
                (value (and col-name (nth col-name row))))
@@ -2019,8 +2027,7 @@ Table names are schema-qualified if the schema is non-default."
   (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--proc-list-delete (proc-row)
-  (let* ((db-buffer pgmacs--db-buffer)
-         (pgmacstbl (pgmacstbl-current-table))
+  (let* ((pgmacstbl (pgmacstbl-current-table))
          (con pgmacs--con)
          (oid (nth 6 proc-row))
          (sql "SELECT pg_catalog.pg_get_function_arguments(p.oid)
@@ -2030,11 +2037,10 @@ Table names are schema-qualified if the schema is non-default."
          (res (pg-fetch-prepared con ps-name `((,oid . "int4"))))
          (arglist (cl-first (pg-result res :tuple 0)))
          (schema (nth 0 proc-row))
-         (name (nth 1 proc-row))
-         ;; DROP ROUTINE deletes both functions and procedures
-         (sql (format "DROP ROUTINE %s.%s(%s)" schema name arglist)))
+         (name (nth 1 proc-row)))
     (when (yes-or-no-p (format "Really delete PostgreSQL routine %s.%s? " schema name))
       (condition-case err
+          ;; DROP ROUTINE deletes both functions and procedures
           (let* ((res (pg-exec con (format "DROP ROUTINE %s.%s(%s)" schema name arglist)))
                  (status (pg-result res :status)))
             (pgmacs--notify "%s" status)
@@ -2467,9 +2473,9 @@ Opens a dedicated buffer if the query list is not empty."
 ;; some columns are using special face features such as bold (primary key) and blue foreground
 ;; (foreign key references). So we need to be "adding" an attribute, using add-face-text-property.
 ;; But deleting that later is tricky...
-(cl-defun pgmacs--row-list-mark-row (primary-keys)
+(cl-defun pgmacs--row-list-mark-row ()
   "Mark the current row for deletion."
-  (when (null primary-keys)
+  (when (null pgmacs--table-primary-keys)
     (message "Can't delete from a table that has no PRIMARY KEY")
     (cl-return-from pgmacs--row-list-mark-row))
   ;; Note: this line number is zero-based
@@ -2518,14 +2524,13 @@ Opens a dedicated buffer if the query list is not empty."
   (pgmacs--redraw-pgmacstbl))
 
 ;; Bound to "x" in a row-list buffer.
-(cl-defun pgmacs--row-list-delete-marked (primary-keys)
+(cl-defun pgmacs--row-list-delete-marked ()
   "Delete rows in the current table marked for deletion using `d'.
-Deletion is only possible for tables with a (possibly multicolumn) primary key,
-specied by PRIMARY-KEYS."
+Deletion is only possible for tables with a (possibly multicolumn) primary key."
   (when (null pgmacs--marked-rows)
     (message "No rows are marked for deletion")
     (cl-return-from pgmacs--row-list-delete-marked))
-  (when (null primary-keys)
+  (when (null pgmacs--table-primary-keys)
     (user-error "Can't delete from a table that has no PRIMARY KEY"))
   (when (y-or-n-p (format "Really delete %d PostgreSQL rows?" (length pgmacs--marked-rows)))
     (let* ((pgmacstbl (pgmacstbl-current-table))
@@ -2536,7 +2541,7 @@ specied by PRIMARY-KEYS."
       (dolist (line-number pgmacs--marked-rows)
         (let ((where-clauses-line (list))
               (where-values-line (list)))
-          (dolist (pk primary-keys)
+          (dolist (pk pgmacs--table-primary-keys)
             (let* ((col-name (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=))
                    (col-type (and col-name (aref pgmacs--column-type-names col-name)))
                    (row (nth line-number (pgmacstbl-objects pgmacstbl)))
@@ -2697,8 +2702,9 @@ Runs functions on `pgmacs-row-list-hook'."
        (propertize header1 'face 'bold)
        (propertize header2 'face 'bold)
        "\n"))
-    (let* ((primary-keys (pgmacs--table-primary-keys con table))
-           (comment (pg-table-comment con table))
+    ;; This is a buffer-local variable.
+    (setq pgmacs--table-primary-keys (pgmacs--table-primary-keys con table))
+    (let* ((comment (pg-table-comment con table))
            (indexes (pgmacs--table-indexes con table))
            (offset (or pgmacs--offset 0))
            (res (cond (center-on
@@ -2752,20 +2758,24 @@ Runs functions on `pgmacs-row-list-hook'."
                        :row-colors pgmacs-row-colors
                        :objects rows
                        ;; same syntax for keys as keymap-set
-                       ;; TODO: the primary-keys could perhaps be saved as a text property on the table?
-                       :actions `("RET" (lambda (row) (pgmacs--table-list-dwim row ',primary-keys))
+                       ;;
+                       ;; FIXME: it would be preferable to switch to using the :keymap argument
+                       ;; instead of :actions, to use a user-customizable keymap. For this we need
+                       ;; to change all the functions to use pgmacstbl-current-object instead of a
+                       ;; "row" argument.
+                       :actions `("RET" (lambda (row) (pgmacs--table-list-dwim row))
                                   "TAB" pgmacs--next-column
-                                  "w" (lambda (row) (pgmacs--edit-value-widget row ',primary-keys))
-                                  "!" (lambda (row) (pgmacs--shell-command-on-value row ',primary-keys))
+                                  "w" (lambda (row) (pgmacs--edit-value-widget row))
+                                  "!" (lambda (row) (pgmacs--shell-command-on-value row))
                                   "&" pgmacs--async-command-on-value
-                                  "M-u" (lambda (row) (pgmacs--upcase-value row ',primary-keys))
-                                  "M-l" (lambda (row) (pgmacs--downcase-value row ',primary-keys))
-                                  "M-c" (lambda (row) (pgmacs--capitalize-value row ',primary-keys))
+                                  "M-u" (lambda (row) (pgmacs--upcase-value row))
+                                  "M-l" (lambda (row) (pgmacs--downcase-value row))
+                                  "M-c" (lambda (row) (pgmacs--capitalize-value row))
                                   "v" pgmacs--view-value
-                                  "<delete>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                                  "<deletechar>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                                  "<backspace>" (lambda (row) (pgmacs--delete-row row ',primary-keys))
-                                  "DEL" (lambda (row) (pgmacs--delete-row row ',primary-keys))
+                                  "<delete>" (lambda (row) (pgmacs--delete-row row))
+                                  "<deletechar>" (lambda (row) (pgmacs--delete-row row))
+                                  "<backspace>" (lambda (row) (pgmacs--delete-row row))
+                                  "DEL" (lambda (row) (pgmacs--delete-row row))
                                   "<backtab>" (lambda (_row) (pgmacstbl-previous-column))
                                   "R" pgmacs--row-list-rename-column
                                   "h" pgmacs--row-list-help
@@ -2785,10 +2795,10 @@ Runs functions on `pgmacs-row-list-hook'."
                                   "r" pgmacs--redraw-pgmacstbl
                                   "g" pgmacs--row-list-redraw
                                   "j" pgmacs--row-as-json
-                                  "d" (lambda (&rest _ignore) (pgmacs--row-list-mark-row ',primary-keys))
+                                  "d" (lambda (&rest _ignore) (pgmacs--row-list-mark-row))
                                   "u" pgmacs--row-list-unmark-row
                                   "U" pgmacs--row-list-unmark-all
-                                  "x" (lambda (&rest _ignored) (pgmacs--row-list-delete-marked ',primary-keys))
+                                  "x" (lambda (&rest _ignored) (pgmacs--row-list-delete-marked))
                                   ;; "n" and "p" are bound when table is paginated to next/prev page
                                   "<" (lambda (&rest _ignored)
                                         (text-property-search-backward 'pgmacstbl)
@@ -3026,7 +3036,7 @@ This refetches data from PostgreSQL and runs hooks on `pgmacs-row-list-hook'."
 
 ;; Used in table-list buffer: if point is on a column which REFERENCES a foreign table, then jump to
 ;; that table on the appropriate row; otherwise prompt to edit using pgmacs--edit-value-minibuffer
-(defun pgmacs--table-list-dwim (row primary-keys)
+(defun pgmacs--table-list-dwim (row)
   (let* ((colinfo (get-text-property (point) 'pgmacs--column-info))
          (refs (and colinfo (gethash "REFERENCES" colinfo))))
     (if refs
@@ -3037,7 +3047,7 @@ This refetches data from PostgreSQL and runs hooks on `pgmacs-row-list-hook'."
                (pk-val (nth pk-col-id row))
                (center-on (and pk (list pk pk-val pk-col-type))))
           (pgmacs--display-table table :center-on center-on))
-      (pgmacs--edit-value-minibuffer row primary-keys))))
+      (pgmacs--edit-value-minibuffer row))))
 
 ;; bound to "o". We make sure here to retain a schema-qualified name for a table, because
 ;; pgmacs--display-table needs a schema-qualified name for tables not in the current schema.
