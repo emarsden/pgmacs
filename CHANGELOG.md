@@ -10,7 +10,7 @@
 
 - In the procedure-list buffer, the `DEL` key allows you to delete the function or procedure at point.
 
-- When serializing a table to JSON, NULL column values are handled correctly.
+- When serializing a row to JSON, NULL column values are handled correctly.
 
 
 ## [0.25] - 2025-06-08
