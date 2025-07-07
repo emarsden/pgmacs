@@ -690,8 +690,10 @@ Applies format string FMT to ARGS."
        for col in cols
        for col-type = (aref pgmacs--column-type-names col-id)
        for raw in current-row
-       for v = (if (jsonable-p raw) raw
-                 (pg-serialize raw col-type ce))
+       for v = (cond ((jsonable-p raw) raw)
+                     ((null raw) nil)
+                     (t
+                      (pg-serialize raw col-type ce)))
        do (puthash (pgmacstbl-column-name col) v ht))
       (kill-new (json-serialize ht))
       (message "JSON copied to kill ring"))))
