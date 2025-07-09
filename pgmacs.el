@@ -1880,7 +1880,7 @@ Uses PostgreSQL connection CON."
 
 (defun pgmacs--table-size-ondisk (con table)
   (pcase (pgcon-server-variant con)
-    ('postgresql
+    ((or 'postgresql 'yugabyte)
      (let* ((schema (if (pg-qualified-name-p table)
                         (pg-qualified-name-schema table)
                       "public"))
@@ -1917,11 +1917,6 @@ Uses PostgreSQL connection CON."
             (res (pg-exec con (format sql (pg-escape-identifier table))))
             (tuple (pg-result res :tuple 0)))
        (* 1000000 (cl-first tuple))))
-    ('yugabyte
-     (let* ((sql "SELECT pg_catalog.pg_table_size($1)")
-            (res (pg-exec-prepared con sql `((,table . "text"))))
-            (tuple (pg-result res :tuple 0)))
-       (cl-first tuple)))
     (_ nil)))
 
 (defun pgmacs--index-size-ondisk (con table)
