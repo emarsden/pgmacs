@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.26] - Unreleased
+## [0.26] - 2025-07-09
 
 - Use keymaps for all key bindings, to allow customization by the user. There are customizable
   keymaps for the table-list buffer (`pgmacs-table-list-map`), row-list buffers
