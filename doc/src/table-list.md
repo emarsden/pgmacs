@@ -1,6 +1,6 @@
-# The table list buffer
+# The table-list buffer
 
-The table list buffer is the main PGmacs buffer. It shows some metainformation concerning the
+The table-list buffer is the main PGmacs buffer. It shows some metainformation concerning the
 PostgreSQL backend that you are connected to (version, database size on disk, etc.), followed by a
 tabulated list of all the tables in the database (at least the tables which are visible to your
 current PostgreSQL user).
@@ -8,7 +8,7 @@ current PostgreSQL user).
 ![Screenshot table list](img/screenshot-overview.png)
 
 
-The following keys are bound when the point is located in the table list buffer: 
+The following keys are bound when the point is located in the table-list buffer: 
 
 | Key            | Binding                                                                              |
 |----------------|--------------------------------------------------------------------------------------|
@@ -29,6 +29,9 @@ The following keys are bound when the point is located in the table list buffer:
 | <kbd>q</kbd>   | Bury the current buffer.                                                             |
 
 
+The keybindings in the table-list can be customized by modifying the `pgmacs-table-list-map`
+keymap. The `pgmacs-table-list-map/table` keymap contains keybindings that are only relevant when
+point is in the tabular display of tables, such as the command to rename the table at point. 
 
 
 The `More backend information` button will open a buffer that displays further information

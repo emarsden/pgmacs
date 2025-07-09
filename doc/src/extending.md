@@ -2,7 +2,7 @@
 
 A big advantage of building on the Emacs platform is that PGmacs is automatically quite easy to
 extend and customize. You can extend it using the same programming language (Emacs Lisp) and APIs
-that are used to build PGmacs itself.
+as those that are used to build PGmacs itself.
 
 Here’s a simple example where we add a key binding that applies in row-list buffers to implement a
 web search on the content of the current cell (where the cursor is located). This is easy to
@@ -19,7 +19,8 @@ the “html” interface of the DuckDuckGo search engine.
 ```
 
 Then we define a function that calls our ddg-query function on the current cell contents, and define
-a keybinding for it in the `pgmacs-row-list-map` keymap which is active in a row-list buffer.
+a keybinding for it in the `pgmacs-row-list-map/table` keymap which is active when point is in the
+tabular data in a row-list buffer.
 
 ```lisp
 (require 'pgmacs)
@@ -28,7 +29,7 @@ a keybinding for it in the `pgmacs-row-list-map` keymap which is active in a row
   (interactive)
   (pgmacs-funcall-cell #'my/ddg-query))
 
-(define-key pgmacs-row-list-map (kbd "D") #'my/pgmacs-ddg-cell)
+(define-key pgmacs-row-list-map/table (kbd "D") #'my/pgmacs-ddg-cell)
 ```
 
 This is what the functionality looks like once you’ve included this code in your Emacs

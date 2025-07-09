@@ -57,6 +57,12 @@ The following keys are bound when the point is located in the row-list table:
 | <kbd>q</kbd>                    | Bury the current buffer.                                                             |
 
 
+These keybindings can be customized by modifying the `pgmacs-row-list-map` keymap, which contains
+keybindings that apply everywhere in the row-list buffer, or by modifying the
+`pgmacs-row-list-map/table` child keymap, which contains keybindings that are only relevant when
+point is in the tabular data display (for example, commands that operate on a specific cell value).
+
+
 Any functions on `pgmacs-row-list-hook` are run when a row-list buffer is opened. They are run just
 before control is returned to the user, in a buffer with all data inserted. For example, if you
 would like all column widths to be adjusted to the narrowest size possible given the data displayed

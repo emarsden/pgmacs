@@ -360,14 +360,46 @@ Uses customizations implemented in Emacs' customize support."
 
 (defvar-keymap pgmacs-table-list-map
   :doc "Keymap for PGmacs table-list buffers"
-  (kbd "q") #'bury-buffer
   (kbd "h") #'pgmacs--table-list-help
   (kbd "?") #'pgmacs--table-list-help
   (kbd "g") #'pgmacs--table-list-redraw
   (kbd "o") #'pgmacs-open-table
   (kbd "e") #'pgmacs-run-sql
   (kbd "E") #'pgmacs-run-buffer-sql
-  (kbd "T") #'pgmacs--switch-to-database-buffer)
+  (kbd "=") #'pgmacs--shrink-columns
+  (kbd "r") #'pgmacs--redraw-pgmacstbl
+  (kbd "T") #'pgmacs--switch-to-database-buffer
+  (kbd "q") #'bury-buffer)
+
+(defvar-keymap pgmacs-table-list-map/table
+  :doc "Keymap for PGmacs table-list buffers when point is in a table"
+  :parent pgmacs-table-list-map
+  "RET"          #'pgmacs--table-list-RET
+  "TAB"          #'pgmacs--next-column
+  "<deletechar>" #'pgmacs--table-list-delete
+  "S"            #'pgmacs--schemaspy-database
+  "R"            #'pgmacs--table-list-rename
+  "j"            #'pgmacs--row-as-json
+  "v"            #'pgmacs--view-value
+  ;; "n" and "p" are bound when table is paginated to next/prev page
+  "<" (lambda (&rest _ignored)
+        (text-property-search-backward 'pgmacstbl)
+        (forward-line))
+  ">" (lambda (&rest _ignored)
+        (text-property-search-forward 'pgmacstbl)
+        (forward-line -1))
+  "0" (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
+  "1" (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
+  "2" (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
+  "3" (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
+  "4" (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
+  "5" (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
+  "6" (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
+  "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
+  "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
+  "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9)))
+
+
 
 (define-key global-map [menu-bar tools PGmacs]
    (cons "PGmacs" (make-sparse-keymap "PGmacs")))
@@ -449,22 +481,98 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   (kbd "q") #'bury-buffer
   (kbd "h") #'pgmacs--row-list-help
   (kbd "?") #'pgmacs--row-list-help
-  (kbd "g") #'pgmacs--row-list-redraw
   (kbd "i") #'pgmacs--insert-row-empty
   (kbd "o") #'pgmacs-open-table
+  ;; pgmacs--redraw-pgmacstbl does not refetch data from PostgreSQL;
+  ;; pgmacs--row-list-redraw does refetch.
+  (kbd "r")  #'pgmacs--redraw-pgmacstbl
+  (kbd "g")  #'pgmacs--row-list-redraw
   (kbd "e") #'pgmacs-run-sql
   (kbd "E") #'pgmacs-run-buffer-sql
   (kbd "W") #'pgmacs--add-where-filter
   (kbd "S") #'pgmacs--schemaspy-table
   (kbd "T") #'pgmacs--switch-to-database-buffer)
 
+;; Additional keybindings for a row-list buffer when the point is inside the table that displays
+;; row data.
+;;
+;; FIXME or perhaps just fix the additional functions to ding when outside of the table?
+(defvar-keymap pgmacs-row-list-map/table
+  :doc "Keymap for PGmacs row-list buffers when point is in a table"
+  :parent pgmacs-row-list-map
+  "RET"          #'pgmacs--row-list-dwim
+  "TAB"          #'pgmacs--next-column
+  "w"            #'pgmacs--edit-value-widget
+  (kbd "!")      #'pgmacs--shell-command-on-value
+  (kbd "&")      #'pgmacs--async-command-on-value
+  "M-u"          #'pgmacs--upcase-value
+  "M-l"          #'pgmacs--downcase-value
+  "M-c"          #'pgmacs--capitalize-value
+  (kbd "v")      #'pgmacs--view-value
+  "<delete>"     #'pgmacs--delete-row
+  "<deletechar>" #'pgmacs--delete-row
+  "<backspace>"  #'pgmacs--delete-row
+  "DEL"          #'pgmacs--delete-row
+  "<backtab>"    #'pgmacstbl-previous-column
+  (kbd "R")      #'pgmacs--row-list-rename-column
+  (kbd "+")      #'pgmacs--insert-row
+  (kbd "i")      #'pgmacs--insert-row-widget
+  (kbd "k")      #'pgmacs--copy-row
+  (kbd "y")      #'pgmacs--yank-row
+  (kbd "=")      #'pgmacs--shrink-columns
+  (kbd "j")      #'pgmacs--row-as-json
+  (kbd "d")      #'pgmacs--row-list-mark-row
+  (kbd "u")      #'pgmacs--row-list-unmark-row
+  (kbd "U")      #'pgmacs--row-list-unmark-all
+  (kbd "x")      #'pgmacs--row-list-delete-marked
+  ;; "n" and "p" are bound when table is paginated to next/prev page
+  (kbd "<")  (lambda (&rest _ignored)
+               (text-property-search-backward 'pgmacstbl)
+               (forward-line))
+  (kbd ">")  (lambda (&rest _ignored)
+               (text-property-search-forward 'pgmacstbl)
+               (forward-line -1))
+  (kbd "0") (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
+  (kbd "1") (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
+  (kbd "2") (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
+  (kbd "3") (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
+  (kbd "4") (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
+  (kbd "5") (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
+  (kbd "6") (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
+  (kbd "7") (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
+  (kbd "8") (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
+  (kbd "9") (lambda (&rest _ignored) (pgmacstbl-goto-column 9)))
+
+
+(defvar-keymap pgmacs-proc-list-map
+  :doc "Keymap for PGmacs proc-list buffers"
+  "h"            #'pgmacs--proc-list-help
+  "?"            #'pgmacs--proc-list-help
+  "RET"          #'pgmacs--proc-list-RET
+  "TAB"          #'pgmacs--next-column
+  "<deletechar>" #'pgmacs--proc-list-delete
+  "T"            #'pgmacs--switch-to-database-buffer
+  ;; "r" pgmacs--proc-list-rename
+  ;; "g" pgmacs--proc-list-redraw
+  ;; the functions pgmacstbl-beginning-of-table and
+  ;; pgmacstbl-end-of-table don't work when we have inserted text before
+  ;; the pgmacstbl.
+  "<" (lambda (&rest _ignored)
+        (text-property-search-backward 'pgmacstbl)
+        (forward-line))
+  ">" (lambda (&rest _ignored)
+        (text-property-search-forward 'pgmacstbl)
+        (forward-line -1))
+  "q" (lambda (&rest _ignored) (bury-buffer)))
+
+
 (defvar-keymap pgmacs-transient-map
   :doc "Keymap for PGmacs transient buffers"
-  (kbd "q") #'bury-buffer
-  (kbd "o") #'pgmacs-open-table
-  (kbd "e") #'pgmacs-run-sql
-  (kbd "E") #'pgmacs-run-buffer-sql
-  (kbd "T") #'pgmacs--switch-to-database-buffer)
+  "q"  #'bury-buffer
+  "o"  #'pgmacs-open-table
+  "e"  #'pgmacs-run-sql
+  "E"  #'pgmacs-run-buffer-sql
+  "T"  #'pgmacs--switch-to-database-buffer)
 
 (define-minor-mode pgmacs-transient-mode
   "Minor mode for transient PGmacs buffers."
@@ -671,6 +779,7 @@ Applies format string FMT to ARGS."
 
 (cl-defun pgmacs--row-as-json (&rest _ignore)
   "Copy the current row as JSON to the kill ring."
+  (interactive)
   (unless (json-available-p)
     (message "Emacs is not compiled with JSON support")
     (cl-return-from pgmacs--row-as-json))
@@ -807,6 +916,7 @@ the value in the database), use
    C-u ! rev
 
 Operates on the current row. The table must have a primary key."
+  (interactive)
   (when (null pgmacs--table-primary-keys)
     (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let ((current-row (pgmacstbl-current-object))
@@ -846,6 +956,7 @@ filename in the default application on your system by entering
 `xdg-open' (or `open' on a MacOS machine).
 
 Operates on the current row. The table must have a primary key."
+  (interactive)
   (pgmacs-funcall-cell
    (lambda (cell-value)
      (let* ((prompt "Async command: ")
@@ -856,6 +967,7 @@ Operates on the current row. The table must have a primary key."
 (defun pgmacs--downcase-value (&rest _ignore)
   "Downcase the value in the cell at point and update PostgreSQL.
 Operates on the current row. The table must have a primary key."
+  (interactive)
   (when (null pgmacs--table-primary-keys)
     (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let ((current-row (pgmacstbl-current-object))
@@ -874,6 +986,7 @@ Operates on the current row. The table must have a primary key."
 (defun pgmacs--upcase-value (&rest _ignore)
   "Upcase the value in the cell at point and update PostgreSQL.
 Operates on the CURRENT-ROW. The table must have a primary key."
+  (interactive)
   (when (null pgmacs--table-primary-keys)
     (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let ((current-row (pgmacstbl-current-object))
@@ -892,6 +1005,7 @@ Operates on the CURRENT-ROW. The table must have a primary key."
 (defun pgmacs--capitalize-value (&rest _ignore)
   "Capitalize the value in the cell at point and update PostgreSQL.
 Operates on the current row. The table must have a primary key."
+  (interactive)
   (when (null pgmacs--table-primary-keys)
     (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let ((current-row (pgmacstbl-current-object))
@@ -1057,10 +1171,11 @@ Operates on the current row. The table must have a primary key."
                       :size (min 200 (+ 5 (length current-string)))
                       (format "%s" current-value))))))
 
-(defun pgmacs--edit-value-widget (row)
+(defun pgmacs--edit-value-widget (&rest _ignored)
   "Edit and update in PostgreSQL the value at point in ROW.
 Uses a dedicated widget buffer.  Editing is only possible if the current table
 has a primary key."
+  (interactive)
   (when (null pgmacs--table-primary-keys)
     (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((con pgmacs--con)
@@ -1076,7 +1191,7 @@ has a primary key."
          (pk (cl-first pgmacs--table-primary-keys))
          (pk-col-id (cl-position pk cols :key #'pgmacstbl-column-name :test #'string=))
          (pk-col-type (aref pgmacs--column-type-names pk-col-id))
-         (pk-value (and pk-col-id (nth pk-col-id row))))
+         (pk-value (and pk-col-id (nth pk-col-id current-row))))
     (unless pk-value
       (error "Can't find value for primary key %s" pk))
     (let* ((current (nth col-id current-row))
@@ -1152,6 +1267,7 @@ has a primary key."
 
 (defun pgmacs--view-value (&rest _ignore)
   "Insert column value at point into a dedicated buffer."
+  (interactive)
   (let* ((db-buffer pgmacs--db-buffer)
          (col-id (pgmacstbl-current-column))
          (cols (pgmacstbl-columns (pgmacstbl-current-table)))
@@ -1176,6 +1292,7 @@ has a primary key."
 (defun pgmacs--delete-row (&rest _ignore)
   "Delete the row at point from the database table.
 Deletion is only possible when the table has primary key."
+  (interactive)
   (when (null pgmacs--table-primary-keys)
     (user-error "Can't edit content of a table that has no PRIMARY KEY"))
   (let* ((pgmacstbl (pgmacstbl-current-table))
@@ -1260,6 +1377,7 @@ Deletion is only possible when the table has primary key."
 Uses the minibuffer to prompt for new values."
   ;; TODO we need to handle the case where there is no existing pgmacstbl because the underlying SQL
   ;; table is empty.
+  (interactive)
   (let* ((pgmacstbl (pgmacstbl-current-table))
          (cols (pgmacstbl-columns pgmacstbl))
          (current-row (pgmacstbl-current-object))
@@ -1301,6 +1419,7 @@ Uses the minibuffer to prompt for new values."
   "Insert a new row of data into the current table after point.
 Uses a widget-based buffer to prompt for new values.  Updates the
 PostgreSQL database."
+  (interactive)
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
          (table pgmacs--table)
@@ -1378,6 +1497,7 @@ PostgreSQL database."
 
 (defun pgmacs--copy-row (&rest _ignore)
   "Copy CURRENT-ROW to the PGmacs internal kill ring."
+  (interactive)
   (setq pgmacs--kill-ring (cons pgmacs--table (pgmacstbl-current-object)))
   (message "Row copied to PGmacs kill ring"))
 
@@ -1388,6 +1508,7 @@ The new row contents are based on the last copied row. Columns for which
 a default SQL value is defined (such as a SERIAL type) will take the
 default value instead of the last copied value.
 Updates the PostgreSQL database."
+  (interactive)
   (unless pgmacs--kill-ring
     (user-error "PGmacs kill ring is empty"))
   (unless (eq (car pgmacs--kill-ring) pgmacs--table)
@@ -1908,6 +2029,7 @@ Table names are schema-qualified if the schema is non-default."
 
 (defun pgmacs--table-to-csv (&rest _ignore)
   "Dump the current PostgreSQL table in CSV format into an Emacs buffer."
+  (interactive)
   (when (eq (pgcon-server-variant pgmacs--con) 'cratedb)
     (user-error "CrateDB does not support COPY TO STDOUT"))
   (when (eq (pgcon-server-variant pgmacs--con) 'materialize)
@@ -1937,6 +2059,7 @@ Table names are schema-qualified if the schema is non-default."
 ;; Autoincremented columns are difficult to manage for distributed databases.
 (defun pgmacs--add-primary-key (&rest _ignore)
   "Add a PRIMARY KEY to the current PostgreSQL table."
+  (interactive)
   (let ((pk (pgmacs--table-primary-keys pgmacs--con pgmacs--table)))
     (when pk
       (user-error "Table %s already has a primary key %s" (pgmacs--display-identifier pgmacs--table) pk)))
@@ -1995,11 +2118,13 @@ Table names are schema-qualified if the schema is non-default."
 ;;
 ;; TODO: allow user to edit the definition of a function, using a query such as that provided
 ;; at https://stackoverflow.com/questions/12148914/get-definition-of-function-sequence-type-etc-in-postgresql-with-sql-query
-(defun pgmacs--proc-list-RET (proc-row)
+(defun pgmacs--proc-list-RET (&rest _ignore)
   "Handle RET on a row in the proc-list buffer PROC-ROW."
+  (interactive)
   (pgmacs--start-progress-reporter "Retrieving procedure data from PostgreSQL")
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
+         (proc-row (pgmacstbl-current-object))
          (oid (nth 6 proc-row))
          (sql "SELECT pg_catalog.pg_get_function_arguments(p.oid) AS arguments,
                       t.typname AS return_type,
@@ -2035,9 +2160,11 @@ Table names are schema-qualified if the schema is non-default."
       (shrink-window-if-larger-than-buffer)))
   (pgmacs--stop-progress-reporter))
 
-(defun pgmacs--proc-list-delete (proc-row)
+(defun pgmacs--proc-list-delete (&rest _ignore)
+  (interactive)
   (let* ((pgmacstbl (pgmacstbl-current-table))
          (con pgmacs--con)
+         (proc-row (pgmacstbl-current-object))
          (oid (nth 6 proc-row))
          (sql "SELECT pg_catalog.pg_get_function_arguments(p.oid)
                FROM pg_catalog.pg_proc p
@@ -2096,25 +2223,7 @@ Table names are schema-qualified if the schema is non-default."
                      :row-colors pgmacs-row-colors
                      :face 'pgmacs-table-data
                      :objects (pg-result res :tuples)
-                     ;; FIXME move to the :keymap argument to allow user customization of the keybindings
-                     :actions '("h" pgmacs--proc-list-help
-                                "?" pgmacs--proc-list-help
-                                "RET" pgmacs--proc-list-RET
-                                "TAB" pgmacs--next-column
-                                "<deletechar>" pgmacs--proc-list-delete
-                                ;; "r" pgmacs--proc-list-rename
-                                ;; "g" pgmacs--proc-list-redraw
-                                ;; the functions pgmacstbl-beginning-of-table and
-                                ;; pgmacstbl-end-of-table don't work when we have inserted text before
-                                ;; the pgmacstbl.
-                                "<" (lambda (&rest _ignored)
-                                      (text-property-search-backward 'pgmacstbl)
-                                      (forward-line))
-                                ">" (lambda (&rest _ignored)
-                                      (text-property-search-forward 'pgmacstbl)
-                                      (previous-line))
-                                "T" pgmacs--switch-to-database-buffer
-                                "q"  (lambda (&rest _ignored) (bury-buffer)))
+                     :keymap pgmacs-proc-list-map
                      :getter (lambda (object column pgmacstbl)
                                (pcase (pgmacstbl-column pgmacstbl column)
                                  ("Schema" (pgmacs--display-table-name (cl-first object)))
@@ -2191,25 +2300,7 @@ Table names are schema-qualified if the schema is non-default."
                      :row-colors pgmacs-row-colors
                      :face 'pgmacs-table-data
                      :objects (pg-result res :tuples)
-                     ;; TODO move to the :keymap argument to allow user customization of keybindings
-                     :actions '("h" pgmacs--proc-list-help
-                                "?" pgmacs--proc-list-help
-                                "RET" pgmacs--proc-list-RET
-                                "TAB" pgmacs--next-column
-                                "<deletechar>" pgmacs--proc-list-delete
-                                ;; "r" pgmacs--proc-list-rename
-                                ;; "g" pgmacs--proc-list-redraw
-                                ;; the functions pgmacstbl-beginning-of-table and
-                                ;; pgmacstbl-end-of-table don't work when we have inserted text before
-                                ;; the pgmacstbl.
-                                "<" (lambda (&rest _ignored)
-                                      (text-property-search-backward 'pgmacstbl)
-                                      (forward-line))
-                                ">" (lambda (&rest _ignored)
-                                      (text-property-search-forward 'pgmacstbl)
-                                      (previous-line))
-                                "T" pgmacs--switch-to-database-buffer
-                                "q"  (lambda (&rest _ignored) (bury-buffer)))
+                     :keymap pgmacs-proc-list-map
                      :getter (lambda (object column pgmacstbl)
                                (pcase (pgmacstbl-column pgmacstbl column)
                                  ("Schema" (pgmacs--display-table-name (cl-first object)))
@@ -2235,6 +2326,7 @@ Table names are schema-qualified if the schema is non-default."
 
 (defun pgmacs--display-procedures (&rest args)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
+  (interactive)
   (pcase (pgcon-server-variant pgmacs--con)
     ((or 'postgresql 'cockroachdb)
      (pgmacs--display-procedures/postgresql args))
@@ -2243,6 +2335,7 @@ Table names are schema-qualified if the schema is non-default."
 
 (defun pgmacs--display-database-list (&rest _ignore)
   "Display the list of databases visible over our PostgreSQL connection."
+  (interactive)
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
          (sql "SELECT d.datname FROM pg_catalog.pg_database d ORDER BY 1")
@@ -2266,6 +2359,7 @@ Table names are schema-qualified if the schema is non-default."
 (defun pgmacs--display-running-queries (&rest _ignore)
   "Display the list of queries running in PostgreSQL.
 Opens a dedicated buffer if the query list is not empty."
+  (interactive)
   (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
@@ -2298,6 +2392,7 @@ Opens a dedicated buffer if the query list is not empty."
 
 (defun pgmacs--display-replication-stats (&rest _ignore)
   "Display the replication status of this PostgreSQL instance."
+  (interactive)
   (let* ((db-buffer pgmacs--db-buffer)
          (con pgmacs--con)
          (res (pg-exec con "SELECT * FROM pg_stat_replication"))
@@ -2322,21 +2417,23 @@ Opens a dedicated buffer if the query list is not empty."
 
 (defun pgmacs--run-analyze (&rest _ignore)
   "Run ANALYZE on the current PostgreSQL table."
+  (interactive)
   (let* ((sql (format "ANALYZE %s" (pg-escape-identifier pgmacs--table)))
          (res (pg-exec pgmacs--con sql)))
     (pgmacs--notify "%s" (pg-result res :status))))
 
 (defun pgmacs--run-count (&rest _ignore)
   "Count the number of rows in the current PostgreSQL table."
+  (interactive)
   (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
   (let* ((sql (format "SELECT COUNT(*) FROM %s" (pg-escape-identifier pgmacs--table)))
          (res (pg-exec pgmacs--con sql))
          (count (cl-first (pg-result res :tuple 0))))
+    (pgmacs--stop-progress-reporter)
     (pgmacs--notify "Table %s has %s row%s"
                     pgmacs--table
                     count
-                    (if (= count 1) "" "s")))
-  (pgmacs--stop-progress-reporter))
+                    (if (= count 1) "" "s"))))
 
 (defun pgmacs--find-completable-symbol ()
   (let ((bounds (bounds-of-thing-at-point 'symbol)))
@@ -2486,6 +2583,7 @@ Opens a dedicated buffer if the query list is not empty."
 ;; But deleting that later is tricky...
 (cl-defun pgmacs--row-list-mark-row ()
   "Mark the current row for deletion."
+  (interactive)
   (when (null pgmacs--table-primary-keys)
     (message "Can't delete from a table that has no PRIMARY KEY")
     (cl-return-from pgmacs--row-list-mark-row))
@@ -2506,6 +2604,7 @@ Opens a dedicated buffer if the query list is not empty."
 (cl-defun pgmacs--row-list-unmark-row (&rest _ignore)
   "Unmark the current row for deletion."
   ;; Note: this line number is zero-based
+  (interactive)
   (when-let* ((line-number (get-text-property (point) 'pgmacstbl-line-number)))
     (cond ((member line-number pgmacs--marked-rows)
            (setq pgmacs--marked-rows (cl-delete line-number pgmacs--marked-rows))
@@ -2527,6 +2626,7 @@ Opens a dedicated buffer if the query list is not empty."
 ;; Bound to "U" in a row-list buffer.
 (cl-defun pgmacs--row-list-unmark-all (&rest _ignore)
   "Unmark all rows (deselect them all for deletion)."
+  (interactive)
   (let* ((table (pgmacstbl-current-table))
          (buffer-read-only nil))
     (dolist (line-number pgmacs--marked-rows)
@@ -2538,6 +2638,7 @@ Opens a dedicated buffer if the query list is not empty."
 (cl-defun pgmacs--row-list-delete-marked ()
   "Delete rows in the current table marked for deletion using `d'.
 Deletion is only possible for tables with a (possibly multicolumn) primary key."
+  (interactive)
   (when (null pgmacs--marked-rows)
     (message "No rows are marked for deletion")
     (cl-return-from pgmacs--row-list-delete-marked))
@@ -2592,6 +2693,7 @@ Deletion is only possible for tables with a (possibly multicolumn) primary key."
 ;; FIXME this SQL query does not work with YDB (BAD_REQUEST message)
 (defun pgmacs--row-list-rename-column (&rest _ignore)
   "Rename the current PostgreSQL column."
+  (interactive)
   (let* ((col-id (pgmacstbl-current-column))
          (cols (pgmacstbl-columns (pgmacstbl-current-table)))
          (col (nth col-id cols))
@@ -2768,67 +2870,7 @@ Runs functions on `pgmacs-row-list-hook'."
                        :columns columns
                        :row-colors pgmacs-row-colors
                        :objects rows
-                       ;; same syntax for keys as keymap-set
-                       ;;
-                       ;; FIXME: it would be preferable to switch to using the :keymap argument
-                       ;; instead of :actions, to use a user-customizable keymap. For this we need
-                       ;; to change all the functions to use pgmacstbl-current-object instead of a
-                       ;; "row" argument.
-                       :actions `("RET" pgmacs--table-list-dwim
-                                  "TAB" pgmacs--next-column
-                                  "w" pgmacs--edit-value-widget
-                                  "!" pgmacs--shell-command-on-value
-                                  "&" pgmacs--async-command-on-value
-                                  "M-u" pgmacs--upcase-value
-                                  "M-l" pgmacs--downcase-value
-                                  "M-c" pgmacs--capitalize-value
-                                  "v" pgmacs--view-value
-                                  "<delete>" pgmacs--delete-row
-                                  "<deletechar>" pgmacs--delete-row
-                                  "<backspace>" pgmacs--delete-row
-                                  "DEL" pgmacs--delete-row
-                                  "<backtab>" pgmacstbl-previous-column
-                                  "R" pgmacs--row-list-rename-column
-                                  "h" pgmacs--row-list-help
-                                  "?" pgmacs--row-list-help
-                                  "o" pgmacs-open-table
-                                  "+" pgmacs--insert-row
-                                  "i" pgmacs--insert-row-widget
-                                  "k" pgmacs--copy-row
-                                  "y" pgmacs--yank-row
-                                  "e" pgmacs-run-sql
-                                  "E" pgmacs-run-buffer-sql
-                                  "S" pgmacs--schemaspy-table
-                                  "W" pgmacs--add-where-filter
-                                  "=" pgmacs--shrink-columns
-                                  ;; pgmacs--redraw-pgmacstbl does not refetch data from PostgreSQL;
-                                  ;; pgmacs--row-list-redraw does refetch.
-                                  "r" pgmacs--redraw-pgmacstbl
-                                  "g" pgmacs--row-list-redraw
-                                  "j" pgmacs--row-as-json
-                                  "d" pgmacs--row-list-mark-row
-                                  "u" pgmacs--row-list-unmark-row
-                                  "U" pgmacs--row-list-unmark-all
-                                  "x" pgmacs--row-list-delete-marked
-                                  ;; "n" and "p" are bound when table is paginated to next/prev page
-                                  "<" (lambda (&rest _ignored)
-                                        (text-property-search-backward 'pgmacstbl)
-                                        (next-line))
-                                  ">" (lambda (&rest _ignored)
-                                        (text-property-search-forward 'pgmacstbl)
-                                        (previous-line))
-                                  "0" (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
-                                  "1" (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
-                                  "2" (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
-                                  "3" (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
-                                  "4" (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
-                                  "5" (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
-                                  "6" (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
-                                  "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
-                                  "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
-                                  "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
-                                  "T" pgmacs--switch-to-database-buffer
-                                  "q" (lambda (&rest ignore) (bury-buffer))))))
+                       :keymap pgmacs-row-list-map/table)))
       (setq-local pgmacs--con con
                   pgmacs--table table
                   pgmacs--offset offset
@@ -3028,6 +3070,7 @@ This refetches data from PostgreSQL and runs hooks on `pgmacs-row-list-hook'."
 
 ;; Shrink each column to the smallest size possible.
 (defun pgmacs--shrink-columns (&rest _ignore)
+  (interactive)
   (let* ((pgmacstbl (pgmacstbl-current-table))
          (widths (pgmacstbl--widths pgmacstbl))
          (cols (pgmacstbl-columns pgmacstbl)))
@@ -3045,20 +3088,22 @@ This refetches data from PostgreSQL and runs hooks on `pgmacs-row-list-hook'."
     (pgmacs--redraw-pgmacstbl)))
 
 
-;; Used in table-list buffer: if point is on a column which REFERENCES a foreign table, then jump to
+;; Used in row-list buffer: if point is on a column which REFERENCES a foreign table, then jump to
 ;; that table on the appropriate row; otherwise prompt to edit using pgmacs--edit-value-minibuffer
-(defun pgmacs--table-list-dwim (row)
+(defun pgmacs--row-list-dwim (&rest _ignore)
+  (interactive)
   (let* ((colinfo (get-text-property (point) 'pgmacs--column-info))
-         (refs (and colinfo (gethash "REFERENCES" colinfo))))
+         (refs (and colinfo (gethash "REFERENCES" colinfo)))
+         (current-row (pgmacstbl-current-object)))
     (if refs
         (let* ((table (cl-first refs))
                (pk (cl-second refs))
                (pk-col-id (pgmacstbl-current-column))
                (pk-col-type (aref pgmacs--column-type-names pk-col-id))
-               (pk-val (nth pk-col-id row))
+               (pk-val (nth pk-col-id current-row))
                (center-on (and pk (list pk pk-val pk-col-type))))
           (pgmacs--display-table table :center-on center-on))
-      (pgmacs--edit-value-minibuffer row))))
+      (pgmacs--edit-value-minibuffer current-row))))
 
 ;; bound to "o". We make sure here to retain a schema-qualified name for a table, because
 ;; pgmacs--display-table needs a schema-qualified name for tables not in the current schema.
@@ -3077,6 +3122,7 @@ Prompt for the table name in the minibuffer."
 ;; than the pgmacstbl.
 (defun pgmacs--redraw-pgmacstbl (&rest _ignore)
   "Redraw the pgmacstbl in the current buffer."
+  (interactive)
   (let ((pgmacstbl (pgmacstbl-current-table))
         (object (pgmacstbl-current-object))
         (column (pgmacstbl-current-column))
@@ -3123,6 +3169,7 @@ Prompt for the table name in the minibuffer."
 
 (defun pgmacs--display-backend-information (&rest _ignore)
   "Create a buffer with information concerning the current PostgreSQL backend."
+  (interactive)
   (let ((con pgmacs--con)
         (db-buffer pgmacs--db-buffer)
         (inhibit-read-only t))
@@ -3215,6 +3262,7 @@ Prompt for the table name in the minibuffer."
 
 (defun pgmacs--display-stat-activity (&rest _ignore)
   "Display information from PostgreSQL's pg_stat_activity table."
+  (interactive)
   (let* ((cols (string-join pgmacs--stat-activity-columns ","))
          (sql (format "SELECT %s FROM pg_catalog.pg_stat_activity" cols)))
     (pgmacs-show-result pgmacs--con sql)))
@@ -3296,6 +3344,7 @@ Uses PostgreSQL connection CON."
                                                :min-width (1+ (max w (length name)))
                                                :formatter fmt
                                                :displayer (pgmacs--make-column-displayer "" nil))))
+                    ;; FIXME we should be using a keymap without the destructive operations here
                     (pgmacstbl (make-pgmacstbl
                                 :insert nil
                                 :use-header-line nil
@@ -3303,37 +3352,13 @@ Uses PostgreSQL connection CON."
                                 :columns columns
                                 :row-colors pgmacs-row-colors
                                 :objects rows
-                                :actions '("TAB" pgmacs--next-column
-                                           "e" pgmacs-run-sql
-                                           "E" pgmacs-run-buffer-sql
-                                           "r" pgmacs--redraw-pgmacstbl
-                                           "j" pgmacs--row-as-json
-                                           "v" pgmacs--view-value
-                                           "o" pgmacs-open-table
-                                           ;; "n" and "p" are bound when table is paginated to next/prev page
-                                           "=" pgmacs--shrink-columns
-                                           "<" (lambda (&rest _ignored)
-                                                 (text-property-search-backward 'pgmacstbl)
-                                                 (next-line))
-                                           ">" (lambda (&rest _ignored)
-                                                 (text-property-search-forward 'pgmacstbl)
-                                                 (previous-line))
-                                           "0" (lambda (&rest _ignored) (pgmacstbl-goto-column 0))
-                                           "1" (lambda (&rest _ignored) (pgmacstbl-goto-column 1))
-                                           "2" (lambda (&rest _ignored) (pgmacstbl-goto-column 2))
-                                           "3" (lambda (&rest _ignored) (pgmacstbl-goto-column 3))
-                                           "4" (lambda (&rest _ignored) (pgmacstbl-goto-column 4))
-                                           "5" (lambda (&rest _ignored) (pgmacstbl-goto-column 5))
-                                           "6" (lambda (&rest _ignored) (pgmacstbl-goto-column 6))
-                                           "7" (lambda (&rest _ignored) (pgmacstbl-goto-column 7))
-                                           "8" (lambda (&rest _ignored) (pgmacstbl-goto-column 8))
-                                           "9" (lambda (&rest _ignored) (pgmacstbl-goto-column 9))
-                                           "q" (lambda (&rest _ignore) (bury-buffer))))))
+                                :keymap pgmacs-row-list-map/table)))
                (pgmacstbl-insert pgmacstbl))))
       (shrink-window-if-larger-than-buffer))))
 
 ;; Bound to TAB in table-list, row-list, proc-list buffers.
 (defun pgmacs--next-column (&rest _ignore)
+  (interactive)
   (let* ((tbl (pgmacstbl-current-table))
          (column-count (length (pgmacstbl-columns tbl)))
          (current-col (pgmacstbl-current-column)))
@@ -3346,9 +3371,11 @@ Uses PostgreSQL connection CON."
 
 ;; If the cursor is on the Comment column, allow the user to set the table comment. Otherwise,
 ;; display the table in a separate buffer.
-(defun pgmacs--table-list-RET (table-row)
+(defun pgmacs--table-list-RET (&rest _ignore)
   "Called on RET on a line in the list-of-tables buffer TABLE-ROW."
+  (interactive)
   (let* ((tbl (pgmacstbl-current-table))
+         (table-row (pgmacstbl-current-object))
          (col-id (pgmacstbl-current-column))
          (col (nth col-id (pgmacstbl-columns tbl)))
          (col-name (pgmacstbl-column-name col))
@@ -3365,9 +3392,11 @@ Uses PostgreSQL connection CON."
           (t
            (pgmacs--display-table table)))))
 
-(defun pgmacs--table-list-delete (table-row)
+(defun pgmacs--table-list-delete (&rest _ignore)
   "Delete (drop) the PostgreSQL table specified by TABLE-ROW."
+  (interactive)
   (let* ((pgmacstbl (pgmacstbl-current-table))
+         (table-row (pgmacstbl-current-object))
          (table (car table-row))
          (t-id (pg-escape-identifier table)))
     (when (yes-or-no-p (format "Really drop PostgreSQL table %s? " t-id))
@@ -3378,9 +3407,11 @@ Uses PostgreSQL connection CON."
         (pgmacstbl-remove-object pgmacstbl table-row)
         (pgmacs--redraw-pgmacstbl)))))
 
-(defun pgmacs--table-list-rename (table-row)
+(defun pgmacs--table-list-rename (&rest _ignore)
   "Rename the PostgreSQL table specified by TABLE-ROW."
+  (interactive)
   (let* ((pgmacstbl (pgmacstbl-current-table))
+         (table-row (pgmacstbl-current-object))
 	 (table (car table-row))
          (t-id (pg-escape-identifier table))
          (new (read-string (format "Rename table %s to: " t-id)))
@@ -3658,27 +3689,7 @@ inlined vector SVG image that is encoded as a data URI."
                   :row-colors pgmacs-row-colors
                   :face 'pgmacs-table-data
                   :objects (pgmacs--list-tables)
-                  :actions '("h" pgmacs--table-list-help
-                             "?" pgmacs--table-list-help
-                             "RET" pgmacs--table-list-RET
-                             "TAB" pgmacs--next-column
-                             "<deletechar>" pgmacs--table-list-delete
-                             "S" pgmacs--schemaspy-database
-                             "R" pgmacs--table-list-rename
-                             "g" pgmacs--table-list-redraw
-                             "o" pgmacs-open-table
-                             "e" pgmacs-run-sql
-                             "E" pgmacs-run-buffer-sql
-                             ;; the functions pgmacstbl-beginning-of-table and
-                             ;; pgmacstbl-end-of-table don't work when we have inserted text before
-                             ;; the pgmacstbl.
-                             "<" (lambda (&rest _ignored)
-                                   (text-property-search-backward 'pgmacstbl)
-                                   (next-line))
-                             ">" (lambda (&rest _ignored)
-                                   (text-property-search-forward 'pgmacstbl)
-                                   (previous-line))
-                             "q"  (lambda (&rest _ignored) (bury-buffer)))
+                  :keymap pgmacs-table-list-map/table
                   :getter (lambda (object column pgmacstbl)
                             (pcase (pgmacstbl-column pgmacstbl column)
                               ("Table" (pgmacs--display-table-name (cl-first object)))

@@ -3,6 +3,13 @@
 
 ## [0.26] - Unreleased
 
+- Use keymaps for all key bindings, to allow customization by the user. There are customizable
+  keymaps for the table-list buffer (`pgmacs-table-list-map`), row-list buffers
+  (`pgmacs-row-list-map`) and proc-list buffers that show the functions and procedures available
+  (`pgmacs-proc-list-map`). These keymaps have child keymaps for keybindings that are only relevant
+  when point is in the tabular data display; for example `pgmacs-row-list-map/table` contains
+  keybindings that act on a specific cell value or move to a specific table column.
+
 - Add workarounds for showing current database settings with PostgreSQL variant YDB (work around the
   missing two-parameter version of `current_setting` function).
 
