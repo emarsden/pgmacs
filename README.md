@@ -6,7 +6,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Latest tagged version](https://img.shields.io/github/v/tag/emarsden/pgmacs?label=Latest%20tagged%20version)](https://github.com/emarsden/pgmacs/)
-[![Container size](https://ghcr-badge.egpl.dev/emarsden/pgmacs/size?label=Container%20image)](https://github.com/users/emarsden/packages/container/package/pgmacs)
+[![Container size](https://ghcr-badge-hwb3.onrender.com/emarsden/pgmacs/size?label=Container%20image)](https://github.com/users/emarsden/packages/container/package/pgmacs)
 [![Documentation build](https://img.shields.io/github/actions/workflow/status/emarsden/pgmacs/mdbook.yml?label=Documentation)](https://github.com/emarsden/pgmacs/actions/)
 ![Beta status](https://img.shields.io/badge/status-beta-blue)
 
@@ -96,7 +96,7 @@ it to modify real PostgreSQL databases used in production.
 has mostly been tested on Linux, but should work as expected on Microsoft Windows and MacOS. It
 works both in graphical mode and in the terminal.
 
-**PostgreSQL version**: PGmacs is primarily tested with PostgreSQL versions 17.4 and 16.4, but
+**PostgreSQL version**: PGmacs is primarily tested with PostgreSQL versions 17.5 and 16.4, but
 should work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate
 with PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
@@ -128,6 +128,9 @@ The following PostgreSQL-compatible databases have been tested:
 - The [Timescale DB](https://www.timescale.com/) extension for time series data works perfectly
   (last tested with version 2.16.1).
 
+- The [CitusDB](https://github.com/citusdata/citus) extension for sharding PostgreSQL over multiple
+  hosts (AGPLv3 licence) works perfectly (last tested 2025-07 with Citus version 13.0).
+
 - The [IvorySQL](https://www.ivorysql.org/) Oracle-compatible flavour of PostgreSQL works perfectly
   (last tested with version 3.4).
 
@@ -139,25 +142,25 @@ The following PostgreSQL-compatible databases have been tested:
 
 - [Google AlloyDB Omni](https://cloud.google.com/alloydb/omni/docs/quickstart) is a proprietary fork
   of PostgreSQL with Google-developed extensions, including a columnar storage extension, adaptive
-  autovacuum, and an index advisor. It works perfectly with PGmacs as of 2025-06.
+  autovacuum, and an index advisor. It works perfectly with PGmacs as of 2025-07.
 
 - [YugabyteDB](https://yugabyte.com/) works to a limited extent: we are not able to run the SQL
   command that adds a PRIMARY KEY to an existing table, nor to display total database size on disk,
-  for example. It does support some extensions such as pgvector, for example. Last tested 2025-06
+  for example. It does support some extensions such as pgvector, for example. Last tested 2025-07
   with v2.25.
   
 - [CrateDB](https://crate.io/) works with limited functionality: for example querying the list of
-  defined procedures and functions triggers an internal error in CrateDB. Last tested 2025-06 with
-  v5.10.9.
+  defined procedures and functions triggers an internal error in CrateDB. Last tested 2025-07 with
+  v5.10.10.
 
 - [CockroachDB](https://github.com/cockroachdb/cockroach) works with limited functionality: for
   example the list of defined procedures and functions is not properly populated. Lasted tested
-  2025-06 with version 25.2.
+  2025-07 with version 25.2.
 
 - The [RisingWave](https://github.com/risingwavelabs/risingwave) event streaming database (Apache
   license) is mostly working. It does not support `GENERATED ALWAYS AS IDENTITY` or `SERIAL`
   columns, nor `VACUUM ANALYZE`. The database does not implement column renaming. Last tested
-  2025-06 with v2.1.1.
+  2025-07 with v2.4.3.
 
 - [Xata](https://xata.io/) “serverless PostgreSQL” has many limitations including lack of support
   for `CREATE DATABASE`, `CREATE COLLATION`, for XML processing, for temporary tables, for cursors,
@@ -174,19 +177,21 @@ The following PostgreSQL-compatible databases have been tested:
 - The [Materialize](https://materialize.com/) operational database (a proprietary differential
   dataflow database) has many limitations in its PostgreSQL compatibility: no support for primary
   keys, unique constraints, check constraints, for the 'bit' type for example. It works with these
-  limitations with PGmacs (last tested 2025-06 with Materialize v0.148).
+  limitations with PGmacs (last tested 2025-07 with Materialize v0.149).
 
 - [YDB by Yandex](https://ydb.tech/docs/en/postgresql/docker-connect) has limited PostgreSQL
   compatibility (for example, it does not support foreign key references), but works with limited
-  functionality with PGmacs. Lasted tested 2025-06 with version 23-4.
+  functionality with PGmacs. Lasted tested 2025-07 with version 23-4.
 
 - ClickHouse does not work: its implementation of the wire protocol is very limited, with no support
   for the `pg_type` metadata and no support for basic PostgreSQL-flavoured SQL commands such as
   `SET`. Last tested with v24.5.
 
-- Hosted PostgreSQL services that have been tested: [Railway.app](https://railway.app/) is running a
-  Debian build of PostgreSQL 16.4, and works fine; [Aiven.io](https://aiven.io/) is running a Red
-  Hat build of PostgreSQL 16.4 on Linux/Aarch64 and works fine.
+- Hosted PostgreSQL services that have been tested: as of 2025-07 render.com is running a Debian
+  build of PostgreSQL 16.8 and works fine (requires TLS connection);
+  [Railway.app](https://railway.app/) is running a Debian build of PostgreSQL 16.4, and works fine;
+  [Aiven.io](https://aiven.io/) is running a Red Hat build of PostgreSQL 16.4 on Linux/Aarch64 and
+  works fine.
 
 - Untested but likely to work: Amazon RDS, Google Cloud SQL, Azure Database for PostgreSQL, Amazon
   Aurora. You may however encounter difficulties with TLS connections, as noted above.
