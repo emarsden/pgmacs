@@ -1,6 +1,15 @@
 # Changelog
 
 
+## [0.27] - Unreleased
+
+- Rename `pgmacs--delete-row` to `pgmacs--row-list-delete-row`.
+
+- Rename `pgmacs--next-column` to `pgmacs--next-item`. This function can now be used outside the
+  data table, and moves to the next button or to the beginning of the data table.
+
+
+
 ## [0.26] - 2025-07-09
 
 - Use keymaps for all key bindings, to allow customization by the user. There are customizable

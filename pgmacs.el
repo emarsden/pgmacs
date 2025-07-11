@@ -265,6 +265,10 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
         (unless (funcall condition)
           (setq disabled t)))
       (unless disabled
+        ;; TODO: the default keymap for these buttons binds TAB to next-button when point is inside
+        ;; the button, but we would prefer to bind it to pgmacs--next-item (which moves to the data
+        ;; table when it's on the last button, rather than wrapping to the first button in the
+        ;; buffer). Perhaps we should override the 'keymap property on the button.
         (insert-text-button label 'action action 'help-echo help-echo)))))
 
 ;; It is possible to customize the row of text buttons that is displayed above the list of tables in
@@ -360,22 +364,22 @@ Uses customizations implemented in Emacs' customize support."
 
 (defvar-keymap pgmacs-table-list-map
   :doc "Keymap for PGmacs table-list buffers"
-  (kbd "h") #'pgmacs--table-list-help
-  (kbd "?") #'pgmacs--table-list-help
-  (kbd "g") #'pgmacs--table-list-redraw
-  (kbd "o") #'pgmacs-open-table
-  (kbd "e") #'pgmacs-run-sql
-  (kbd "E") #'pgmacs-run-buffer-sql
-  (kbd "=") #'pgmacs--shrink-columns
-  (kbd "r") #'pgmacs--redraw-pgmacstbl
-  (kbd "T") #'pgmacs--switch-to-database-buffer
-  (kbd "q") #'bury-buffer)
+  "TAB"   #'pgmacs--next-item
+  "h"     #'pgmacs--table-list-help
+  "?"     #'pgmacs--table-list-help
+  "g"     #'pgmacs--table-list-redraw
+  "o"     #'pgmacs-open-table
+  "e"     #'pgmacs-run-sql
+  "E"     #'pgmacs-run-buffer-sql
+  "="     #'pgmacs--shrink-columns
+  "r"     #'pgmacs--redraw-pgmacstbl
+  "T"     #'pgmacs--switch-to-database-buffer
+  "q"     #'bury-buffer)
 
 (defvar-keymap pgmacs-table-list-map/table
   :doc "Keymap for PGmacs table-list buffers when point is in a table"
   :parent pgmacs-table-list-map
   "RET"          #'pgmacs--table-list-RET
-  "TAB"          #'pgmacs--next-column
   "<deletechar>" #'pgmacs--table-list-delete
   "S"            #'pgmacs--schemaspy-database
   "R"            #'pgmacs--table-list-rename
@@ -478,20 +482,21 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 
 (defvar-keymap pgmacs-row-list-map
   :doc "Keymap for PGmacs row-list buffers"
-  (kbd "q") #'bury-buffer
-  (kbd "h") #'pgmacs--row-list-help
-  (kbd "?") #'pgmacs--row-list-help
-  (kbd "i") #'pgmacs--insert-row-empty
-  (kbd "o") #'pgmacs-open-table
+  "TAB"   #'pgmacs--next-item
+  "q"     #'bury-buffer
+  "h"     #'pgmacs--row-list-help
+  "?"     #'pgmacs--row-list-help
+  "i"     #'pgmacs--insert-row-empty
+  "o"     #'pgmacs-open-table
   ;; pgmacs--redraw-pgmacstbl does not refetch data from PostgreSQL;
   ;; pgmacs--row-list-redraw does refetch.
-  (kbd "r")  #'pgmacs--redraw-pgmacstbl
-  (kbd "g")  #'pgmacs--row-list-redraw
-  (kbd "e") #'pgmacs-run-sql
-  (kbd "E") #'pgmacs-run-buffer-sql
-  (kbd "W") #'pgmacs--add-where-filter
-  (kbd "S") #'pgmacs--schemaspy-table
-  (kbd "T") #'pgmacs--switch-to-database-buffer)
+  "r"     #'pgmacs--redraw-pgmacstbl
+  "g"     #'pgmacs--row-list-redraw
+  "e"     #'pgmacs-run-sql
+  "E"     #'pgmacs-run-buffer-sql
+  "W"     #'pgmacs--add-where-filter
+  "S"     #'pgmacs--schemaspy-table
+  "T"     #'pgmacs--switch-to-database-buffer)
 
 ;; Additional keybindings for a row-list buffer when the point is inside the table that displays
 ;; row data.
@@ -501,18 +506,17 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   :doc "Keymap for PGmacs row-list buffers when point is in a table"
   :parent pgmacs-row-list-map
   "RET"          #'pgmacs--row-list-dwim
-  "TAB"          #'pgmacs--next-column
   "w"            #'pgmacs--edit-value-widget
-  (kbd "!")      #'pgmacs--shell-command-on-value
-  (kbd "&")      #'pgmacs--async-command-on-value
+  "!"            #'pgmacs--shell-command-on-value
+  "&"            #'pgmacs--async-command-on-value
   "M-u"          #'pgmacs--upcase-value
   "M-l"          #'pgmacs--downcase-value
   "M-c"          #'pgmacs--capitalize-value
   (kbd "v")      #'pgmacs--view-value
-  "<delete>"     #'pgmacs--delete-row
-  "<deletechar>" #'pgmacs--delete-row
-  "<backspace>"  #'pgmacs--delete-row
-  "DEL"          #'pgmacs--delete-row
+  "<delete>"     #'pgmacs--row-list-delete-row
+  "<deletechar>" #'pgmacs--row-list-delete-row
+  "<backspace>"  #'pgmacs--row-list-delete-row
+  "DEL"          #'pgmacs--row-list-delete-row
   "<backtab>"    #'pgmacstbl-previous-column
   (kbd "R")      #'pgmacs--row-list-rename-column
   (kbd "+")      #'pgmacs--insert-row
@@ -549,7 +553,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   "h"            #'pgmacs--proc-list-help
   "?"            #'pgmacs--proc-list-help
   "RET"          #'pgmacs--proc-list-RET
-  "TAB"          #'pgmacs--next-column
+  "TAB"          #'pgmacs--next-item
   "<deletechar>" #'pgmacs--proc-list-delete
   "T"            #'pgmacs--switch-to-database-buffer
   ;; "r" pgmacs--proc-list-rename
@@ -1289,7 +1293,7 @@ has a primary key."
     (setq buffer-read-only t)
     (goto-char (point-min))))
 
-(defun pgmacs--delete-row (&rest _ignore)
+(defun pgmacs--row-list-delete-row (&rest _ignore)
   "Delete the row at point from the database table.
 Deletion is only possible when the table has primary key."
   (interactive)
@@ -3352,22 +3356,33 @@ Uses PostgreSQL connection CON."
       (shrink-window-if-larger-than-buffer))))
 
 ;; Bound to TAB in table-list, row-list, proc-list buffers.
-(defun pgmacs--next-column (&rest _ignore)
+(defun pgmacs--next-item (&rest _ignore)
+  "Move to the next column or next active button in a PGmacs buffer."
   (interactive)
-  (let* ((tbl (pgmacstbl-current-table))
-         (column-count (length (pgmacstbl-columns tbl)))
-         (current-col (pgmacstbl-current-column)))
-    (when current-col
-      (cond ((eql current-col (1- column-count))
-             (forward-line)
-             (pgmacstbl-goto-column 0))
-            (t
-             (pgmacstbl-next-column))))))
+  (let ((tbl (pgmacstbl-current-table)))
+    (if tbl
+        ;; If we are inside the data table, move to the next column (including moving down a line if
+        ;; we are on the last column).
+        (let* ((column-count (length (pgmacstbl-columns tbl)))
+               (current-col (pgmacstbl-current-column)))
+          (when current-col
+            (cond ((eql current-col (1- column-count))
+                   (forward-line)
+                   (pgmacstbl-goto-column 0))
+                  (t
+                   (pgmacstbl-next-column)))))
+      ;; Outside the data table, move to the next active button, or to the beginning of the data table.
+      (let ((btn (next-button (point))))
+        (if btn
+            (goto-char btn)
+          (text-property-search-forward 'pgmacstbl)
+          (text-property-search-backward 'pgmacstbl))))))
+
 
 ;; If the cursor is on the Comment column, allow the user to set the table comment. Otherwise,
 ;; display the table in a separate buffer.
 (defun pgmacs--table-list-RET (&rest _ignore)
-  "Called on RET on a line in the list-of-tables buffer TABLE-ROW."
+  "Called on RET on a line in the list-of-tables buffer."
   (interactive)
   (let* ((tbl (pgmacstbl-current-table))
          (table-row (pgmacstbl-current-object))
