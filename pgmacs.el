@@ -427,14 +427,14 @@ PGmacs provides an editing interface for PostgreSQL. The main
 PGmacs table-list buffer that is displayed when you connect to a
 database backend allows you to:
  - browse the list of tables in the database
- - browse/edit a table (type `RET' on the table name or `o' to be
+ - browse/edit a table (type `\\[pgmacs--table-list-RET]' on the table name or `\\[pgmacs-open-table]' to be
    prompted for a table name in the minibuffer)
- - delete a table (type `DEL' on the table name)
- - rename a table (type `\\[pgmacs-table-list-rename]' on the table name)
+ - delete a table (type `\\[pgmacs--table-list-delete]' on the table name)
+ - rename a table (type `\\[pgmacs--table-list-rename]' on the table name)
  - modify the SQL comment on a table (type `RET' in the `comment' column)
- - show the output from an SQL query in table mode (type `e' to enter the
+ - show the output from an SQL query in table mode (type `\\[pgmacs-run-sql]' to enter the
    SQL query in the minibuffer)
- - run SchemaSpy on the database to view its structure (type `S', only
+ - run SchemaSpy on the database to view its structure (type `\\[pgmacs--schemaspy-database]', only
    available in graphical mode)
  - type `h' to show buffer-specific help and keybindings
 
@@ -443,25 +443,25 @@ database table along with metainformation on the table (column
 types and associated SQL constraints, on-disk size, table owner),
 you can:
  - browse the table contents row by row, in paginated mode for large
-   tables. Type `n' and `p' to move to the next/previous page in a
+   tables. Type `\\[pgmacs--paginated-next]' and `\\[pgmacs--paginated-prev]' to move to the next/previous page in a
    paginated buffer.
  - use `M-right' and `M-left' to move to the next/previous column,
    type a number to move to that column (numbering is zero-based)
- - edit the data value at point (type `RET' on the value you want to
-   modify to edit it in the minibuffer, or `w' to open a dedicated
+ - edit the data value at point (type `\\[pgmacs--row-list-dwim]' on the value you want to
+   modify to edit it in the minibuffer, or `\\[pgmacs--edit-value-widget]' to open a dedicated
    widget-based editing buffer)
- - insert a new row by typing `+' (you will be prompted in the minibuffer
+ - insert a new row by typing `\\[pgmacs--insert-row]' (you will be prompted in the minibuffer
    for new values, unless an SQL default value is defined) or by typing
-   `i' (opens a dedicated widget-based buffer for you to enter the new
+   `\\[pgmacs--insert-row-widget]' (opens a dedicated widget-based buffer for you to enter the new
    values).
- - copy the current row to the kill ring in JSON format (type `j' on the
+ - copy the current row to the kill ring in JSON format (type `\\[pgmacs--row-as-json]' on the
    row you want to serialize to JSON)
- - delete a row (type `DEL' on the row you wish to delete)
- - copy/paste rows of a database table (type `k' to copy, `y' to paste)
+ - delete a row (type `\\[pgmacs--row-list-delete-row]' on the row you wish to delete)
+ - copy/paste rows of a database table (type `\\[pgmacs--copy-row]' to copy, `\\[pgmacs--yank-row]' to paste)
  - export the contents of a table to CSV using a dedicated button
- - type `S' to run SchemaSpy on the current table and display its structure
- - type `o' to open a new row-list buffer for another table
- - type `T' to jump back to the main table-list buffer
+ - type `\\[pgmacs--schemaspy-table]' to run SchemaSpy on the current table and display its structure
+ - type `\\[pgmacs-open-table]' to open a new row-list buffer for another table
+ - type `\\[pgmacs--switch-to-database-buffer]' to jump back to the main table-list buffer
  - type `h' to show buffer-specific help and keybindings
 
 Please note that edits, insertions and deletions are made immediately on
@@ -1503,7 +1503,7 @@ PostgreSQL database."
       (widget-forward 1))))
 
 (defun pgmacs--copy-row (&rest _ignore)
-  "Copy CURRENT-ROW to the PGmacs internal kill ring."
+  "Copy the current row to the PGmacs internal kill ring."
   (interactive)
   (setq pgmacs--kill-ring (cons pgmacs--table (pgmacstbl-current-object)))
   (message "Row copied to PGmacs kill ring"))
@@ -2652,7 +2652,7 @@ Opens a dedicated buffer if the query list is not empty."
 
 ;; Bound to "x" in a row-list buffer.
 (cl-defun pgmacs--row-list-delete-marked (&rest _ignore)
-  "Delete rows in the current table marked for deletion using `d'.
+  "Delete rows in the current table marked for deletion using `\\[pgmacs--row-list-mark-row]'.
 Deletion is only possible for tables with a (possibly multicolumn) primary key."
   (interactive)
   (when (null pgmacs--marked-rows)
@@ -3435,7 +3435,7 @@ Uses PostgreSQL connection CON."
         (pgmacs--redraw-pgmacstbl)))))
 
 (defun pgmacs--table-list-rename (&rest _ignore)
-  "Rename the PostgreSQL table specified by TABLE-ROW."
+  "Rename the PostgreSQL table at point."
   (interactive)
   (let* ((pgmacstbl (pgmacstbl-current-table))
          (table-row (pgmacstbl-current-object))
