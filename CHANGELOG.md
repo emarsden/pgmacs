@@ -8,6 +8,8 @@
 - Rename `pgmacs--next-column` to `pgmacs--next-item`. This function can now be used outside the
   data table, and moves to the next button or to the beginning of the data table.
 
+- Help buffers: look up the currently used keybinding for each available function, instead of using
+  hardcoded bindings which may have been modified by the user.
 
 
 ## [0.26] - 2025-07-09
