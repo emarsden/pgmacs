@@ -2170,6 +2170,7 @@ Table names are schema-qualified if the schema is non-default."
   (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--proc-list-delete (&rest _ignore)
+  "Delete the procedure or function at point in a PGmacs proc-list buffer."
   (interactive)
   (let* ((pgmacstbl (pgmacstbl-current-table))
          (con pgmacs--con)
@@ -2706,7 +2707,7 @@ Deletion is only possible for tables with a (possibly multicolumn) primary key."
                  (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))
     (setq pgmacs--marked-rows (list))))
 
-;; FIXME this SQL query does not work with YDB (BAD_REQUEST message)
+;; FIXME this SQL query does not work with YDB (BAD_REQUEST message) nor with RisingWave (unimplemented).
 (defun pgmacs--row-list-rename-column (&rest _ignore)
   "Rename the current PostgreSQL column."
   (interactive)
@@ -2926,18 +2927,19 @@ Runs functions on `pgmacs-row-list-hook'."
                  (cif (pgmacs--format-column-info ci)))
             (insert (propertize (format "%c " structure-char) 'face 'shadow))
             (insert (format "%s: %s  " col cif))
-            (insert-text-button "Rename column"
-                                'action `(lambda (&rest _ignore)
-                                           (let* ((prompt (format "New name for column %s: " ,col))
-                                                  (new (read-from-minibuffer prompt))
-                                                  (sql (format "ALTER TABLE %s RENAME COLUMN %s TO %s"
-                                                               (pg-escape-identifier ,table)
-                                                               (pg-escape-identifier ,col)
-                                                               (pg-escape-identifier new)))
-                                                  (res (pg-exec ,con sql)))
-                                             (pgmacs--notify "%s" (pg-result res :status))
-                                             (pgmacs--display-table ,table)))
-                                'help-echo "Rename this column")
+            (unless (member (pgcon-server-variant con) '(risingwave))
+              (insert-text-button "Rename column"
+                                  'action `(lambda (&rest _ignore)
+                                             (let* ((prompt (format "New name for column %s: " ,col))
+                                                    (new (read-from-minibuffer prompt))
+                                                    (sql (format "ALTER TABLE %s RENAME COLUMN %s TO %s"
+                                                                 (pg-escape-identifier ,table)
+                                                                 (pg-escape-identifier ,col)
+                                                                 (pg-escape-identifier new)))
+                                                    (res (pg-exec ,con sql)))
+                                               (pgmacs--notify "%s" (pg-result res :status))
+                                               (pgmacs--display-table ,table)))
+                                  'help-echo "Rename this column"))
             (insert "   ")
             (cond ((pg-column-comment con table col)
                    (insert-text-button
@@ -3134,7 +3136,7 @@ Prompt for the table name in the minibuffer."
                     identifier)))
     (pgmacs--display-table table)))
 
-;; This is similar to pgmacstbl-revert, but works correctly with a buffer than contains content other
+;; This is similar to pgmacstbl-revert, but works correctly with a buffer that contains content other
 ;; than the pgmacstbl.
 (defun pgmacs--redraw-pgmacstbl (&rest _ignore)
   "Redraw the pgmacstbl in the current buffer."
@@ -3399,7 +3401,8 @@ Uses PostgreSQL connection CON."
 ;; If the cursor is on the Comment column, allow the user to set the table comment. Otherwise,
 ;; display the table in a separate buffer.
 (defun pgmacs--table-list-RET (&rest _ignore)
-  "Called on RET on a line in the list-of-tables buffer."
+  "In the table-list buffer, open the table at point or update table comment.
+Called on RET on a line in the table-list buffer."
   (interactive)
   (let* ((tbl (pgmacstbl-current-table))
          (table-row (pgmacstbl-current-object))
