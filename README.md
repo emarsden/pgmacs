@@ -92,8 +92,8 @@ it to modify real PostgreSQL databases used in production.
 
 ## Supported platforms
 
-**Emacs version**: PGmacs requires Emacs version 29. It is tested mostly on Emacs 30.1 and 29.4. It
-has mostly been tested on Linux, but should work as expected on Microsoft Windows and MacOS. It
+**Emacs version**: PGmacs requires Emacs version 29 or later. It is tested mostly on Emacs 30.1 and
+29.4. It is mostly tested on Linux, but should work as expected on Microsoft Windows and MacOS. It
 works both in graphical mode and in the terminal.
 
 **PostgreSQL version**: PGmacs is primarily tested with PostgreSQL versions 17.5 and 16.4, but
@@ -120,7 +120,7 @@ points where this compatibility may be problematic:
 
 The following PostgreSQL-compatible databases have been tested:
 
-- [Neon](https://neon.tech/) “serverless PostgreSQL” works perfectly.
+- [Neon](https://neon.tech/) “serverless PostgreSQL” works perfectly (last tested 2025-07).
 
 - [ParadeDB](https://www.paradedb.com/) seems to work fine in limited testing (it's really a
   PostgreSQL extension rather than a fully separate product). Last tested with v0.9.1.
@@ -157,6 +157,11 @@ The following PostgreSQL-compatible databases have been tested:
   example the list of defined procedures and functions is not properly populated. Lasted tested
   2025-07 with version 25.2.
 
+- [PolarDB for PostgreSQL](https://github.com/ApsaraDB/PolarDB-for-PostgreSQL) is free software
+  (Apache 2 licence) developed by Alibaba Cloud, also available as a commercial hosted service with
+  a proprietary distributed storage architecture. It works perfectly with PGmacs (last tested
+  2025-07 with version 15.13).
+
 - The [RisingWave](https://github.com/risingwavelabs/risingwave) event streaming database (Apache
   license) is mostly working. It does not support `GENERATED ALWAYS AS IDENTITY` or `SERIAL`
   columns, nor `VACUUM ANALYZE`. The database does not implement column renaming. Last tested
@@ -167,7 +172,7 @@ The following PostgreSQL-compatible databases have been tested:
   for `EXPLAIN`, for `CREATE EXTENSION`, for functions such as `pg_notify`.
 
 - [QuestDB](https://questdb.io/) has very limited PostgreSQL support, and does not support the
-  `integer` type for example. Last tested 2024-04 against version 8.3.3.
+  `integer` type for example. Last tested 2024-07 against version 9.0.0.
 
 - [Google Spanner](https://cloud.google.com/spanner), or at least the Spanner emulator (that reports
   itself as `PostgreSQL 14.1`) and the PGAdapter library that enables support for the PostgreSQL
