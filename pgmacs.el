@@ -3236,6 +3236,8 @@ Prompt for the table name in the minibuffer."
       (show "server_encoding" "Server encoding")
       (show "TimeZone" "Server timezone")
       (show "shared_memory_size" "Server shared memory size")
+      (show "datestyle" "Date style")
+      (show "search_path" "Search path")
       (unless (member (pgcon-server-variant con) '(cockroachdb cratedb materialize))
         (let* ((res (pg-exec con "SELECT pg_catalog.pg_listening_channels()"))
                (channels (pg-result res :tuples)))
@@ -3269,6 +3271,10 @@ Prompt for the table name in the minibuffer."
                          (search-forward (car ext))
                          (recenter))))
             (insert "\n"))))
+      (when (eq (pgcon-server-variant con) 'cockroachdb)
+        (insert "\nCockroachDB users\n")
+        (let ((res (pg-exec con "SHOW USERS")))
+          (pgmacs--show-pgresult (current-buffer) res)))
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min))
       (pgmacs-transient-mode)
@@ -3334,6 +3340,7 @@ Uses PostgreSQL connection CON."
     (insert (format ": %s\n\n" sql)))
   (let* ((res (pg-exec con sql)))
     (pgmacs--show-pgresult (current-buffer) res))
+  (shrink-window-if-larger-than-buffer)
   (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--show-pgresult (buffer pgresult)
@@ -3371,8 +3378,7 @@ Uses PostgreSQL connection CON."
                                 :row-colors pgmacs-row-colors
                                 :objects rows
                                 :keymap pgmacs-row-list-map/table)))
-               (pgmacstbl-insert pgmacstbl))))
-      (shrink-window-if-larger-than-buffer))))
+               (pgmacstbl-insert pgmacstbl)))))))
 
 ;; Bound to TAB in table-list, row-list, proc-list buffers.
 (defun pgmacs--next-item (&rest _ignore)

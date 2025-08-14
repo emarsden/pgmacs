@@ -11,6 +11,8 @@
 - Help buffers: look up the currently used keybinding for each available function, instead of using
   hardcoded bindings which may have been modified by the user.
 
+- CockroachDB: show information on the configured users in the “More backend information” buffer.
+
 
 ## [0.26] - 2025-07-09
 
