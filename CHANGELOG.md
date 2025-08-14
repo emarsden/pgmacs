@@ -17,6 +17,9 @@
 - Risingwave variant: improve the “More backend information” buffer, and implement the “display
   functions” feature. Implement a “Show jobs” button that displays streaming jobs in progress.
 
+- Materialize variant: show more information in the “More backend information” buffer, and implement
+  a “Show connections” button.
+
 
 ## [0.26] - 2025-07-09
 

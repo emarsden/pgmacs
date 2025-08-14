@@ -307,6 +307,11 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :label "Show jobs"
          :action #'pgmacs--display-jobs/risingwave
          :help-echo "Show all streaming jobs in process")
+        (pgmacs-shortcut-button
+         :condition (lambda () (eq (pgcon-server-variant pgmacs--con) 'materialize))
+         :label "Show connections"
+         :action #'pgmacs--display-connections/materialize
+         :help-echo "Show all connections configured in Materialize")
 	(pgmacs-shortcut-button
          :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize risingwave))))
 	 :label "Replication stats"
@@ -3308,6 +3313,10 @@ Prompt for the table name in the minibuffer."
         ('risingwave
          (insert "\nRisingwave 'show parameters' output\n")
          (let ((res (pg-exec con "SHOW PARAMETERS")))
+           (pgmacs--show-pgresult (current-buffer) res)))
+        ('materialize
+         (insert "\nMaterialize 'show all' output\n")
+         (let ((res (pg-exec con "SHOW ALL")))
            (pgmacs--show-pgresult (current-buffer) res))))
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min))
@@ -3329,6 +3338,11 @@ Prompt for the table name in the minibuffer."
   "Display information on Risingwave streaming jobs in progress."
   (interactive)
   (pgmacs-show-result pgmacs--con "SHOW JOBS"))
+
+(defun pgmacs--display-connections/materialize (&rest _ignore)
+  "Display information on Materialize connections."
+  (interactive)
+  (pgmacs-show-result pgmacs--con "SHOW CONNECTIONS"))
 
 (defvar pgmacs--run-sql-history nil)
 
