@@ -278,7 +278,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 ;; pgmacs-shortcut-button object) to the pgmacs-table-list-buttons list.
 (defvar pgmacs-table-list-buttons
   (list (pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner materialize ydb risingwave))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner materialize ydb))))
 	 :label "Display procedures"
          :action #'pgmacs--display-procedures)
 	(pgmacs-shortcut-button
@@ -2258,6 +2258,28 @@ Table names are schema-qualified if the schema is non-default."
       (pgmacstbl-insert pgmacstbl)))
   (pgmacs--stop-progress-reporter))
 
+(defun pgmacs--display-procedures/risingwave (&rest _ignore)
+  (pgmacs--start-progress-reporter "Retrieving data from Risingwave")
+  (let* ((db-buffer pgmacs--db-buffer)
+         (con pgmacs--con)
+         (res (pg-exec con "SHOW FUNCTIONS"))
+         (buf (get-buffer-create "*PGmacs procedures*")))
+    (pop-to-buffer buf)
+    (kill-all-local-variables)
+    (setq-local pgmacs--con con
+                pgmacs--db-buffer db-buffer
+                buffer-read-only t
+                truncate-lines t)
+    (pgmacs-mode)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (remove-overlays)
+      (insert (propertize "Risingwave functions" 'face 'bold))
+      (insert "\n\n")
+      (pgmacs--show-pgresult buf res)))
+  (pgmacs--stop-progress-reporter))
+
+
 (defun pgmacs--display-procedures/postgresql (&rest _ignore)
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
   (pgmacs--start-progress-reporter "Retrieving data from PostgreSQL")
@@ -2340,6 +2362,8 @@ Table names are schema-qualified if the schema is non-default."
   (pcase (pgcon-server-variant pgmacs--con)
     ((or 'postgresql 'cockroachdb)
      (pgmacs--display-procedures/postgresql args))
+    ('risingwave
+     (pgmacs--display-procedures/risingwave args))
     (_ (pgmacs--display-procedures/infschema args))))
 
 
@@ -3238,14 +3262,14 @@ Prompt for the table name in the minibuffer."
       (show "shared_memory_size" "Server shared memory size")
       (show "datestyle" "Date style")
       (show "search_path" "Search path")
-      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb materialize))
+      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb materialize risingwave))
         (let* ((res (pg-exec con "SELECT pg_catalog.pg_listening_channels()"))
                (channels (pg-result res :tuples)))
           (when channels
             (insert "Asynchronous notification channels for the current session:\n")
             (dolist (ch channels)
               (insert "  " ch "\n")))))
-      (unless (member (pgcon-server-variant con) '(cratedb materialize))
+      (unless (member (pgcon-server-variant con) '(cratedb materialize risingwave))
         (let* ((res (pg-exec con "SELECT name, default_version, installed_version FROM pg_available_extensions"))
                (exts (pg-result res :tuples)))
           (insert "PostgreSQL extensions:")
@@ -3271,10 +3295,15 @@ Prompt for the table name in the minibuffer."
                          (search-forward (car ext))
                          (recenter))))
             (insert "\n"))))
-      (when (eq (pgcon-server-variant con) 'cockroachdb)
-        (insert "\nCockroachDB users\n")
-        (let ((res (pg-exec con "SHOW USERS")))
-          (pgmacs--show-pgresult (current-buffer) res)))
+      (pcase (pgcon-server-variant con)
+        ('cockroachdb
+         (insert "\nCockroachDB users\n")
+         (let ((res (pg-exec con "SHOW USERS")))
+           (pgmacs--show-pgresult (current-buffer) res)))
+        ('risingwave
+         (insert "\nRisingwave 'show parameters' output\n")
+         (let ((res (pg-exec con "SHOW PARAMETERS")))
+           (pgmacs--show-pgresult (current-buffer) res))))
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min))
       (pgmacs-transient-mode)
