@@ -15,7 +15,7 @@
   buffer.
 
 - Risingwave variant: improve the “More backend information” buffer, and implement the “display
-  functions” feature.
+  functions” feature. Implement a “Show jobs” button that displays streaming jobs in progress.
 
 
 ## [0.26] - 2025-07-09

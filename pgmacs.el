@@ -302,6 +302,11 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 	 :label "Stat activity"
          :action #'pgmacs--display-stat-activity
          :help-echo "Show information from the pg_stat_activity table")
+        (pgmacs-shortcut-button
+         :condition (lambda () (eq (pgcon-server-variant pgmacs--con) 'risingwave))
+         :label "Show jobs"
+         :action #'pgmacs--display-jobs/risingwave
+         :help-echo "Show all streaming jobs in process")
 	(pgmacs-shortcut-button
          :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize risingwave))))
 	 :label "Replication stats"
@@ -3319,6 +3324,11 @@ Prompt for the table name in the minibuffer."
   (let* ((cols (string-join pgmacs--stat-activity-columns ","))
          (sql (format "SELECT %s FROM pg_catalog.pg_stat_activity" cols)))
     (pgmacs-show-result pgmacs--con sql)))
+
+(defun pgmacs--display-jobs/risingwave (&rest _ignore)
+  "Display information on Risingwave streaming jobs in progress."
+  (interactive)
+  (pgmacs-show-result pgmacs--con "SHOW JOBS"))
 
 (defvar pgmacs--run-sql-history nil)
 
