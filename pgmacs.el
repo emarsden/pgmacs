@@ -2146,11 +2146,14 @@ Table names are schema-qualified if the schema is non-default."
   "Handle RET on a row in the proc-list buffer PROC-ROW."
   (interactive)
   (pgmacs--start-progress-reporter "Retrieving procedure data from PostgreSQL")
-  (let* ((db-buffer pgmacs--db-buffer)
-         (con pgmacs--con)
-         (proc-row (pgmacstbl-current-object))
-         (oid (nth 6 proc-row))
-         (sql "SELECT pg_catalog.pg_get_function_arguments(p.oid) AS arguments,
+  (let* ((proc-row (pgmacstbl-current-object))
+         (oid (nth 6 proc-row)))
+    (unless oid
+      (message "No further procedure information on this database variant")
+      (cl-return-from pgmacs--proc-list-RET nil))
+    (let* ((db-buffer pgmacs--db-buffer)
+           (con pgmacs--con)
+           (sql "SELECT pg_catalog.pg_get_function_arguments(p.oid) AS arguments,
                       t.typname AS return_type,
                       CASE WHEN l.lanname = 'internal' THEN p.prosrc
                            ELSE pg_catalog.pg_get_functiondef(p.oid)
