@@ -1329,27 +1329,32 @@ Deletion is only possible when the table has primary key."
           (push (cons value col-type) where-values)))
       (setq where-clauses (nreverse where-clauses)
             where-values (nreverse where-values))
-      (let* ((sql (format "DELETE FROM %s WHERE %s"
-                          (pg-escape-identifier pgmacs--table)
-                          (string-join where-clauses " AND ")))
-             (_ (pg-exec pgmacs--con "START TRANSACTION"))
-             (res (pg-exec-prepared pgmacs--con sql where-values))
-             (status (pg-result res :status)))
-        (pgmacs-flush-table pgmacs--con pgmacs--table)
-        (pgmacs--notify "%s" status)
-        (unless (string-prefix-p "DELETE " status)
-          (error "Unexpected status %s for PostgreSQL DELETE command" status))
-        (let ((rows (cl-parse-integer (substring status 7))))
-          (cond ((eql 0 rows)
-                 (warn "Could not delete PostgreSQL row")
-                 (pg-exec pgmacs--con "COMMIT TRANSACTION"))
-                ((eql 1 rows)
-                 (pg-exec pgmacs--con "COMMIT TRANSACTION")
-                 (pgmacstbl-remove-object pgmacstbl current-row)
-                 (pgmacs--redraw-pgmacstbl))
-                (t
-                 (warn "Deletion affected more than 1 row; rolling back")
-                 (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))))
+      (pg-exec pgmacs--con "START TRANSACTION")
+      (unwind-protect
+          (condition-case e
+              (let* ((sql (format "DELETE FROM %s WHERE %s"
+                                  (pg-escape-identifier pgmacs--table)
+                                  (string-join where-clauses " AND ")))
+                     (res (pg-exec-prepared pgmacs--con sql where-values))
+                     (status (pg-result res :status)))
+                (pgmacs-flush-table pgmacs--con pgmacs--table)
+                (pgmacs--notify "%s" status)
+                (unless (string-prefix-p "DELETE " status)
+                  (error "Unexpected status %s for PostgreSQL DELETE command" status))
+                (let ((rows (cl-parse-integer (substring status 7))))
+                  (cond ((eql 0 rows)
+                         (warn "Could not delete PostgreSQL row")
+                         (pg-exec pgmacs--con "COMMIT TRANSACTION"))
+                        ((eql 1 rows)
+                         (pg-exec pgmacs--con "COMMIT TRANSACTION")
+                         (pgmacstbl-remove-object pgmacstbl current-row)
+                         (pgmacs--redraw-pgmacstbl))
+                        (t
+                         (warn "Deletion affected more than 1 row; rolling back")
+                         (pg-exec pgmacs--con "ROLLBACK TRANSACTION")))))
+            (pg-error
+             (message "Couldn't delete row: %s" e)))
+          (pg-exec pgmacs--con "ROLLBACK TRANSACTION")))))
 
 ;; TODO: could handle a numeric arg prefix
 (defun pgmacs--insert-row-empty ()
