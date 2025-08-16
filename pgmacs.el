@@ -2142,7 +2142,7 @@ Table names are schema-qualified if the schema is non-default."
 ;;
 ;; TODO: allow user to edit the definition of a function, using a query such as that provided
 ;; at https://stackoverflow.com/questions/12148914/get-definition-of-function-sequence-type-etc-in-postgresql-with-sql-query
-(defun pgmacs--proc-list-RET (&rest _ignore)
+(cl-defun pgmacs--proc-list-RET (&rest _ignore)
   "Handle RET on a row in the proc-list buffer PROC-ROW."
   (interactive)
   (pgmacs--start-progress-reporter "Retrieving procedure data from PostgreSQL")
