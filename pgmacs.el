@@ -2378,7 +2378,7 @@ Table names are schema-qualified if the schema is non-default."
   "Open a buffer displaying the FUNCTIONs and PROCEDURES defined in this database."
   (interactive)
   (pcase (pgcon-server-variant pgmacs--con)
-    ((or 'postgresql 'cockroachdb)
+    ((or 'postgresql 'cockroachdb 'yugabyte)
      (pgmacs--display-procedures/postgresql args))
     ('risingwave
      (pgmacs--display-procedures/risingwave args))
