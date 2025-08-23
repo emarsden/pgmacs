@@ -2280,6 +2280,7 @@ Table names are schema-qualified if the schema is non-default."
       (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
       (insert "\n\n")
       (pgmacstbl-insert pgmacstbl)))
+  (goto-char (point-min))
   (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--display-procedures/risingwave (&rest _ignore)
@@ -2301,6 +2302,7 @@ Table names are schema-qualified if the schema is non-default."
       (insert (propertize "Risingwave functions" 'face 'bold))
       (insert "\n\n")
       (pgmacs--show-pgresult buf res)))
+  (goto-char (point-min))
   (pgmacs--stop-progress-reporter))
 
 
@@ -2378,6 +2380,7 @@ Table names are schema-qualified if the schema is non-default."
       (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
       (insert "\n\n")
       (pgmacstbl-insert pgmacstbl)))
+  (goto-char (point-min))
   (pgmacs--stop-progress-reporter))
 
 (defun pgmacs--display-procedures (&rest args)
@@ -2444,7 +2447,8 @@ Opens a dedicated buffer if the query list is not empty."
                (remove-overlays)
                (insert (propertize "Queries running in this PostgreSQL backend" 'face 'bold))
                (insert "\n\n")
-               (pgmacs--show-pgresult buf res))))))
+               (pgmacs--show-pgresult buf res)
+               (goto-char (point-min)))))))
   (pgmacs--stop-progress-reporter))
 
 
@@ -3445,7 +3449,8 @@ Uses PostgreSQL connection CON."
                                 :row-colors pgmacs-row-colors
                                 :objects rows
                                 :keymap pgmacs-row-list-map/table)))
-               (pgmacstbl-insert pgmacstbl)))))))
+               (pgmacstbl-insert pgmacstbl)
+               (goto-char (point-min))))))))
 
 ;; Bound to TAB in table-list, row-list, proc-list buffers.
 (defun pgmacs--next-item (&rest _ignore)
