@@ -1155,9 +1155,9 @@ Operates on the current row. The table must have a primary key."
      (widget-create 'integer (or current-value "")))
     ((or "numeric" "float4" "float8")
      (widget-create 'float (or current-value "")))
-    ((or "char" "bpchar")
+    ("char"
      (widget-create 'character (or current-value "")))
-    ((or "text" "varchar")
+    ((or "text" "varchar" "bpchar")
      (let ((default (or current-value "")))
        (widget-create 'string
                       :size (max 80 (min 200 (+ 5 (length default))))
