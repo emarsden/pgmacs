@@ -2187,8 +2187,34 @@ Table names are schema-qualified if the schema is non-default."
         (insert (format ": %s\n" (cl-second tuple)))
         (insert (propertize "Definition" 'face 'bold))
         (insert (format ": %s\n" (cl-third tuple)))
+        (goto-char (point-min))
         (shrink-window-if-larger-than-buffer)))
   (pgmacs--stop-progress-reporter)))
+
+(cl-defun pgmacs--proc-list-rename (&rest _ignore)
+  "Rename the procedure or function at point in a PGmacs proc-list buffer."
+  (interactive)
+  (let* ((proc-row (pgmacstbl-current-object))
+         (oid (nth 6 proc-row)))
+    (unless oid
+      (message "Can't rename procedures in this PostgreSQL variant")
+      (cl-return-from pgmacs--proc-list-rename nil))
+    (let* ((pgmacstbl (pgmacstbl-current-table))
+           (con pgmacs--con)
+           (schema (nth 0 proc-row))
+           (orig-name (nth 1 proc-row))
+           (sql "SELECT pg_catalog.pg_get_function_arguments(p.oid)
+                 FROM pg_catalog.pg_proc p
+                 WHERE p.oid = $1")
+           (res (pg-exec-prepared con sql `((,oid . "int4"))))
+           (arg-list (cl-first (pg-result res :tuple 0)))
+           (new (read-string (format "Rename procedure %s.%s to: " schema orig-name)))
+           ;; FIXME don't seem to be able to use a prepared statement here
+           (sql "ALTER PROCEDURE $1.$2($3) RENAME TO $4")
+           (typed-args `((,schema . "text") (,orig-name . "text") (,arg-list . "text") (,new . "text")))
+           (res (pg-exec-prepared pgmacs--con sql typed-args)))
+      (pgmacs--notify "%s" (pg-result res :status))
+      (pgmacs--display-table pgmacs--table))))
 
 (cl-defun pgmacs--proc-list-delete (&rest _ignore)
   "Delete the procedure or function at point in a PGmacs proc-list buffer."
