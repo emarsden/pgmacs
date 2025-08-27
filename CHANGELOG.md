@@ -3,6 +3,11 @@
 
 ## [0.27] - Unreleased
 
+- Fix bug in handling display and updates for columns of type `CHAR(N)`. Bug reported by @Tekki.
+
+- In the proc-list buffer, it is now possible to rename a function or procedure using the `R`
+  keybinding.
+
 - Rename `pgmacs--delete-row` to `pgmacs--row-list-delete-row`.
 
 - Rename `pgmacs--next-column` to `pgmacs--next-item`. This function can now be used outside the

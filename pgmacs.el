@@ -569,7 +569,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   "TAB"          #'pgmacs--next-item
   "<deletechar>" #'pgmacs--proc-list-delete
   "T"            #'pgmacs--switch-to-database-buffer
-  ;; "r" pgmacs--proc-list-rename
+  "R"            #'pgmacs--proc-list-rename
   ;; "g" pgmacs--proc-list-redraw
   ;; the functions pgmacstbl-beginning-of-table and
   ;; pgmacstbl-end-of-table don't work when we have inserted text before
@@ -2128,7 +2128,7 @@ Table names are schema-qualified if the schema is non-default."
           (shwf 'pgmacs--next-item "Move to next column")
           (shwf 'pgmacs--proc-list-delete "Delete the procedure at point")
           (shw "DEL" "Delete the procedure at point")
-          ;; (shw "R" "Rename the current procedure")
+          (shw 'pgmacs--proc-list-rename "Rename the current procedure")
           (shw "<" "Move point to the first row in the table")
           (shw ">" "Move point to the last row in the table")
           (shw "{" "Shrink the horizontal space used by the current column")
@@ -2208,13 +2208,16 @@ Table names are schema-qualified if the schema is non-default."
                  WHERE p.oid = $1")
            (res (pg-exec-prepared con sql `((,oid . "int4"))))
            (arg-list (cl-first (pg-result res :tuple 0)))
-           (new (read-string (format "Rename procedure %s.%s to: " schema orig-name)))
-           ;; FIXME don't seem to be able to use a prepared statement here
-           (sql "ALTER PROCEDURE $1.$2($3) RENAME TO $4")
-           (typed-args `((,schema . "text") (,orig-name . "text") (,arg-list . "text") (,new . "text")))
-           (res (pg-exec-prepared pgmacs--con sql typed-args)))
+           (new-name (read-string (format "Rename procedure %s.%s to: " schema orig-name)))
+           ;; PostgreSQL does not allow us to use a prepared statement here.
+           (sql (format "ALTER ROUTINE %s.%s(%s) RENAME TO %s"
+                        (pg-escape-identifier schema)
+                        (pg-escape-identifier orig-name)
+                        arg-list
+                        (pg-escape-identifier new-name)))
+           (res (pg-exec con sql)))
       (pgmacs--notify "%s" (pg-result res :status))
-      (pgmacs--display-table pgmacs--table))))
+      (pgmacs--display-procedures))))
 
 (cl-defun pgmacs--proc-list-delete (&rest _ignore)
   "Delete the procedure or function at point in a PGmacs proc-list buffer."
