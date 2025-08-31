@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.27] - Unreleased
+## [0.27] - 2025-08-31
 
 - Fix bug in handling display and updates for columns of type `CHAR(N)`. Bug reported by @Tekki.
 
