@@ -322,7 +322,7 @@ If it can't be found, return nil and don't move point."
           (goto-char (prop-match-beginning match))))
     (end-of-line)))
 
-(defun pgmacstbl-update-object (table object old-object)
+(cl-defun pgmacstbl-update-object (table object old-object)
   "Replace OLD-OBJECT in TABLE with OBJECT."
   (let* ((objects (pgmacstbl-objects table))
          (inhibit-read-only t))

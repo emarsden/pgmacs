@@ -25,6 +25,8 @@
 - Materialize variant: show more information in the “More backend information” buffer, and implement
   a “Show connections” button.
 
+- Add new SVG icons to labels concerning comments and replication statistics.
+
 
 ## [0.26] - 2025-07-09
 

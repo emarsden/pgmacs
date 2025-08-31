@@ -191,13 +191,6 @@ concerning a specific table, rather than the entire database."
   :type 'string
   :group 'pgmacs)
 
-(defun pgmacs--maybe-svg-icon (svg-fn)
-  (if (and (display-graphic-p)
-           (image-type-available-p 'svg))
-      (let ((svg (funcall svg-fn)))
-	(propertize " " 'display svg 'rear-nonsticky t 'cursor-intangible t))
-    ""))
-
 (defcustom pgmacs-use-header-line t
   "If non-nil, use header line to display information on PostgreSQL connection."
   :type 'boolean
@@ -245,6 +238,58 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 (defvar-local pgmacs--completions nil)
 (defvar-local pgmacs--table-primary-keys nil)
 
+
+(defun pgmacs--svg-icon-database ()
+  "Return an SVG icon representing a database."
+  (let ((icon (svg-create "1.3em" "1.3em" :viewBox "0 0 16 16")))
+    (cl-flet ((ellipse (y)
+                (svg-ellipse icon 8 y 5 1 :fill "purple")
+                (svg-ellipse icon 8 (+ y 1.8) 5 1 :fill "purple" :stroke "white" :stroke-width 0.3)
+                (svg-rectangle icon 3 y 10 1.5 :fill "purple")))
+      (ellipse 9)
+      (ellipse 6)
+      (ellipse 3)
+      (svg-image icon :margin 2 :ascent 'center))))
+
+(defun pgmacs--svg-icon-user ()
+  "Return an SVG icon representing a computer user."
+  (let ((icon (svg-create "0.7em" "0.7em" :viewBox "0 0 16 16")))
+    (svg-circle icon 8 4 3.8 :fill "black" :opacity 0.5)
+    (svg-rectangle icon 1 9 15 20 :fill "black" :opacity 0.5 :rx 3)
+    (svg-image icon :margin 2 :ascent 'center)))
+
+(defun pgmacs--svg-icon-table ()
+  "Return an SVG icon representing a database table."
+  (let ((icon (svg-create "1em" "1em" :viewBox "-0.4 -0.4 3.6 4.6" :fill "currentColor")))
+    (svg-rectangle icon 0 0 3 3 :fill "none" :stroke "black" :stroke-width 0.3 :rx 0.1)
+    (svg-line icon 0 1 3 1 :stroke "black" :stroke-width 0.2)
+    (svg-line icon 0 2 3 2 :stroke "black" :stroke-width 0.2)
+    (svg-line icon 0 0.3 3 0.3 :stroke "black" :stroke-width 0.2)
+    (svg-line icon 1 0 1 3 :stroke "black" :stroke-width 0.2)
+    (svg-line icon 2 0 2 3 :stroke "black" :stroke-width 0.2)
+    (svg-image icon :margin 2 :ascent 'center)))
+
+(defun pgmacs--svg-icon-comment ()
+  "Return an SVG icon representing a comment."
+  (let* ((icon (svg-create "1em" "1em" :viewBox "0 0 32 32"))
+         (d "M16 26c-1.168 0-2.296-.136-3.38-.367l-4.708 2.83.063-4.639C4.366 21.654 2 18.066 2 14 2 7.373 8.268 2 16 2s14 5.373 14 12c0 6.628-6.268 12-14 12Zm0-26C7.164 0 0 6.269 0 14c0 4.419 2.345 8.354 6 10.919V32l7.009-4.253c.97.16 1.968.253 2.991.253 8.836 0 16-6.268 16-14 0-7.731-7.164-14-16-14Zm7 11H9a1 1 0 0 0 0 2h14a1 1 0 1 0 0-2Zm-2 6H11a1 1 0 1 0 0 2h10a1 1 0 1 0 0-2Z"))
+    (svg--append icon (dom-node 'path `((d . ,d) (fill . "#000") (fill-rule . "evenodd"))))
+    (svg-image icon :margin (cons 3 1) :ascent 'center)))
+
+(defun pgmacs--svg-icon-replication ()
+  "Return an SVG icon representing data replication."
+  (let* ((icon (svg-create "1em" "1em" :viewBox "0 0 32 32"))
+         (d "M20 20v2h5.22a11.016 11.016 0 0 1-11.97 4.653l-.499 1.937A13 13 0 0 0 26 24.293V28h2v-8zm5-17a4.005 4.005 0 0 0-4 4a3.954 3.954 0 0 0 .567 2.019L9.019 21.567A3.952 3.952 0 0 0 7 21a4 4 0 1 0 4 4a3.954 3.954 0 0 0-.567-2.019l12.548-12.548A3.952 3.952 0 0 0 25 11a4 4 0 0 0 0-8M7 27a2 2 0 1 1 2-2a2.002 2.002 0 0 1-2 2M25 9a2 2 0 1 1 2-2a2.002 2.002 0 0 1-2 2m-9-6A13.04 13.04 0 0 0 6 7.707V4H4v8h8v-2H6.78a11.016 11.016 0 0 1 11.97-4.653l.499-1.937A13.036 13.036 0 0 0 16 3"))
+    (svg--append icon (dom-node 'path `((d . ,d) (fill . "#000"))))
+    (svg-image icon :margin (cons 3 1) :ascent 'center)))
+
+(defun pgmacs--maybe-svg-icon (svg-fn)
+  (if (and (display-graphic-p)
+           (image-type-available-p 'svg))
+      (let ((svg (funcall svg-fn)))
+	(propertize " " 'display svg 'rear-nonsticky t 'cursor-intangible t))
+    ""))
+
 (defclass pgmacs-shortcut-button ()
   ((label :initarg :label :type string)
    ;; Condition, if defined, is a function called with zero arguments that determines whether this
@@ -280,7 +325,8 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
   (list (pgmacs-shortcut-button
          :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(questdb spanner materialize ydb))))
 	 :label "Display procedures"
-         :action #'pgmacs--display-procedures)
+         :action #'pgmacs--display-procedures
+         :help-echo "Display a table with all functions and procedures")
 	(pgmacs-shortcut-button
          :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize risingwave))))
 	 :label "Display running queries"
@@ -314,7 +360,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :help-echo "Show all connections configured in Materialize")
 	(pgmacs-shortcut-button
          :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize risingwave))))
-	 :label "Replication stats"
+	 :label (format "%sReplication stats" (or (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-replication) ""))
 	 :action #'pgmacs--display-replication-stats
 	 :help-echo "Show information on PostgreSQL replication status")
         (pgmacs-shortcut-button
@@ -352,7 +398,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :condition (lambda ()
                       (unless (memq (pgcon-server-variant pgmacs--con) '(cratedb ydb spanner questdb))
                         (null (pg-table-comment pgmacs--con pgmacs--table))))
-         :label "Add table comment"
+         :label (format "%sAdd table comment" (or (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-comment) ""))
          :action (lambda (&rest _ignore)
                    (let ((comment (read-from-minibuffer "Table comment: ")))
                      (setf (pg-table-comment pgmacs--con pgmacs--table) comment))
@@ -995,6 +1041,7 @@ Operates on the current row. The table must have a primary key."
          (lambda (old-value _col-name col-type)
            (unless (or (string= "text" col-type)
                        (string= "varchar" col-type)
+                       (string= "bpchar" col-type)
                        (string= "name" col-type))
              (user-error "Can only downcase text values"))
            (with-temp-buffer
@@ -1014,6 +1061,7 @@ Operates on the CURRENT-ROW. The table must have a primary key."
          (lambda (old-value _col-name col-type)
            (unless (or (string= "text" col-type)
                        (string= "varchar" col-type)
+                       (string= "bpchar" col-type)
                        (string= "name" col-type))
              (user-error "Can only upcase text values"))
            (with-temp-buffer
@@ -1033,6 +1081,7 @@ Operates on the current row. The table must have a primary key."
          (lambda (old-value _col-name col-type)
            (unless (or (string= "text" col-type)
                        (string= "varchar" col-type)
+                       (string= "bpchar" col-type)
                        (string= "name" col-type))
              (user-error "Can only capitalize text values"))
            (with-temp-buffer
@@ -1775,7 +1824,7 @@ over the PostgreSQL connection CON."
          (oid (cadar (pg-result res :attributes)))
          (type-name (pg-lookup-type-name con oid))
          (column-info (make-hash-table :test #'equal)))
-    (puthash "TYPE" type-name column-info)
+    (puthash "TYPE" (propertize type-name 'help-echo "The type of this column") column-info)
     (dolist (c check-constraints)
       (cond ((string= "CHECK" (cl-first c))
              (let* ((sql "SELECT check_clause FROM information_schema.check_constraints
@@ -1784,7 +1833,7 @@ over the PostgreSQL connection CON."
                     (clauses (pg-result res :tuple 0)))
                (puthash (cl-first c) (format "%s %s" (cl-second c) (cl-first clauses)) column-info)))
             (t
-             (puthash (cl-first c) (cl-second c) column-info))))
+             (puthash (propertize (cl-first c) 'text-echo "Constraint type") (cl-second c) column-info))))
     ;; If references-constraints contains a single row, we are in the presence of a simple foreign
     ;; key reference (to a single column), and the second element of the hash-table entry is the
     ;; target column name. If there is more than one row, we have a complex (multi-column) foreign
@@ -1796,13 +1845,15 @@ over the PostgreSQL connection CON."
         (let ((sqn (make-pg-qualified-name :schema (cl-first fc) :name (cl-second fc))))
           (puthash "REFERENCES" (list sqn target-col) column-info))))
     (when (pgmacs--column-nullable-p con table column)
-      (puthash "NOT NULL" nil column-info))
+      (puthash (propertize "NOT NULL" 'help-echo "Not null constraint") nil column-info))
     (when (cl-first maxlen)
       (puthash "maxlen" (cl-first maxlen) column-info))
     (when defaults
-      (puthash "DEFAULT" defaults column-info))
-    (when-let* ((comment (pg-column-comment con table column)))
-      (puthash "COMMENT" comment column-info))
+      (puthash (propertize "DEFAULT" 'help-echo "Default value for this column") defaults column-info))
+    (when-let* ((comment (pg-column-comment con table column))
+                (maybe-icon (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-comment))
+                (label (propertize (or maybe-icon "COMMENT") 'help-echo "Comment on this column")))
+      (puthash label comment column-info))
     column-info))
 
 (defun pgmacs--column-info/basic (con table column)
@@ -2199,8 +2250,7 @@ Table names are schema-qualified if the schema is non-default."
     (unless oid
       (message "Can't rename procedures in this PostgreSQL variant")
       (cl-return-from pgmacs--proc-list-rename nil))
-    (let* ((pgmacstbl (pgmacstbl-current-table))
-           (con pgmacs--con)
+    (let* ((con pgmacs--con)
            (schema (nth 0 proc-row))
            (orig-name (nth 1 proc-row))
            (sql "SELECT pg_catalog.pg_get_function_arguments(p.oid)
@@ -3044,7 +3094,7 @@ Runs functions on `pgmacs-row-list-hook'."
                   (t
                    ;; FIXME this functionality is not implemented for YDB
                    (insert-text-button
-                    "Add column comment"
+                    (format "%sAdd column comment" (or (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-comment) ""))
                     'action `(lambda (&rest _ignore)
                                (let* ((prompt (format "New comment for column %s: " ,col))
                                       (new (read-from-minibuffer prompt)))
@@ -3089,12 +3139,14 @@ Runs functions on `pgmacs-row-list-hook'."
         (when (>= pgmacs--offset pgmacs-row-limit)
           (insert-text-button
            (format "Prev. %s rows" pgmacs-row-limit)
-           'action #'pgmacs--paginated-prev)
+           'action #'pgmacs--paginated-prev
+           'help-echo "Move to previous page of results")
           (insert "   "))
         (when (pg-result res :incomplete)
           (insert-text-button
            (format "Next %s rows" pgmacs-row-limit)
-           'action #'pgmacs--paginated-next))
+           'action #'pgmacs--paginated-next
+           'help-echo "Move to next page of results"))
         (insert "\n\n"))
       (if (null rows)
           (insert "(no rows in table)")
@@ -3707,36 +3759,6 @@ inlined vector SVG image that is encoded as a data URI."
           (pgmacs--rewrite-schemaspy-svg out)
           (find-file out))))))
 
-(defun pgmacs--svg-icon-database ()
-  "Return an SVG icon representing a database."
-  (let ((icon (svg-create "1.3em" "1.3em" :viewBox "0 0 16 16")))
-    (cl-flet ((ellipse (y)
-                (svg-ellipse icon 8 y 5 1 :fill "purple")
-                (svg-ellipse icon 8 (+ y 1.8) 5 1 :fill "purple" :stroke "white" :stroke-width 0.3)
-                (svg-rectangle icon 3 y 10 1.5 :fill "purple")))
-      (ellipse 9)
-      (ellipse 6)
-      (ellipse 3)
-      (svg-image icon :margin 2 :ascent 'center))))
-
-(defun pgmacs--svg-icon-user ()
-  "Return an SVG icon representing a computer user."
-  (let ((icon (svg-create "0.7em" "0.7em" :viewBox "0 0 16 16")))
-    (svg-circle icon 8 4 3.8 :fill "black" :opacity 0.5)
-    (svg-rectangle icon 1 9 15 20 :fill "black" :opacity 0.5 :rx 3)
-    (svg-image icon :margin 2 :ascent 'center)))
-
-(defun pgmacs--svg-icon-table ()
-  "Return an SVG icon representing a database table."
-  (let ((icon (svg-create "1em" "1em" :viewBox "-0.4 -0.4 3.6 4.6" :fill "currentColor")))
-    (svg-rectangle icon 0 0 3 3 :fill "none" :stroke "black" :stroke-width 0.3 :rx 0.1)
-    (svg-line icon 0 1 3 1 :stroke "black" :stroke-width 0.2)
-    (svg-line icon 0 2 3 2 :stroke "black" :stroke-width 0.2)
-    (svg-line icon 0 0.3 3 0.3 :stroke "black" :stroke-width 0.2)
-    (svg-line icon 1 0 1 3 :stroke "black" :stroke-width 0.2)
-    (svg-line icon 2 0 2 3 :stroke "black" :stroke-width 0.2)
-    (svg-image icon :margin 2 :ascent 'center)))
-
 ;; This function generates the string used to display a table in the main table-list buffer. If the
 ;; display is able to display SVG images, we prefix the name with a little SVG icon of a table.
 (defun pgmacs--display-table-name (name)
@@ -3825,7 +3847,9 @@ inlined vector SVG image that is encoded as a data URI."
                                               (file-size-human-readable octets 'iec " ")
                                             "")))
                             (make-pgmacstbl-column
-                             :name (propertize "Owner" 'face 'pgmacs-table-header)
+                             :name (propertize "Owner"
+                                               'face 'pgmacs-table-header
+                                               'help-echo "The owner of the table")
                              :width 13 :align 'right)
                             (make-pgmacstbl-column
                              :name (propertize "Comment" 'face 'pgmacs-table-header)
@@ -3850,7 +3874,9 @@ inlined vector SVG image that is encoded as a data URI."
                         (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-user)
                         (cl-first row)
                         (cl-second row)
-                        (if (cl-third row) "RECOVERING" "PRIMARY"))))
+                        (if (cl-third row)
+                            (propertize "RECOVERING" 'help-echo "Read-only replica server in hot_standby mode")
+                          "PRIMARY"))))
       ;; PostgreSQL has a function pg_size_pretty() that we could also use, but it's not implemented
       ;; in all semi-compatible variants.
       ;;
