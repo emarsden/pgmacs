@@ -9,7 +9,7 @@ vhs:
 
 # Build a Podman/Docker container image for PGmacs
 #
-# Needs the package qemu-user-static installed to cross-build the various architectures.
+# Needs the package qemu-user and binfmt-misc installed to cross-build the various architectures.
 container:
   podman manifest create pgmacs
   buildah build -f etc/Containerfile --platform linux/amd64 --tag pgmacs-linux-amd64 --manifest pgmacs .
