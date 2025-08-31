@@ -339,6 +339,8 @@ If it can't be found, return nil and don't move point."
         (error "Can't find the old object"))
       (setcar (cdr objects) object))
     ;; Then update the cache.
+    (unless (pgmacstbl--cache table)
+      (cl-return-from pgmacstbl-update-object nil))
     (if-let* ((line-number (cl-position old-object (car (pgmacstbl--cache table))
                                         :key #'car
                                         :test #'eq))
