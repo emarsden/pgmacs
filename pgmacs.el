@@ -329,6 +329,11 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb materialize risingwave))))
          :action #'pgmacs--table-to-csv
          :help-echo  "Export this table to a CSV buffer")
+        (pgmacs-shortcut-button
+         :label "Export table to MD buffer"
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb ydb materialize risingwave))))
+         :action #'pgmacs--table-to-md
+         :help-echo  "Export this table to a Markdown buffer")
         ;; Materialize does not support ALTER TABLE ADD COLUMN. Spanner does not allow the addition
         ;; of primary keys with ALTER TABLE. CrateDB does not allow a primary key column to be added
         ;; to a table that is not empty.
@@ -2064,6 +2069,38 @@ Table names are schema-qualified if the schema is non-default."
       (csv-mode))
     (pg-copy-to-buffer con sql buf)
     (goto-char (point-min))))
+
+(defun pgmacs--table-to-md (&rest _ignore)
+  "Dump the current PostgreSQL table in Markdown format into an Emacs buffer."
+  (interactive)
+  (when (eq (pgcon-server-variant pgmacs--con) 'cratedb)
+    (user-error "CrateDB does not support COPY TO STDOUT"))
+  (when (eq (pgcon-server-variant pgmacs--con) 'materialize)
+    (user-error "Materialize does not support COPY TO STDOUT"))
+  (let* ((con pgmacs--con)
+         (db-buffer pgmacs--db-buffer)
+         (table pgmacs--table)
+         (t-id (pg-escape-identifier table))
+         (t-pretty (pgmacs--display-identifier table))
+         (buf (get-buffer-create (format "*PostgreSQL Markdown for %s*" t-pretty)))
+         (sql (format "COPY %s TO STDOUT (HEADER TRUE, DELIMITER '|')" t-id)))
+    (pop-to-buffer buf)
+    (erase-buffer)
+    (remove-overlays)
+    (kill-all-local-variables)
+    (setq-local pgmacs--db-buffer db-buffer)
+    (pgmacs-transient-mode)
+    (pg-copy-to-buffer con sql buf)
+    (replace-regexp "^\\(.+\\)$" "|\\1|" nil nil nil t))
+  (let* ((column-count (- (cl-count ?| (buffer-substring-no-properties 1 (line-end-position))) 1))
+         (separator-line (concat (mapconcat 'identity (make-list column-count "|-") "") "|\n")))
+    (forward-line)
+    (insert separator-line)
+    (goto-char (point-min))
+    (require 'markdown-mode nil t)
+    (when (fboundp 'markdown-mode)
+      (markdown-mode)
+      (markdown-cycle))))
 
 ;; Note that CrateDB does not support "GENERATED ALWAYS AS IDENTITY" columns, as of 2025-01. For
 ;; some distributed databases such as CrateDB and Materialize, we use a UUID column as a primary key
