@@ -2091,9 +2091,21 @@ Table names are schema-qualified if the schema is non-default."
     (setq-local pgmacs--db-buffer db-buffer)
     (pgmacs-transient-mode)
     (pg-copy-to-buffer con sql buf)
-    (replace-regexp "^\\(.+\\)$" "|\\1|" nil nil nil t))
+    (goto-char (point-min))
+    ;; See https://github.com/sonic-net/SONiC/wiki/Special-Characters-and-Escaping#characters-that-need-to-be-escaped
+    ;; Escape characters that might be interpreted as formatting commands by the Markdown parser
+    (while (re-search-forward "\\([][`*_#+-.!{}()<>]\\)" nil t)
+      (replace-match "\\\\\\1" nil nil))
+    (goto-char (point-min))
+    ;; Wrap every line of output in pipe characters (|) for Markdown parser to interpret it as a row
+    (while (not (eq (point) (point-max)))
+      (insert "|")
+      (end-of-line)
+      (insert "|")
+      (forward-line)))
   (let* ((column-count (- (cl-count ?| (buffer-substring-no-properties 1 (line-end-position))) 1))
          (separator-line (concat (mapconcat 'identity (make-list column-count "|-") "") "|\n")))
+    (goto-char (point-min))
     (forward-line)
     (insert separator-line)
     (goto-char (point-min))
