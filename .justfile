@@ -49,6 +49,10 @@ list-docker-platforms:
     podman run --rm docker.io/mplatform/mquery ghcr.io/emarsden/pgmacs:latest
 
 
+inspect-container:
+    skopeo inspect docker://ghcr.io/emarsden/pgmacs:latest
+
+
 # Run a trivy vulnerability scan of our container image
 # https://github.com/aquasecurity/trivy
 trivy-container:
