@@ -3465,7 +3465,19 @@ Prompt for the table name in the minibuffer."
         ('materialize
          (insert "\nMaterialize 'show all' output\n")
          (let ((res (pg-exec con "SHOW ALL")))
-           (pgmacs--show-pgresult (current-buffer) res))))
+           (pgmacs--show-pgresult (current-buffer) res)))
+        ('cratedb
+         (let* ((res (pg-exec con "SELECT name, settings FROM sys.cluster"))
+                (row (pg-result res :tuple 0)))
+           ;; json-pretty-print-buffer
+           (insert "\nCrateDB cluster name: " (cl-first row) "\n")
+           (when (json-available-p)
+             (insert "CrateDB settings: ")
+             (insert (with-temp-buffer
+                       (json-insert (cl-second row))
+                       (json-pretty-print-buffer)
+                       (buffer-string)))
+             (insert "\n")))))
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min))
       (pgmacs-transient-mode)

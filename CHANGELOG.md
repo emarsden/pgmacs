@@ -5,6 +5,8 @@
 - Add functionality to export the contents of a PostgreSQL table in Markdown table format. Patch by
   @ramitmittal.
 
+- When editing a CrateDB database, additional CrateDB-specific information will be printed in the
+  backend information buffer. 
 
 
 ## [0.27] - 2025-08-31
