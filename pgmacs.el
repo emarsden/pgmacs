@@ -1857,7 +1857,7 @@ over the PostgreSQL connection CON."
         (let ((sqn (make-pg-qualified-name :schema (cl-first fc) :name (cl-second fc))))
           (puthash "REFERENCES" (list sqn target-col) column-info))))
     (when (pgmacs--column-nullable-p con table column)
-      (puthash (propertize "NOT NULL" 'help-echo "Not null constraint") nil column-info))
+      (puthash (propertize "NOT NULL" 'font-lock-face '(:box t) 'help-echo "Not null constraint") nil column-info))
     (when (cl-first maxlen)
       (puthash "maxlen" (cl-first maxlen) column-info))
     (when defaults
@@ -3086,7 +3086,7 @@ Runs functions on `pgmacs-row-list-hook'."
       (when comment
         (insert (propertize "Table comment" 'face 'bold))
         (insert (format ": %s  " comment))
-        (insert-text-button "Modify"
+        (insert-text-button (propertize "Modify"  'font-lock-face '(:box t))
                             'action (lambda (&rest _ignore)
                                       (let ((comment (read-from-minibuffer "New table comment: ")))
                                         (setf (pg-table-comment con table) comment))
