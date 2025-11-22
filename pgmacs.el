@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023-2025 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 ;; Version: 0.27
-;; Package-Requires: ((emacs "29.1") (pg "0.53"))
+;; Package-Requires: ((emacs "29.1") (pg "0.61"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -1815,10 +1815,11 @@ over the PostgreSQL connection CON."
          (res (pg-fetch-prepared con ps-name params))
          (references-constraints (pg-result res :tuples))
          (sql "SELECT character_maximum_length FROM information_schema.columns
-                WHERE table_schema=$1 AND table_name=$2 AND column_name=$3")
+               WHERE table_schema=$1 AND table_name=$2 AND column_name=$3")
          (ps-name (pg-ensure-prepared-statement con "QRY-maxlen" sql argument-types))
          (res (pg-fetch-prepared con ps-name params))
-         (maxlen (pg-result res :tuple 0))
+         (maybe-maxlen (cl-first (pg-result res :tuple 0)))
+         (maxlen (if (equal pg-null-marker maybe-maxlen) nil maybe-maxlen))
          ;; TODO perhaps want to include GENERATED ALWAYS information in here
          ;; the generation_expression column of information.schema.columns
          (defaults (pg-column-default con table column))

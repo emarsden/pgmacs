@@ -8,6 +8,12 @@
 - When editing a CrateDB database, additional CrateDB-specific information will be printed in the
   backend information buffer. 
 
+- Support for the special `pg-null-value` variable in pg.el, which you can set to be different from
+  its default nil value for SQL NULLs to be displayed using a recognizable value (e.g. "ω", as used
+  in some writing on relational algebra theory).
+
+- Experimentation with some box font-locking for certain column attributes.
+
 
 ## [0.27] - 2025-08-31
 
