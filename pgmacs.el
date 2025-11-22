@@ -29,6 +29,12 @@
 (require 'pgmacs-sql-keywords)
 
 
+(declare-function csv-mode "csv-mode" ())
+(declare-function markdown-mode "markdown-mode" ())
+(declare-function markdown-cycle "markdown-mode" (&optional arg))
+
+
+
 (defgroup pgmacs nil
   "Browse and edit a PostgreSQL database from Emacs."
   :prefix "pgmacs-"
