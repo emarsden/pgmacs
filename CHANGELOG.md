@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.28] - Unreleased
+## [0.28] - 2025-11-23
 
 - Add functionality to export the contents of a PostgreSQL table in Markdown table format. Patch by
   @ramitmittal.
