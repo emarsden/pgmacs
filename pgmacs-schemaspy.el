@@ -3,6 +3,9 @@
 ;; Copyright (C) 2025 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 
+(defvar-local pgmacs--con nil)
+(defvar-local pgmacs--table nil)
+
 
 ;; To run SchemaSpy on the current database or on the current table, and display images describing
 ;; the schema. The default setting runs SchemaSpy in a Docker/Podman software container, using
@@ -74,7 +77,7 @@ inlined vector SVG image that is encoded as a data URI."
     (user-error "SchemaSpy support needs SVG support in your Emacs"))
   (when (member (pgcon-server-variant pgmacs--con) '(spanner))
     (error "The Spanner database does not implement system tables needed by SchemaSpy"))
-  (when (eq (pgcon-server-variant pgmacs--con) '(cratedb))
+  (when (eq (pgcon-server-variant pgmacs--con) 'cratedb)
     (error "CrateDB does not implement shobj_description() needed by SchemaSpy"))
   (let* ((tmpdir (temporary-file-directory))
          (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
