@@ -2006,6 +2006,8 @@ Table names are schema-qualified if the schema is non-default."
        privs))
     ('cratedb
      (list "SELECT" "INSERT" "UPDATE" "DELETE"))
+    ('cockroachdb
+     '("SELECT" "INSERT" "UPDATE" "DELETE" "TRUNCATE" "REFERENCES" "TRIGGER"))
     (_ nil)))
 
 ;; Used to display only the first line of a table cell.
@@ -3106,12 +3108,12 @@ Runs functions on `pgmacs-row-list-hook'."
       (when (pg-function-p con "has_table_privilege")
         (let ((items (list)))
           (dolist (priv (pgmacs--available-table-privileges con))
-            (let* ((res (pg-exec-prepared con "SELECT has_table_privilege($1, $2)" `((,table . "text") (,priv . "text"))))
+            (let* ((res (pg-exec-prepared con "SELECT has_table_privilege($1, $2)" `((,t-id . "text") (,priv . "text"))))
                    (tuple (pg-result res :tuple 0))
                    (color (if (cl-first tuple) "green" "red")))
               (push (pgmacs--make-badge priv :color color) items)))
           (when items
-            (insert "Table privileges for current user: " (string-join items " ") "\n"))))
+            (insert "Table privileges for current user: " (string-join (reverse items) " ") "\n"))))
       (insert "Row-level access control: ")
       (if (pgmacs--row-security-active con table)
           (insert "enabled")
