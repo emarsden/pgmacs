@@ -74,6 +74,8 @@ inlined vector SVG image that is encoded as a data URI."
     (user-error "SchemaSpy support needs SVG support in your Emacs"))
   (when (member (pgcon-server-variant pgmacs--con) '(spanner))
     (error "The Spanner database does not implement system tables needed by SchemaSpy"))
+  (when (eq (pgcon-server-variant pgmacs--con) '(cratedb))
+    (error "CrateDB does not implement shobj_description() needed by SchemaSpy"))
   (let* ((tmpdir (temporary-file-directory))
          (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
     (when (file-directory-p schemaspy-dir)
@@ -91,6 +93,8 @@ inlined vector SVG image that is encoded as a data URI."
                         pgmacs--table)))
       (when (eql :local (cl-first ci))
         (message "Replacing Unix connection by network connection to localhost for SchemaSpy"))
+      ;; TMP TMP ££
+      (message "££ using connect-info %s" ci)
       (let* ((cmdline (concat pgmacs-schemaspy-cmdline
                               " -s %s -i %t"))
              (cmd (cl-multiple-value-bind (type host port dbname user password) ci
@@ -98,7 +102,7 @@ inlined vector SVG image that is encoded as a data URI."
                                       (cons ?P (or port 5432))
                                       (cons ?d dbname)
                                       (cons ?u user)
-                                      (cons ?p password)
+                                      (cons ?p (or password "none"))
                                       (cons ?s schema-name)
                                       (cons ?t table-name)
                                       (cons ?D schemaspy-dir))))
