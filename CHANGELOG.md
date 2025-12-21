@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.29] - Unreleased
+
+- When running in graphical mode and SVG support is available, use SVG badges for various parts of
+  the table metadata display.
+
+- In row-list buffers, display information on the table privileges held by the current user
+  (permission to select, update, delete rows and so on).
+
+
+
 ## [0.28] - 2025-11-23
 
 - Add functionality to export the contents of a PostgreSQL table in Markdown table format. Patch by

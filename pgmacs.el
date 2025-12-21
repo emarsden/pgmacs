@@ -27,6 +27,8 @@
 (require 'pg)
 (require 'pgmacstbl)
 (require 'pgmacs-sql-keywords)
+(require 'pgmacs-schemaspy)
+(require 'pgmacs-chrome)
 
 
 (declare-function csv-mode "csv-mode" ())
@@ -154,49 +156,6 @@ may be a safe option on large production databases)."
   :type 'boolean
   :group 'pgmacs)
 
-;; To run SchemaSpy on the current database or on the current table, and display images describing
-;; the schema. The default setting runs SchemaSpy in a Docker/Podman software container, using
-;; Podman or Docker. This is the easiest way of running SchemaSpy, because all necessary
-;; dependencies are preinstalled. Alternatively (see commented commandline), you can run the
-;; SchemaSpy java application natively, which requires the following software to be installed:
-;;
-;;  - SchemaSpy (see schemaspy.org)
-;;  - Java
-;;  - GraphViz
-;;  - JDBC support for PostgreSQL (here in /usr/share/java/postgresql-jdbc4.jar, installable for example
-;;    using "sudo apt install libpostgresql-jdbc-java")
-;;
-;; The commandline below with "--userns=keep-id" is suitable for running a container in rootless
-;; mode with Podman. This is because the SchemaSpy Dockerfile creates a new user "java" then runs as
-;; that user. We can't map that new user id to our own id, because the java uid is not known prior
-;; to the container running. With the --userns=keep-id option however, the USER will be mapped to
-;; our own uid when running rootless.
-(defcustom pgmacs-schemaspy-cmdline
-  "podman run -v %D:/output --userns=keep-id --network=host docker.io/schemaspy/schemaspy:latest -t pgsql11 -host %h -port %P -u %u -p %p -db %d -imageformat svg"
-  "Commandline for running the SchemaSpy application or container.
-
-This commandline will be used both for generating an image
-representing the relations between tables in the current
-database, and for generating an image representing the schema of
-the current table. In the latter case, the string ` -s %s -i %t'
-will be appended to the commandline (with `%s' replaced by the
-table schema name and `%t' by the table name).
-
-SchemaSpy can be run as a Java application installed on the local
-machine, or (probably easier for most users) in a Docker/Podman
-software container that contains the necessary dependencies.
-
-In this commandline, %d is replaced by the database name, %h by
-the hostname on which PostgreSQL is running, %P by the port it is
-running on, %u by the user, %p by the password, %s by the current
-table schema name, %t by the current table name and %D by the
-directory (which will be created in the system temporary
-directory) in which output files are created by SchemaSpy. The %s
-and %t values will only be used when generating illustrations
-concerning a specific table, rather than the entire database."
-  :type 'string
-  :group 'pgmacs)
-
 (defcustom pgmacs-use-header-line t
   "If non-nil, use header line to display information on PostgreSQL connection."
   :type 'boolean
@@ -245,56 +204,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 (defvar-local pgmacs--table-primary-keys nil)
 
 
-(defun pgmacs--svg-icon-database ()
-  "Return an SVG icon representing a database."
-  (let ((icon (svg-create "1.3em" "1.3em" :viewBox "0 0 16 16")))
-    (cl-flet ((ellipse (y)
-                (svg-ellipse icon 8 y 5 1 :fill "purple")
-                (svg-ellipse icon 8 (+ y 1.8) 5 1 :fill "purple" :stroke "white" :stroke-width 0.3)
-                (svg-rectangle icon 3 y 10 1.5 :fill "purple")))
-      (ellipse 9)
-      (ellipse 6)
-      (ellipse 3)
-      (svg-image icon :margin 2 :ascent 'center))))
 
-(defun pgmacs--svg-icon-user ()
-  "Return an SVG icon representing a computer user."
-  (let ((icon (svg-create "0.7em" "0.7em" :viewBox "0 0 16 16")))
-    (svg-circle icon 8 4 3.8 :fill "black" :opacity 0.5)
-    (svg-rectangle icon 1 9 15 20 :fill "black" :opacity 0.5 :rx 3)
-    (svg-image icon :margin 2 :ascent 'center)))
-
-(defun pgmacs--svg-icon-table ()
-  "Return an SVG icon representing a database table."
-  (let ((icon (svg-create "1em" "1em" :viewBox "-0.4 -0.4 3.6 4.6" :fill "currentColor")))
-    (svg-rectangle icon 0 0 3 3 :fill "none" :stroke "black" :stroke-width 0.3 :rx 0.1)
-    (svg-line icon 0 1 3 1 :stroke "black" :stroke-width 0.2)
-    (svg-line icon 0 2 3 2 :stroke "black" :stroke-width 0.2)
-    (svg-line icon 0 0.3 3 0.3 :stroke "black" :stroke-width 0.2)
-    (svg-line icon 1 0 1 3 :stroke "black" :stroke-width 0.2)
-    (svg-line icon 2 0 2 3 :stroke "black" :stroke-width 0.2)
-    (svg-image icon :margin 2 :ascent 'center)))
-
-(defun pgmacs--svg-icon-comment ()
-  "Return an SVG icon representing a comment."
-  (let* ((icon (svg-create "1em" "1em" :viewBox "0 0 32 32"))
-         (d "M16 26c-1.168 0-2.296-.136-3.38-.367l-4.708 2.83.063-4.639C4.366 21.654 2 18.066 2 14 2 7.373 8.268 2 16 2s14 5.373 14 12c0 6.628-6.268 12-14 12Zm0-26C7.164 0 0 6.269 0 14c0 4.419 2.345 8.354 6 10.919V32l7.009-4.253c.97.16 1.968.253 2.991.253 8.836 0 16-6.268 16-14 0-7.731-7.164-14-16-14Zm7 11H9a1 1 0 0 0 0 2h14a1 1 0 1 0 0-2Zm-2 6H11a1 1 0 1 0 0 2h10a1 1 0 1 0 0-2Z"))
-    (svg--append icon (dom-node 'path `((d . ,d) (fill . "#000") (fill-rule . "evenodd"))))
-    (svg-image icon :margin (cons 5 3) :ascent 'center)))
-
-(defun pgmacs--svg-icon-replication ()
-  "Return an SVG icon representing data replication."
-  (let* ((icon (svg-create "1em" "1em" :viewBox "0 0 32 32"))
-         (d "M20 20v2h5.22a11.016 11.016 0 0 1-11.97 4.653l-.499 1.937A13 13 0 0 0 26 24.293V28h2v-8zm5-17a4.005 4.005 0 0 0-4 4a3.954 3.954 0 0 0 .567 2.019L9.019 21.567A3.952 3.952 0 0 0 7 21a4 4 0 1 0 4 4a3.954 3.954 0 0 0-.567-2.019l12.548-12.548A3.952 3.952 0 0 0 25 11a4 4 0 0 0 0-8M7 27a2 2 0 1 1 2-2a2.002 2.002 0 0 1-2 2M25 9a2 2 0 1 1 2-2a2.002 2.002 0 0 1-2 2m-9-6A13.04 13.04 0 0 0 6 7.707V4H4v8h8v-2H6.78a11.016 11.016 0 0 1 11.97-4.653l.499-1.937A13.036 13.036 0 0 0 16 3"))
-    (svg--append icon (dom-node 'path `((d . ,d) (fill . "#000"))))
-    (svg-image icon :margin (cons 3 1) :ascent 'center)))
-
-(defun pgmacs--maybe-svg-icon (svg-fn)
-  (if (and (display-graphic-p)
-           (image-type-available-p 'svg))
-      (let ((svg (funcall svg-fn)))
-	(propertize " " 'display svg 'rear-nonsticky t 'cursor-intangible t))
-    ""))
 
 (defclass pgmacs-shortcut-button ()
   ((label :initarg :label :type string)
@@ -1857,9 +1767,9 @@ over the PostgreSQL connection CON."
         (let ((sqn (make-pg-qualified-name :schema (cl-first fc) :name (cl-second fc))))
           (puthash "REFERENCES" (list sqn target-col) column-info))))
     (when (pgmacs--column-nullable-p con table column)
-      (puthash (propertize "NOT NULL" 'font-lock-face '(:box t) 'help-echo "Not null constraint") nil column-info))
-    (when (cl-first maxlen)
-      (puthash "maxlen" (cl-first maxlen) column-info))
+      (puthash (pgmacs--make-badge "NOT NULL" :color "#777" :help-echo "Not null constraint") nil column-info))
+    (when  maxlen
+      (puthash "maxlen" maxlen column-info))
     (when defaults
       (puthash (propertize "DEFAULT" 'help-echo "Default value for this column") defaults column-info))
     (when-let* ((comment (pg-column-comment con table column))
@@ -1894,7 +1804,7 @@ over the PostgreSQL connection CON."
      (pgmacs--column-info/basic con table column))
     (_ (pgmacs--column-info/full con table column))))
 
-;; Format the column-info hashtable as a string
+;; Format the column-info hashtable as a string for display
 (defun pgmacs--format-column-info (column-info)
   (let ((items (list)))
     (maphash (lambda (k v)
@@ -1905,6 +1815,12 @@ over the PostgreSQL connection CON."
                                       (pgmacs--display-identifier (cl-first v))
                                       (cl-second v))
                               items)))
+                     ((string= "PRIMARY KEY" k)
+                      (push (concat (pgmacs--make-badge "PRIMARY KEY" :color "#777") " " v) items))
+                     ((string= "DEFAULT" k)
+                      (push (concat (pgmacs--make-badge "DEFAULT" :color "#777") " " v) items))
+                     ((string= "CHECK" k)
+                      (push (concat (pgmacs--make-badge "CHECK" :color "#777") " " v) items))
                      (t
                       (push (if v (format "%s %s" k v) k) items))))
              column-info)
@@ -3749,105 +3665,6 @@ Runs functions on `pgmacs-table-list-hook'."
         (shwf 'bury-buffer "Bury this buffer")
         (shrink-window-if-larger-than-buffer)
         (goto-char (point-min))))))
-
-(defun pgmacs--rewrite-schemaspy-svg (svg-pathname)
-  "Clean up the SVG produced by SchemaSpy to improve display in Emacs.
-The SVG produced by dot includes xlinked references to PNG files
-that represent a key. These xlinked relative pathnames are not
-displayed by the SVG support in Emacs. We replace them by an
-inlined vector SVG image that is encoded as a data URI."
-  (with-current-buffer (find-file-noselect svg-pathname t t)
-    (cl-loop while (search-forward "xlink:href=\"../../images/primaryKeys.png\"" nil t)
-             do (delete-region (match-beginning 0) (match-end 0))
-             (insert "href=\"data:image/svg+xml,%3Csvg height='1362.976' viewBox='0 0 154.491 360.621' width='583.904' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M69.407 360.143c-8.545-1.912-12.989-5.943-15.73-14.271-1.263-3.84-1.716-7.444-3.181-25.306-2.999-36.562-4.773-64.722-6.027-95.69-.332-8.209-5.756-80.762-6.048-80.913-1.011-.52-8.86-5.98-10.696-7.44-3.498-2.783-9.747-9.042-12.344-12.364-6.935-8.871-11.455-18.535-13.708-29.314C.345 88.495-.015 84.632 0 76.886.026 63.563 2.333 53.394 7.8 42.49c3.93-7.834 8.006-13.364 14.96-20.295C35.21 9.785 49.463 2.732 66.707.446c5.045-.669 17.296-.567 22.225.184 11.299 1.723 21.418 5.533 30.339 11.423 8.456 5.583 16.442 13.447 22.31 21.97 11.561 16.793 15.58 38.777 11.155 61.031-3.871 19.471-14.575 35.045-32.054 46.637-2.62 1.738-4.966 3.545-5.216 4.016-1.007 1.905-3.055 7.729-4.826 13.73-1.734 5.874-4.422 16.976-4.422 18.264 0 .922-1.641 2.581-4.62 4.668-4.347 3.046-4.196 2.561-4.198 13.51-.001 10.612-.118 10.114 3.192 13.672 1.14 1.226 2.178 2.644 2.305 3.151.128.508.164 4.288.081 8.4-.122 6.066-.26 7.679-.73 8.537a35.426 35.426 0 0 0-.942 1.852c-.2.437-.534.794-.745.794-.646 0-4.22 3.592-4.22 4.241 0 .336-.25.818-.553 1.07-1.505 1.25-2.785 6.552-2.546 10.552.213 3.566.906 4.789 5.328 9.41 5.078 5.308 5.002 5.13 5.002 11.769 0 6.762-.117 7.03-5.466 12.523-2.079 2.134-4.041 4.389-4.36 5.01-.5.971-.58 2.548-.579 11.289.001 5.913.155 10.709.367 11.474.201.723.915 2.034 1.586 2.914.671.879 1.22 1.8 1.22 2.045s1.192 1.63 2.648 3.077c3.952 3.926 3.887 3.641 3.837 16.755-.047 12.092-.36 14.766-2.187 18.67-1.867 3.99-3.773 5.27-9.766 6.559-4.77 1.026-17.76 1.329-21.465.5z' fill='%23d6de00'/%3E%3Cpath d='M96.814 73.36a25.972 26.755 0 0 1-36.667-1.957 25.972 26.755 0 0 1 1.871-37.773 25.972 26.755 0 0 1 36.67 1.898 25.972 26.755 0 0 1-1.815 37.776' fill='%23fff'/%3E%3C/svg%3E\""))
-    ;; drop the "Generated by SchemaSpy label" which is rather intrusive
-    (goto-char (point-min))
-    (when (search-forward "Generated by SchemaSpy</text>" nil t)
-      (delete-region (line-beginning-position) (line-end-position)))
-    (save-buffer)
-    (kill-buffer)))
-
-(defun pgmacs--schemaspy-table (&rest _ignore)
-  "Run SchemaSpy on current table and display the SVG describing the schema."
-  (interactive)
-  (unless (display-graphic-p)
-    (user-error "SchemaSpy will only work on a graphical terminal"))
-  (unless (image-type-available-p 'svg)
-    (user-error "SchemaSpy support needs SVG support in your Emacs"))
-  (when (member (pgcon-server-variant pgmacs--con) '(spanner))
-    (error "The Spanner database does not implement system tables needed by SchemaSpy"))
-  (let* ((tmpdir (temporary-file-directory))
-         (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
-    (when (file-directory-p schemaspy-dir)
-      (delete-directory schemaspy-dir t nil))
-    (with-file-modes #o777
-      (make-directory schemaspy-dir t))
-    ;; The Docker image for schemaspy runs as user "java" for an obscure reason, so ensure that the
-    ;; temporary schemaspy-dir is writable for all.
-    (let ((ci (pgcon-connect-info pgmacs--con))
-          (schema-name (if (pg-qualified-name-p pgmacs--table)
-                           (pg-qualified-name-schema pgmacs--table)
-                         "public"))
-          (table-name (if (pg-qualified-name-p pgmacs--table)
-                          (pg-qualified-name-name pgmacs--table)
-                        pgmacs--table)))
-      (when (eql :local (cl-first ci))
-        (message "Replacing Unix connection by network connection to localhost for SchemaSpy"))
-      (let* ((cmdline (concat pgmacs-schemaspy-cmdline
-                              " -s %s -i %t"))
-             (cmd (cl-multiple-value-bind (type host port dbname user password) ci
-                    (let ((spec (list (cons ?h (if (eq type :local) "localhost" host))
-                                      (cons ?P (or port 5432))
-                                      (cons ?d dbname)
-                                      (cons ?u user)
-                                      (cons ?p password)
-                                      (cons ?s schema-name)
-                                      (cons ?t table-name)
-                                      (cons ?D schemaspy-dir))))
-                      (format-spec cmdline spec))))
-             (out (format "%s/diagrams/tables/%s.1degree.svg"
-                          schemaspy-dir
-                          table-name)))
-        (message "Running cmd %s, output to %s" cmd out)
-        (shell-command cmd)
-        (when (file-exists-p out)
-          (pgmacs--rewrite-schemaspy-svg out)
-          (find-file out))))))
-
-;; We display only the "real relationships" summary SVG for the database; SchemaSpy generates many
-;; other images including for each orphan table.
-(defun pgmacs--schemaspy-database (&rest _ignore)
-  "Run SchemaSpy on the current PGmacs database and display the SVG."
-  (interactive)
-  (unless (display-graphic-p)
-    (user-error "SchemaSpy will only work on a graphical terminal"))
-  (unless (image-type-available-p 'svg)
-    (user-error "SchemaSpy support needs SVG support in your Emacs"))
-  (let* ((tmpdir (temporary-file-directory))
-         (schemaspy-dir (expand-file-name "pgmacs-schemaspy" tmpdir)))
-    (when (file-directory-p schemaspy-dir)
-      (delete-directory schemaspy-dir t))
-    ;; The Docker image for schemaspy runs as user "java" for an obscure reason, so we need to
-    ;; ensure that the temporary schemaspy-dir is writable for all.
-    (with-file-modes #o777
-      (make-directory schemaspy-dir t))
-    (let ((ci (pgcon-connect-info pgmacs--con)))
-      (when (eql :local (cl-first ci))
-        (message "Replacing Unix connection by network connection to localhost for SchemaSpy"))
-      (let ((cmd (cl-multiple-value-bind (type host port dbname user password) ci
-                   (let ((spec (list (cons ?h (if (eq type :local) "localhost" host))
-                                     (cons ?P (or port 5432))
-                                     (cons ?d dbname)
-                                     (cons ?u user)
-                                     (cons ?p password)
-                                     (cons ?D schemaspy-dir))))
-                     (format-spec pgmacs-schemaspy-cmdline spec))))
-            (out (format "%s/diagrams/summary/relationships.real.compact.svg" schemaspy-dir)))
-        (message "Running cmd %s, output to %s" cmd out)
-        (shell-command cmd)
-        (when (file-exists-p out)
-          (pgmacs--rewrite-schemaspy-svg out)
-          (find-file out))))))
 
 ;; This function generates the string used to display a table in the main table-list buffer. If the
 ;; display is able to display SVG images, we prefix the name with a little SVG icon of a table.
