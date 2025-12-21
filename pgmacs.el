@@ -2081,6 +2081,17 @@ Table names are schema-qualified if the schema is non-default."
       (pgmacs--list-tables-basic)
     (pgmacs--list-tables-full)))
 
+(defun pgmacs--available-table-privileges (con)
+  (pcase (pgcon-server-variant con)
+    ('postgresql
+     (let ((privs '("SELECT" "INSERT" "UPDATE" "DELETE" "TRUNCATE" "REFERENCES" "TRIGGER")))
+       (when (>= (pgcon-server-version-major con) 18)
+         (push "MAINTAIN" privs))
+       privs))
+    ('cratedb
+     (list "SELECT" "INSERT" "UPDATE" "DELETE"))
+    (_ nil)))
+
 ;; Used to display only the first line of a table cell.
 (defun pgmacs--truncate-multiline (string)
   (let ((pos (or (cl-position ?\C-m string)
@@ -3175,6 +3186,16 @@ Runs functions on `pgmacs-row-list-hook'."
                               (if clustered-p "CLUSTERED " "")
                               (if valid-p "" "INVALID ")
                               type cols)))))
+      ;; has_table_privilege ( [ user name or oid, ] table text or oid, privilege text ) → boolean
+      (when (pg-function-p con "has_table_privilege")
+        (let ((items (list)))
+          (dolist (priv (pgmacs--available-table-privileges con))
+            (let* ((res (pg-exec-prepared con "SELECT has_table_privilege($1, $2)" `((,table . "text") (,priv . "text"))))
+                   (tuple (pg-result res :tuple 0))
+                   (color (if (cl-first tuple) "green" "red")))
+              (push (pgmacs--make-badge priv :color color) items)))
+          (when items
+            (insert "Table privileges for current user: " (string-join items " ") "\n"))))
       (insert "Row-level access control: ")
       (if (pgmacs--row-security-active con table)
           (insert "enabled")
