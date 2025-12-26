@@ -8,6 +8,8 @@
 - In row-list buffers, display information on the table privileges held by the current user
   (permission to select, update, delete rows and so on).
 
+- In row-list buffers, display information on the access control list (ACL) for the table, if
+  defined. This requires an update to the pg-el library.
 
 
 ## [0.28] - 2025-11-23

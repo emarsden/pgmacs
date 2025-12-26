@@ -3,7 +3,7 @@
 ;; Copyright (C) 2023-2025 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 ;; Version: 0.28
-;; Package-Requires: ((emacs "29.1") (pg "0.61"))
+;; Package-Requires: ((emacs "29.1") (pg "0.62"))
 ;; URL: https://github.com/emarsden/pgmacs/
 ;; Keywords: data, PostgreSQL, database
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -3114,6 +3114,8 @@ Runs functions on `pgmacs-row-list-hook'."
               (push (pgmacs--make-badge priv :color color) items)))
           (when items
             (insert "Table privileges for current user: " (string-join (reverse items) " ") "\n"))))
+      (when-let* ((acl (pg-table-acl con table)))
+        (insert (format "Table ACL: %s" acl) "\n"))
       (insert "Row-level access control: ")
       (if (pgmacs--row-security-active con table)
           (insert "enabled")
