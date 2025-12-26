@@ -41,7 +41,7 @@ installability:
    podman run --rm -ti -v {{ tmpdir }}:/tmp \
      -e TERM=xterm-256color \
      --network=host \
-     docker.io/silex/emacs:29.4-ci \
+     docker.io/silex/emacs:30.2-ci \
       ${EMACS:-emacs} -l /tmp/init.el
 
 
