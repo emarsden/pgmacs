@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.29] - Unreleased
+## [0.29] - 2025-12-26
 
 - When running in graphical mode and SVG support is available, use SVG badges for various parts of
   the table metadata display.
