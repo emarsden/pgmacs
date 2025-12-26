@@ -93,8 +93,8 @@ it to modify real PostgreSQL databases used in production.
 ## Supported platforms
 
 **Emacs version**: PGmacs requires Emacs version 29 or later. It is tested mostly on Emacs 30.2 and
-29.4. It is mostly tested on Linux, but should work as expected on Microsoft Windows and MacOS. It
-works both in graphical mode and in the terminal.
+29.4. It is mostly tested on Linux, but should work as expected on Microsoft Windows and MacOS (in
+fact, it works very well on Haiku OS). It works both in graphical mode and in the terminal.
 
 **PostgreSQL version**: PGmacs is primarily tested with PostgreSQL versions 18.1, but should work
 with any PostgreSQL version supported by the `pg-el` library that it uses to communicate with
