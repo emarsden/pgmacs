@@ -3352,7 +3352,10 @@ Prompt for the table name in the minibuffer."
         (when (> (pgcon-server-version-major con) 11)
           (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('ssl_library')"))
                  (row (pg-result res :tuple 0)))
-            (insert (format "Backend compiled with SSL library %s\n" (cl-first row))))))
+            (insert (format "Backend compiled with SSL library %s\n" (cl-first row)))))
+        (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('data_checksums')"))
+               (row (pg-result res :tuple 0)))
+          (insert (format "Data checksums: %s\n" (cl-first row)))))
       (let* ((superuser-p (pgmacs--read-current-setting con "is_superuser")))
         (insert (format "Connected as user %s (%ssuperuser)\n"
                         (pgmacs--read-current-user con)
