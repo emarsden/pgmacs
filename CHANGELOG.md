@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30] - Unreleased
+
+- In table-row buffers, add a button that opens a buffer showing system-level information concerning each index
+  on a table. This functionality uses the `pgstattuple` module, which is a privileged module only
+  available to superusers and roles with `EXECUTE` privilege on `pg_stat_scan_tables`.
+
+
 ## [0.29] - 2025-12-26
 
 - When running in graphical mode and SVG support is available, use SVG badges for various parts of

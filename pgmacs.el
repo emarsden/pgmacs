@@ -1316,14 +1316,14 @@ Deletion is only possible when the table has primary key."
                   (error "Unexpected status %s for PostgreSQL DELETE command" status))
                 (let ((rows (cl-parse-integer (substring status 7))))
                   (cond ((eql 0 rows)
-                         (warn "Could not delete PostgreSQL row")
+                         (display-warning 'pgmacs "Could not delete PostgreSQL row")
                          (pg-exec pgmacs--con "COMMIT TRANSACTION"))
                         ((eql 1 rows)
                          (pg-exec pgmacs--con "COMMIT TRANSACTION")
                          (pgmacstbl-remove-object pgmacstbl current-row)
                          (pgmacs--redraw-pgmacstbl))
                         (t
-                         (warn "Deletion affected more than 1 row; rolling back")
+                         (display-warning 'pgmacs "Deletion affected more than 1 row; rolling back")
                          (pg-exec pgmacs--con "ROLLBACK TRANSACTION")))))
             (pg-error
              (message "Couldn't delete row: %s" e)))
@@ -1942,6 +1942,40 @@ Uses PostgreSQL connection CON."
        (cl-first tuple)))
     (_ nil)))
 
+(cl-defun pgmacs--show-index-stats (con index-name)
+  "Create a buffer with information concerning INDEX-NAME.
+Uses PostgreSQL connection CON."
+  (interactive)
+  (let* ((con pgmacs--con)
+         (db-buffer pgmacs--db-buffer)
+         (inhibit-read-only t)
+         (res (pg-exec con "SELECT 1 FROM pg_extension WHERE extname = 'pgstattuples'"))
+         (tuples (pg-result res :tuples)))
+    ;; Loading this extension requires superuser or EXECUTE on pg_stat_scan_tables privileges.
+    (unless tuples
+      (condition-case e
+          (pg-exec con "CREATE EXTENSION IF NOT EXISTS pgstattuple")
+        (pg-error
+         (display-warning 'pgmacs "Could not load PostgreSQL module pgstattuple")
+         (cl-return-from pgmacs--show-index-stats nil))))
+    (pop-to-buffer (get-buffer-create "*PostgreSQL index information*"))
+    (setq buffer-read-only nil)
+    (erase-buffer)
+    (remove-overlays)
+    (kill-all-local-variables)
+    (setq-local pgmacs--con con
+                pgmacs--db-buffer db-buffer
+                buffer-read-only nil)
+    (buffer-disable-undo)
+    (insert (propertize (format "Statistics for index %s" index-name) 'face 'bold) "\n\n")
+    ;; TODO: we should perhaps account for a schema-qualified index-name
+    (let* ((res (pg-exec-prepared con "SELECT * FROM pgstatindex($1)" `((,index-name . "text"))))
+           (data (pg-result res :tuple 0))
+           (column-names (mapcar #'cl-first (pg-result res :attributes))))
+      (cl-loop for column in data
+               for column-name in column-names
+               do (insert column-name ": " (format "%s" column) "\n")))))
+
 
 ;; This function called for semi-compatible PostgreSQL variants that only partially implement the
 ;; system tables that we use to query for metainformation concerning SQL tables.
@@ -2158,7 +2192,7 @@ Table names are schema-qualified if the schema is non-default."
                            (keydesc (when keyvec (key-description keyvec))))
                       (if keydesc
                           (shw keydesc msg)
-                        (warn "Expected function %s to be bound in PGmacs buffer" fun)))))
+                        (display-warning 'pgmacs (format "Expected function %s to be bound in PGmacs buffer" fun))))))
         (let ((inhibit-read-only t))
           (erase-buffer)
           (shwf 'pgmacs--proc-list-RET "Display details of the procedure at point")
@@ -2665,7 +2699,7 @@ Opens a dedicated buffer if the query list is not empty."
                          (keydesc (when keyvec (key-description keyvec))))
                     (if keydesc
                         (shw keydesc msg)
-                      (warn "Expected function %s to be bound in PGmacs buffer" fun)))))
+                      (display-warning 'pgmacs (format "Expected function %s to be bound in PGmacs buffer" fun))))))
       (let ((inhibit-read-only t))
         (erase-buffer)
         (shwf 'pgmacs--view-value "Display the value at point in a dedicated buffer")
@@ -2811,7 +2845,7 @@ Deletion is only possible for tables with a (possibly multicolumn) primary key."
           (error "Unexpected status %s for PostgreSQL DELETE command" status))
         (let ((rows-affected (cl-parse-integer (substring status 7))))
           (cond ((eql 0 rows-affected)
-                 (warn "Could not delete PostgreSQL rows")
+                 (display-warning 'pgmacs "Could not delete PostgreSQL rows")
                  (pg-exec pgmacs--con "COMMIT TRANSACTION"))
                 ((eql (length pgmacs--marked-rows) rows-affected)
                  (pg-exec pgmacs--con "COMMIT TRANSACTION")
@@ -2820,7 +2854,7 @@ Deletion is only possible for tables with a (possibly multicolumn) primary key."
                      (pgmacstbl-remove-object pgmacstbl row)))
                  (pgmacs--redraw-pgmacstbl))
                 (t
-                 (warn "Deletion affected more than 1 row; rolling back")
+                 (display-warning 'pgmacs "Deletion affected more than 1 row; rolling back")
                  (pg-exec pgmacs--con "ROLLBACK TRANSACTION"))))))
     (setq pgmacs--marked-rows (list))))
 
@@ -3097,13 +3131,17 @@ Runs functions on `pgmacs-row-list-hook'."
         (insert (propertize "Indexes" 'face 'bold) ":\n")
         (dolist (idx indexes)
           (cl-multiple-value-bind (name unique-p primary-p clustered-p valid-p _def type cols) idx
-              (insert (format "  %s %s%s%s%s %s (cols: %s)\n"
+              (insert (format "  %s %s%s%s%s %s (cols: %s) "
                               name
                               (if unique-p "UNIQUE " "")
                               (if primary-p "PRIMARY " "")
                               (if clustered-p "CLUSTERED " "")
                               (if valid-p "" "INVALID ")
-                              type cols)))))
+                              type cols))
+              (insert-text-button "index stats"
+                                  'action (lambda (&rest _ignore) (pgmacs--show-index-stats con name))
+                                  'help-echo "Display pgstatindex data")
+              (insert "\n"))))
       ;; has_table_privilege ( [ user name or oid, ] table text or oid, privilege text ) → boolean
       (when (pg-function-p con "has_table_privilege")
         (let ((items (list)))
@@ -3653,7 +3691,7 @@ Runs functions on `pgmacs-table-list-hook'."
                          (keydesc (when keyvec (key-description keyvec))))
                     (if keydesc
                         (shw keydesc msg)
-                      (warn "Expected function %s to be bound in PGmacs buffer" fun)))))
+                      (display-warning 'pgmacs (format "Expected function %s to be bound in PGmacs buffer" fun))))))
       (let ((inhibit-read-only t))
         (shwf 'pgmacs--table-list-RET "Open a new buffer to browse/edit the table at point")
         (shwf 'pgmacs--next-item "Move to next column or button")
