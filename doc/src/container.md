@@ -7,7 +7,7 @@ mode. It includes Emacs, PGmacs and the necessary dependencies preinstalled.
 You will need either [Podman](https://podman.io/) (free software that’s available for Linux,
 Microsoft Windows and MacOS) or Docker installed.
 
-    podman run --network host -ti ghcr.io/emarsden/pgmacs:latest
+    podman run --network host --env LANG=en_UK@UTF-8 -ti ghcr.io/emarsden/pgmacs:latest
 
 [![Container size](https://ghcr-badge.egpl.dev/emarsden/pgmacs/size?label=Container%20image)](https://github.com/users/emarsden/packages/container/package/pgmacs)
 
