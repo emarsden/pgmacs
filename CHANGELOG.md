@@ -2,9 +2,16 @@
 
 ## [0.30] - Unreleased
 
-- In table-row buffers, add a button that opens a buffer showing system-level information concerning each index
-  on a table. This functionality uses the `pgstattuple` module, which is a privileged module only
-  available to superusers and roles with `EXECUTE` privilege on `pg_stat_scan_tables`.
+- In table-row buffers, add a button that opens a buffer showing system-level information concerning
+  each index on a table. This functionality uses the `pgstattuple` module, which is a privileged
+  module only available to superusers and roles with `EXECUTE` privilege on `pg_stat_scan_tables`.
+
+- Improve responsiveness on slow connections to the database. SQL queries issued to collect
+  non-critical information (column metadata, table size on disk, access privileges, etc.) are
+  delayed until after the main row-list table has been displayed. Placeholder data is shown while
+  waiting for these queries to be completed, to avoid display jank. Though the total query time until full
+  information has been displayed is not improved by this change, essential information is now shown
+  first.
 
 
 ## [0.29] - 2025-12-26

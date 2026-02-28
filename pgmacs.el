@@ -1,6 +1,6 @@
 ;;; pgmacs.el --- Emacs is editing a PostgreSQL database  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023-2025 Eric Marsden
+;; Copyright (C) 2023-2026 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 ;; Version: 0.29
 ;; Package-Requires: ((emacs "29.1") (pg "0.62"))
@@ -214,6 +214,13 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
    (condition :initarg :condition :initform nil)
    (action :initarg :action)
    (help-echo :initarg :help-echo :initform nil)))
+
+
+(defun pgmacs--placeholder (text action)
+  (cl-assert (functionp action))
+  (propertize text
+              'pgmacs-async action
+              'face 'pgmacs-muted))
 
 ;; Insert OBJECT into the current buffer. Returns non-nil if the content was inserted (if its
 ;; condition slot evaluated to non-nil).
@@ -669,7 +676,7 @@ Applies format string FMT to ARGS."
          (lambda (s) (or s "")))
         ((string= type-name "bpchar")
          (lambda (val)
-           (if (eql 1 (length val))
+           (if (characterp val)
                (char-to-string val)
              val)))
         ((string= type-name "hstore")
@@ -1720,11 +1727,11 @@ over the PostgreSQL connection CON."
                      con1.contype = 'f'
                 ) con
                JOIN pg_attribute att ON
-                    att.attrelid = con.confrelid and att.attnum = con.child
+                    att.attrelid = con.confrelid AND att.attnum = con.child
                JOIN pg_class cl ON
                     cl.oid = con.confrelid
                JOIN pg_attribute att2 ON
-                    att2.attrelid = con.conrelid and att2.attnum = con.parent
+                    att2.attrelid = con.conrelid AND att2.attnum = con.parent
                WHERE att2.attname = $3")
          ;; this query has the same arguments (and argument types) as that above
          (ps-name (pg-ensure-prepared-statement con "QRY-references-constraints" sql argument-types))
@@ -1768,7 +1775,7 @@ over the PostgreSQL connection CON."
           (puthash "REFERENCES" (list sqn target-col) column-info))))
     (when (pgmacs--column-nullable-p con table column)
       (puthash (pgmacs--make-badge "NOT NULL" :color "#777" :help-echo "Not null constraint") nil column-info))
-    (when  maxlen
+    (when maxlen
       (puthash "maxlen" maxlen column-info))
     (when defaults
       (puthash (propertize "DEFAULT" 'help-echo "Default value for this column") defaults column-info))
@@ -1946,14 +1953,14 @@ Uses PostgreSQL connection CON."
   "Create a buffer with information concerning INDEX-NAME.
 Uses PostgreSQL connection CON."
   (interactive)
-  (let* ((con pgmacs--con)
-         (db-buffer pgmacs--db-buffer)
+  (let* ((db-buffer pgmacs--db-buffer)
          (inhibit-read-only t)
          (res (pg-exec con "SELECT 1 FROM pg_extension WHERE extname = 'pgstattuples'"))
          (tuples (pg-result res :tuples)))
     ;; Loading this extension requires superuser or EXECUTE on pg_stat_scan_tables privileges.
+    ;; https://www.postgresql.org/docs/current/pgstattuple.html
     (unless tuples
-      (condition-case e
+      (condition-case _e
           (pg-exec con "CREATE EXTENSION IF NOT EXISTS pgstattuple")
         (pg-error
          (display-warning 'pgmacs "Could not load PostgreSQL module pgstattuple")
@@ -2011,7 +2018,7 @@ Table names are schema-qualified if the schema is non-default."
              (sql "SELECT
                      pg_catalog.pg_total_relation_size(c.oid),
                      obj_description(c.oid, 'pg_class')
-                   FROM pg_class c
+                   FROM pg_catalog.pg_class c
                    JOIN pg_namespace n ON c.relnamespace = n.oid
                    WHERE (n.nspname, c.relname) = ($1, $2)")
              (res (pg-exec-prepared pgmacs--con sql `((,schema . "text") (,tname . "text"))))
@@ -2021,7 +2028,9 @@ Table names are schema-qualified if the schema is non-default."
              ;; We could use function `pg-table-comment', but that would imply an additional SQL
              ;; query and this function is speed critical.
              (comment (cl-second tuple))
-             (owner (pg-table-owner pgmacs--con table)))
+             ;; The table owner is queried once the basic table information has been displayed, for
+             ;; responsiveness.
+             (owner nil))
         (push (list table row-count size owner (or comment "")) entries)))
     entries))
 
@@ -2376,7 +2385,7 @@ Table names are schema-qualified if the schema is non-default."
     (let ((inhibit-read-only t))
       (erase-buffer)
       (remove-overlays)
-      (insert (propertize "PostgreSQL functions and procedures" 'face 'bold))
+      (insert (propertize "PostgreSQL functions and procedures" 'face 'bold 'display '(height 1.3)))
       (insert "\n\n")
       (pgmacstbl-insert pgmacstbl)))
   (goto-char (point-min))
@@ -2925,6 +2934,91 @@ Deletion is only possible for tables with a (possibly multicolumn) primary key."
     (pg-exec-prepared con sql (list) :max-rows row-count)))
 
 
+;; Helper function for pgmacs--display-table, called asynchronously
+(defun pgmacs--display-column-info (con table column-names)
+  (let* ((column-info
+          (let ((ht (make-hash-table :test #'equal)))
+            (dolist (c column-names)
+              (puthash c (pgmacs--column-info con table c) ht))
+            ht)))
+    (cl-loop
+     for col in column-names
+     for col-count from 1
+     do (let* ((structure-char (if (eql col-count (length column-names))
+                                   (if (char-displayable-p ?└) ?└ ?`)
+                                 (if (char-displayable-p ?├) ?├ ?|)))
+               (ci (gethash col column-info))
+               (cif (pgmacs--format-column-info ci)))
+          (insert (propertize (format "%c " structure-char) 'face 'shadow))
+          (insert col ": " cif " ")
+          (unless (member (pgcon-server-variant con) '(risingwave))
+            (insert-text-button "Rename column"
+                                'action `(lambda (&rest _ignore)
+                                           (let* ((prompt (format "New name for column %s: " ,col))
+                                                  (new (read-from-minibuffer prompt))
+                                                  (sql (format "ALTER TABLE %s RENAME COLUMN %s TO %s"
+                                                               (pg-escape-identifier ,table)
+                                                               (pg-escape-identifier ,col)
+                                                               (pg-escape-identifier new)))
+                                                  (res (pg-exec ,con sql)))
+                                             (pgmacs--notify "%s" (pg-result res :status))
+                                             (pgmacs--display-table ,table)))
+                                'help-echo "Rename this column"))
+          (insert "   ")
+          (cond ((pg-column-comment con table col)
+                 (insert-text-button
+                  "Modify column comment"
+                  'action `(lambda (&rest _ignore)
+                             (let* ((prompt (format "New column comment for %s: " ,col))
+                                    (new (read-from-minibuffer prompt)))
+                               (setf (pg-column-comment ,con ,table ,col) new)
+                               (pgmacs--notify "Column comment updated")
+                               (pgmacs--display-table ,table))))
+                 (insert "   ")
+                 (insert-text-button
+                  "Delete column comment"
+                  'action `(lambda (&rest _ignore)
+                             (when (y-or-n-p (format "Really delete comment on column %s?" ,col))
+                               (setf (pg-column-comment ,con ,table ,col) nil)
+                               (pgmacs--notify "Column comment deleted")
+                               (pgmacs--display-table ,table)))
+                  'help-echo "Delete comment on column"))
+                ;; And if there is no existing column comment
+                (t
+                 ;; FIXME this functionality is not implemented for YDB
+                 (insert-text-button
+                  (format "%sAdd column comment" (or (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-comment) ""))
+                  'action `(lambda (&rest _ignore)
+                             (let* ((prompt (format "New comment for column %s: " ,col))
+                                    (new (read-from-minibuffer prompt)))
+                               (setf (pg-column-comment ,con ,table ,col) new)
+                               (pgmacs--notify "Column comment updated")
+                               (pgmacs--display-table ,table))))))
+          (insert "\n")))
+     ;; Now that we have obtained the column metainformation, update the help-echo on each column
+     ;; name in the table header to display metainformation concerning the column, and update the
+     ;; help-echo on the column values by updating the column displayer function. Ensure that we
+     ;; restore point after all this movement, because the contract of a pgmacs-async function is to
+     ;; stay at point of insertion.
+     (save-excursion
+       (goto-char (point-min))
+       (text-property-search-forward 'pgmacstbl)
+       (text-property-search-backward 'pgmacstbl)
+       (let* ((pgmacstbl (pgmacstbl-current-table))
+              (columns (pgmacstbl-columns pgmacstbl)))
+         (cl-loop
+          for c in columns
+          for name = (pgmacstbl-column-name c)
+          for ci = (gethash name column-info)
+          for cif = (pgmacs--format-column-info ci)
+          for dpy = (or (pgmacs--lookup-column-displayer table name)
+                        (pgmacs--make-column-displayer cif ci))
+          do
+          (setf (pgmacstbl-column-name c) (propertize name 'face 'pgmacs-table-header 'help-echo cif))
+          (setf (pgmacstbl-column-displayer c) dpy)
+          (pgmacs--redraw-pgmacstbl))))))
+
+
 ;; TODO: add additional information as per psql
 ;; Table « public.books »
 ;; Colonne |           Type           | Collationnement | NULL-able |            Par défaut
@@ -2983,11 +3077,10 @@ Runs functions on `pgmacs-row-list-hook'."
        (propertize header1 'face 'bold)
        (propertize header2 'face 'bold)
        "\n"))
+    (redisplay)
     ;; This is a buffer-local variable.
     (setq pgmacs--table-primary-keys (pgmacs--table-primary-keys con table))
-    (let* ((comment (pg-table-comment con table))
-           (indexes (pgmacs--table-indexes con table))
-           (offset (or pgmacs--offset 0))
+    (let* ((offset (or pgmacs--offset 0))
            (res (cond (center-on
                        (pgmacs--select-rows-around con t-id center-on pgmacs-row-limit))
                       (where-filter
@@ -2999,15 +3092,6 @@ Runs functions on `pgmacs-row-list-hook'."
            (column-type-oids (mapcar #'cl-second (pg-result res :attributes)))
            (column-type-names (mapcar (lambda (oid) (pg-lookup-type-name con oid)) column-type-oids))
            (column-alignment (mapcar #'pgmacs--alignment-for column-type-names))
-           (column-info
-            (let ((ht (make-hash-table :test #'equal)))
-              (dolist (c column-names)
-                (puthash c (pgmacs--column-info con table c) ht))
-              ht))
-           (column-meta (cl-loop
-                         for c in column-names
-                         for ci = (gethash c column-info)
-                         collect (pgmacs--format-column-info ci)))
            (column-formatters (mapcar #'pgmacs--value-formatter column-type-names))
            (value-widths (mapcar #'pgmacs--value-width column-type-names))
            (column-widths (cl-loop for w in value-widths
@@ -3015,16 +3099,13 @@ Runs functions on `pgmacs-row-list-hook'."
                                    collect (1+ (max w (length name)))))
            (columns (cl-loop
                      for name in column-names
-                     for meta in column-meta
                      for align in column-alignment
                      for fmt in column-formatters
                      for w in column-widths
                      for dpy = (or (pgmacs--lookup-column-displayer table name)
-                                   (pgmacs--make-column-displayer meta (gethash name column-info)))
+                                   (pgmacs--make-column-displayer "" (make-hash-table)))
                      collect (make-pgmacstbl-column
-                              :name (propertize name
-                                                'face 'pgmacs-table-header
-                                                'help-echo meta)
+                              :name (propertize name 'face 'pgmacs-table-header)
                               :align align
                               :min-width (1+ (max w (length name)))
                               :max-width pgmacs-max-column-width
@@ -3047,117 +3128,82 @@ Runs functions on `pgmacs-row-list-hook'."
                   truncate-lines t)
       (pgmacs-mode)
       (use-local-map pgmacs-row-list-map)
-      (when comment
-        (insert (propertize "Table comment" 'face 'bold))
-        (insert (format ": %s  " comment))
-        (insert-text-button (propertize "Modify"  'font-lock-face '(:box t))
-                            'action (lambda (&rest _ignore)
-                                      (let ((comment (read-from-minibuffer "New table comment: ")))
-                                        (setf (pg-table-comment con table) comment))
-                                      (pgmacs--display-table table))
-                            'help-echo "Modify the table comment")
+      (cl-flet ((update-comment ()
+                  (let ((comment (pg-table-comment con table)))
+                    (cond (comment
+                           (insert comment " ")
+                           (insert-text-button (propertize "Modify"  'font-lock-face '(:box t))
+                                               'action (lambda (&rest _ignore)
+                                                         (let ((comment (read-from-minibuffer "New table comment: ")))
+                                                           (setf (pg-table-comment con table) comment))
+                                                         (pgmacs--display-table table))
+                                               'help-echo "Modify the table comment"))
+                          (t (insert (propertize "<none>" 'face 'pgmacs-muted)))))))
+        (insert (propertize "Table comment" 'face 'bold) ": ")
+        (insert (pgmacs--placeholder "<fetching>" #'update-comment))
         (insert "\n"))
-      (let* ((size/disk (pgmacs--table-size-ondisk con table))
-             (size/pretty (and size/disk (file-size-human-readable size/disk 'iec " ")))
-             (idx/disk (pgmacs--index-size-ondisk con table))
-             (idx/pretty (and idx/disk (file-size-human-readable idx/disk 'iec " "))))
-        (when size/pretty
-          (insert (propertize "On-disk-size" 'face 'bold))
-          (insert ": " size/pretty)
-          (when idx/pretty
-            (insert (format " (indexes %s)" idx/pretty)))
-          (insert "\n")))
+      (cl-flet ((update-size ()
+                  (let* ((size/disk (pgmacs--table-size-ondisk con table))
+                         (size/pretty (and size/disk (file-size-human-readable size/disk 'iec " ")))
+                         (idx/disk (pgmacs--index-size-ondisk con table))
+                         (idx/pretty (and idx/disk (file-size-human-readable idx/disk 'iec " "))))
+                    (insert (format "%s %s"
+                                    (or size/pretty "")
+                                    (if idx/pretty (format " (indexes %s)" idx/pretty) ""))))))
+        (insert (propertize "On-disk-size" 'face 'bold) ": ")
+        (insert (pgmacs--placeholder "<calculating>" #'update-size))
+        (insert "\n"))
       (insert (propertize "Columns" 'face 'bold) ":\n")
-      (cl-loop
-       for col in column-names
-       for col-count from 1
-       do (let* ((structure-char (if (eql col-count (length column-names))
-                                     (if (char-displayable-p ?└) ?└ ?`)
-                                   (if (char-displayable-p ?├) ?├ ?|)))
-                 (ci (gethash col column-info))
-                 (cif (pgmacs--format-column-info ci)))
-            (insert (propertize (format "%c " structure-char) 'face 'shadow))
-            (insert (format "%s: %s  " col cif))
-            (unless (member (pgcon-server-variant con) '(risingwave))
-              (insert-text-button "Rename column"
-                                  'action `(lambda (&rest _ignore)
-                                             (let* ((prompt (format "New name for column %s: " ,col))
-                                                    (new (read-from-minibuffer prompt))
-                                                    (sql (format "ALTER TABLE %s RENAME COLUMN %s TO %s"
-                                                                 (pg-escape-identifier ,table)
-                                                                 (pg-escape-identifier ,col)
-                                                                 (pg-escape-identifier new)))
-                                                    (res (pg-exec ,con sql)))
-                                               (pgmacs--notify "%s" (pg-result res :status))
-                                               (pgmacs--display-table ,table)))
-                                  'help-echo "Rename this column"))
-            (insert "   ")
-            (cond ((pg-column-comment con table col)
-                   (insert-text-button
-                    "Modify column comment"
-                    'action `(lambda (&rest _ignore)
-                               (let* ((prompt (format "New column comment for %s: " ,col))
-                                      (new (read-from-minibuffer prompt)))
-                                 (setf (pg-column-comment ,con ,table ,col) new)
-                                 (pgmacs--notify "Column comment updated")
-                                 (pgmacs--display-table ,table))))
-                   (insert "   ")
-                   (insert-text-button
-                    "Delete column comment"
-                    'action `(lambda (&rest _ignore)
-                               (when (y-or-n-p (format "Really delete comment on column %s?" ,col))
-                                 (setf (pg-column-comment ,con ,table ,col) nil)
-                                 (pgmacs--notify "Column comment deleted")
-                                 (pgmacs--display-table ,table)))
-                    'help-echo "Delete comment on column"))
-                  ;; And if there is no existing column comment
-                  (t
-                   ;; FIXME this functionality is not implemented for YDB
-                   (insert-text-button
-                    (format "%sAdd column comment" (or (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-comment) ""))
-                    'action `(lambda (&rest _ignore)
-                               (let* ((prompt (format "New comment for column %s: " ,col))
-                                      (new (read-from-minibuffer prompt)))
-                                 (setf (pg-column-comment ,con ,table ,col) new)
-                                 (pgmacs--notify "Column comment updated")
-                                 (pgmacs--display-table ,table))))))
-            (insert "\n")))
-      (let ((fkc (pgmacs--fk-constraints con table)))
-        (when fkc
-          (insert (propertize "Foreign key constraints" 'face 'bold) ":\n")
-          (dolist (c fkc)
-            (insert "  " (cl-first c) " " (cl-second c) "\n"))))
-      (when indexes
-        (insert (propertize "Indexes" 'face 'bold) ":\n")
-        (dolist (idx indexes)
-          (cl-multiple-value-bind (name unique-p primary-p clustered-p valid-p _def type cols) idx
-              (insert (format "  %s %s%s%s%s %s (cols: %s) "
-                              name
-                              (if unique-p "UNIQUE " "")
-                              (if primary-p "PRIMARY " "")
-                              (if clustered-p "CLUSTERED " "")
-                              (if valid-p "" "INVALID ")
-                              type cols))
-              (insert-text-button "index stats"
-                                  'action (lambda (&rest _ignore) (pgmacs--show-index-stats con name))
-                                  'help-echo "Display pgstatindex data")
-              (insert "\n"))))
+      ;; We insert a multiline placeholder to avoid redisplay jumps when the placeholder is later
+      ;; replaced by the column metainformation
+      (let ((text (string-join (cl-loop for i below (length column-names) collect "<placeholder>") "\n"))
+            (action (lambda () (pgmacs--display-column-info con table column-names))))
+        (insert (pgmacs--placeholder (concat text "\n") action)))
+      (cl-flet ((update-fkc ()
+                  (when-let* ((fkc (pgmacs--fk-constraints con table)))
+                    (insert (propertize "Foreign key constraints" 'face 'bold) ":\n")
+                    (dolist (c fkc)
+                      (insert "  " (cl-first c) " " (cl-second c) "\n")))))
+        (insert (pgmacs--placeholder "<foreign key constraints>\n" #'update-fkc)))
+      (cl-flet ((update-idx ()
+                  (when-let* ((indexes (pgmacs--table-indexes con table)))
+                    (insert (propertize "Indexes" 'face 'bold) ":\n")
+                    (dolist (idx indexes)
+                      (cl-multiple-value-bind (name unique-p primary-p clustered-p valid-p _def type cols) idx
+                        (insert (format "  %s %s%s%s%s %s (cols: %s) "
+                                        name
+                                        (if unique-p "UNIQUE " "")
+                                        (if primary-p "PRIMARY " "")
+                                        (if clustered-p "CLUSTERED " "")
+                                        (if valid-p "" "INVALID ")
+                                        type cols))
+                        (insert-text-button "index stats"
+                                            'action (lambda (&rest _ignore) (pgmacs--show-index-stats con name))
+                                            'help-echo "Display pgstatindex data")
+                        (insert "\n"))))))
+        (insert (pgmacs--placeholder "<indexes>\n" #'update-idx)))
       ;; has_table_privilege ( [ user name or oid, ] table text or oid, privilege text ) → boolean
       (when (pg-function-p con "has_table_privilege")
-        (let ((items (list)))
-          (dolist (priv (pgmacs--available-table-privileges con))
-            (let* ((res (pg-exec-prepared con "SELECT has_table_privilege($1, $2)" `((,t-id . "text") (,priv . "text"))))
-                   (tuple (pg-result res :tuple 0))
-                   (color (if (cl-first tuple) "green" "red")))
-              (push (pgmacs--make-badge priv :color color) items)))
-          (when items
-            (insert "Table privileges for current user: " (string-join (reverse items) " ") "\n"))))
+        (insert "Table privileges for current user: ")
+        (cl-flet ((update-privs ()
+                    (let ((items (list)))
+                      (dolist (priv (pgmacs--available-table-privileges con))
+                        (let* ((res (pg-exec-prepared con "SELECT has_table_privilege($1, $2)" `((,t-id . "text") (,priv . "text"))))
+                               (tuple (pg-result res :tuple 0))
+                               (color (if (cl-first tuple) "green" "red")))
+                          (push (pgmacs--make-badge priv :color color) items)))
+                      (when items
+                        (insert (string-join (reverse items) " "))))))
+          (insert (pgmacs--placeholder "<...>" #'update-privs)))
+        (insert "\n"))
       (when-let* ((acl (pg-table-acl con table)))
         (insert (format "Table ACL: %s" acl) "\n"))
       (insert "Row-level access control: ")
-      (if (pgmacs--row-security-active con table)
-          (insert "enabled")
-        (insert "not enabled"))
+      (cl-flet ((update-rlac ()
+                  (if (pgmacs--row-security-active con table)
+                      (insert "enabled")
+                    (insert "not enabled"))))
+        (insert (pgmacs--placeholder "<...>" #'update-rlac)))
       (insert "\n\n")
       (dolist (btn pgmacs-row-list-buttons)
         (when (pgmacs--insert btn)
@@ -3197,6 +3243,20 @@ Runs functions on `pgmacs-row-list-hook'."
             (let ((object (elt (pgmacstbl-objects pgmacstbl) line-number)))
               (pgmacstbl-goto-object object)
               (add-face-text-property (pos-bol) (pos-eol) `(:background ,pgmacs-deleted-color))))))
+      (redisplay)
+      ;; Run any pending pgmacs-async code
+      (goto-char (point-min))
+      (cl-loop
+       for match = (text-property-search-forward 'pgmacs-async nil nil)
+       while match do
+       (delete-region (prop-match-beginning match) (prop-match-end match))
+       (funcall (prop-match-value match))
+       (redisplay))
+      ;; position point on the first line of the data table
+      (goto-char (point-min))
+      (text-property-search-forward 'pgmacstbl)
+      (text-property-search-backward 'pgmacstbl)
+      (forward-line 1)
       (pgmacs--stop-progress-reporter)
       ;; if asked to center-on a particular pk value, search for it and move point to that row
       (when center-on
@@ -3833,14 +3893,17 @@ Runs functions on `pgmacs-table-list-hook'."
       ;; in all semi-compatible variants.
       ;;
       ;; TODO: we could implement pg_database_size ourselves for YugabyteDB as per https://yugabytedb.tips/display-ysql-database-size/
-      (let* ((sql "SELECT pg_catalog.pg_database_size($1)")
-             (res (pg-exec-prepared con sql `((,dbname . "text"))))
-             (size (cl-first (pg-result res :tuple 0))))
-        (when size
-          ;; We later use this information to decide whether to prefer fast-but-unreliable or
-          ;; slow-but-exact queries for table row count.
-          (put 'pgmacs--con 'database-size size)
-          (insert (format "Total database size: %s" (file-size-human-readable size 'iec " "))))))
+      (insert "Total database size: ")
+      (cl-flet ((update-size ()
+                  (let* ((sql "SELECT pg_catalog.pg_database_size($1)")
+                         (res (pg-exec-prepared con sql `((,dbname . "text"))))
+                         (size (cl-first (pg-result res :tuple 0))))
+                    (when size
+                      ;; We later use this information to decide whether to prefer fast-but-unreliable or
+                      ;; slow-but-exact queries for table row count.
+                      (put 'pgmacs--con 'database-size size)
+                      (insert (file-size-human-readable size 'iec " "))))))
+        (insert (pgmacs--placeholder "<placeholder>" #'update-size))))
     ;; Perhaps also display output from
     ;; select state, count(*) from pg_stat_activity where pid <> pg_backend_pid() group by 1 order by 1;'
     ;; see https://gitlab.com/posetgres-ai/postgresql-consulting/postgres-howtos/-/blob/main/0068_psql_shortcuts.md
@@ -3852,14 +3915,34 @@ Runs functions on `pgmacs-table-list-hook'."
           (insert "\n"))))
     (insert "\n\n")
     (pgmacstbl-insert pgmacstbl)
-    ;; Now update the "estimated rows" column of the list of tables. We make these queries as a
-    ;; second step because they might be slow on large tables.
+    (redisplay)
+    ;; Now update the "estimated rows" and table-owner columns of the list of tables. We make these
+    ;; queries here as a second step because they might be slow on large tables.
+    ;;
+    ;; TODO: This query could perhaps be run in a separate thread.
     (dolist (row (pgmacstbl-objects pgmacstbl))
       (let* ((table (cl-first row))
              (estimated-count (pgmacs--estimate-row-count table))
+             (owner (pg-table-owner con table))
              (updated-row (copy-sequence row)))
-        (setf (nth 1 updated-row) estimated-count)
+        (setf (nth 1 updated-row) estimated-count
+              (nth 3 updated-row) owner)
         (pgmacstbl-update-object pgmacstbl updated-row row)))
+    (pgmacs--redraw-pgmacstbl)
+    (redisplay)
+    ;; Run any pending pgmacs-async code
+    (goto-char (point-min))
+    (cl-loop
+     for match = (text-property-search-forward 'pgmacs-async nil nil)
+     while match do
+     (delete-region (prop-match-beginning match) (prop-match-end match))
+     (funcall (prop-match-value match))
+     (redisplay))
+    ;; position point on the first line of the data table
+    (goto-char (point-min))
+    (text-property-search-forward 'pgmacstbl)
+    (text-property-search-backward 'pgmacstbl)
+    (forward-line 1)
     (pgmacs--stop-progress-reporter)
     (run-hooks 'pgmacs-table-list-hook)))
 
