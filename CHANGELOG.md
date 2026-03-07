@@ -13,6 +13,9 @@
   information has been displayed is not improved by this change, essential information is now shown
   first.
 
+- In a table-row buffer in which a WHERE filter is active, an SVG funnel icon is displayed next to
+  the content of the filter.
+
 
 ## [0.29] - 2025-12-26
 
