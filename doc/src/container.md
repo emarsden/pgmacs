@@ -27,28 +27,26 @@ support](schemaspy.html)).
 
 
 
+> [!WARNING]
+>
+> **Security concerns regarding Emacs packages**: Any Emacs package that you install (whether from a
+> package repository such as ELPA or MELPA, or via `package-vc-install`) has full read/write/delete
+> access to your data on your computer that is accessible by the logged-in user, and (assuming no
+> particular security protections are in place) full network access to exfiltrate information. The
+> 2024 [xz utils backdoor](https://en.wikipedia.org/wiki/XZ_Utils_backdoor) incident illustrated the
+> amount of effort that malicious actors make to compromise our computers. Operating systems are
+> introducing sandboxing mechanisms for software installed from the internet to protect against
+> these kinds of attacks, but these protections are not effective for user-extensible software like
+> Emacs. For this reason, it is worthwhile spending some time reading the package’s source code to
+> check for suspicious behaviours, introduced by a malicious package developer or one whose computer
+> has been compromised by an attacker.
+>
+> If you install Emacs packages via your operating system’s package distribution mechanism, the
+> package maintainers will — in the best case — play a gatekeeper role and check the source code on
+> behalf of users. Please note however that widely used package archives like MELPA are not equipped
+> to undertake any security checks before package updates are distributed to users. The Elpaca package
+> manager provides special [support for reviewing diffs](https://www.youtube.com/watch?v=5Ud-TE3iIQY)
+> to a package before installing them, which is definitely a good practice. Running packages in a
+> software container until you’ve been able to review them from a software security perspective, is a
+> partial response to some of these concerns.
 
-~~~admonish warning title="Security concerns regarding Emacs packages"
-
-Any Emacs package that you install (whether from a package repository such as ELPA or MELPA, or via
-`package-vc-install`) has full read/write/delete access to your data on your computer that is
-accessible by the logged-in user, and (assuming no particular security protections are in place)
-full network access to exfiltrate information. The 2024 [xz utils
-backdoor](https://en.wikipedia.org/wiki/XZ_Utils_backdoor) incident illustrated the amount of effort
-that malicious actors make to compromise our computers. Operating systems are introducing sandboxing
-mechanisms for software installed from the internet to protect against these kinds of attacks, but
-these protections are not effective for user-extensible software like Emacs. For this reason, it is
-worthwhile spending some time reading the package’s source code to check for suspicious behaviours,
-introduced by a malicious package developer or one whose computer has been compromised by an
-attacker.
-
-If you install Emacs packages via your operating system’s package distribution mechanism, the
-package maintainers will — in the best case — play a gatekeeper role and check the source code on
-behalf of users. Please note however that widely used package archives like MELPA are not equipped
-to undertake any security checks before package updates are distributed to users. The Elpaca package
-manager provides special [support for reviewing diffs](https://www.youtube.com/watch?v=5Ud-TE3iIQY)
-to a package before installing them, which is definitely a good practice. Running packages in a
-software container until you’ve been able to review them from a software security perspective, is a
-partial response to some of these concerns.
-
-~~~

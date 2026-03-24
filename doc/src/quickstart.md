@@ -1,14 +1,14 @@
 # Quickstart
 
-~~~admonish note title="Try it out before installing"
-If you want to get a quick feel for what PGmacs can do before installing it, you can try out our
-[prebuilt Podman/Docker container image](container.html) which includes a terminal-only build of
-Emacs and the necessary dependencies. This will allow you to run PGmacs safely sandboxed in a
-container.
-
-Because it’s running in terminal mode, some functionality such as the SchemaSpy diagram support
-won’t work in the container.
-~~~
+> [!NOTE]
+>
+> **Try it out before installing**: If you want to get a quick feel for what PGmacs can do before
+> installing it, you can try out our [prebuilt Podman/Docker container image](container.html) which
+> includes a terminal-only build of Emacs and the necessary dependencies. This will allow you to run
+> PGmacs safely sandboxed in a container.
+>
+> Because it’s running in terminal mode, some functionality such as the SchemaSpy diagram support
+> won’t work in the container.
 
 
 ## Installation
@@ -55,19 +55,20 @@ git clone https://github.com/emarsden/pgmacs/
 ```
 
 
-~~~admonish warning title="Setting up a PostgreSQL user with limited privileges"
+> [!WARNING]
+>
+> **Setting up a PostgreSQL user with limited privileges**: You should be careful about giving
+> random software you downloaded from the internet access to your PostgreSQL data. I would recommend
+> you take a quick read through the source code (it’s quite short, only 3000 lines) before running
+> it. Before taking the time to do this, you can also run PGmacs as a PostgreSQL user which is not
+> allowed to insert or delete data. Here’s how to do this (using predefined roles that are available
+> from PostgreSQL v14 onwards):
+>
+> ```sql
+> CREATE USER pgmacs_readonly_user WITH PASSWORD 'changeme';
+> GRANT pg_read_all_data TO pgmacs_readonly_user;
+> ```
 
-You should be careful about giving random software you downloaded from the internet access to your
-PostgreSQL data. I would recommend you take a quick read through the source code (it’s quite short,
-only 3000 lines) before running it. Before taking the time to do this, you can also run PGmacs as a
-PostgreSQL user which is not allowed to insert or delete data. Here’s how to do this (using
-predefined roles that are available from PostgreSQL v14 onwards): 
-
-```sql
-CREATE USER pgmacs_readonly_user WITH PASSWORD 'changeme';
-GRANT pg_read_all_data TO pgmacs_readonly_user;
-```
-~~~
 
 
 ## Connecting to a PostgreSQL database

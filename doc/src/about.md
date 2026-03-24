@@ -46,17 +46,16 @@ it to modify real PostgreSQL databases used in production.
 pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
 Windows and MacOS. It works both in graphical mode and in the terminal.
 
-~~~admonish note title="Better network performance with Emacs 31 (unreleased)"
+> [!NOTE]
+>
+> **Better network performance with Emacs 31 (unreleased)**: when connecting to PostgreSQL over the
+> network (rather than over a local Unix connection), you will see far better performance using the
+> unreleased Emacs 31. This version (which you will need to build from source) supports disabling
+> the Nagle algorithm (the `TCP_NODELAY` option on network sockets), which increases performance by
+> a factor of 12 when running the test suite.
 
-When connecting to PostgreSQL over the network (rather than over a local Unix connection), you will
-see far better performance using the unreleased Emacs 31. This version (which you will need to build
-from source) supports disabling the Nagle algorithm (the `TCP_NODELAY` option on network sockets),
-which increases performance by a factor of 12 when running the test suite.
 
-~~~
-
-
-**PostgreSQL version**: PGmacs is mostly tested with PostgreSQL versions 17.3 and 16.4, but should
+**PostgreSQL version**: PGmacs is mostly tested with PostgreSQL versions 18.3 and 16.4, but should
 work with any PostgreSQL version supported by the `pg-el` library that it uses to communicate with
 PostgreSQL. For example, it works fine with PostgreSQL version 14 which was released in 2021.
 
@@ -130,5 +129,5 @@ on-disk size of tables, and these functions are not always implemented. What we 
 
 PGmacs is distributed under the terms of the GNU General Public License, version 3.
 
-Copyright 2023-2025 Eric Marsden.
+Copyright 2023-2026 Eric Marsden.
 
