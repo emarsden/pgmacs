@@ -1,6 +1,6 @@
 ;;; pgmacs-chrome.el --- Additional icons and badges for PGmacs display  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2025 Eric Marsden
+;; Copyright (C) 2025-2026 Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
 
 (require 'svg)
@@ -61,7 +61,7 @@
   (if (and (display-graphic-p)
            (image-type-available-p 'svg))
       (let ((svg (funcall svg-fn)))
-	(propertize " " 'display svg 'rear-nonsticky t 'cursor-intangible t))
+	(propertize " " 'display svg 'rear-nonsticky t 'intangible t))
     ""))
 
 
@@ -221,7 +221,7 @@
 </svg>")))
 
 (cl-defun pgmacs--make-badge/svg (label &key color)
-  (when-let ((svg (pgmacs--lookup-badge label)))
+  (when-let* ((svg (pgmacs--lookup-badge label)))
     (cl-return-from pgmacs--make-badge/svg
       (create-image svg 'svg t :margin 1 :ascent 'center :foreground color)))
   (let* ((width (* 0.9 (string-pixel-width label)))
