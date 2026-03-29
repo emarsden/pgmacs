@@ -217,5 +217,5 @@ Do not work in a satisfactory manner with PGmacs:
 
 PGmacs is distributed under the terms of the GNU General Public License, version 3.
 
-Copyright 2023-2025 Eric Marsden.
+Copyright 2023-2026 Eric Marsden.
 
