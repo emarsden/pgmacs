@@ -7,6 +7,12 @@ default:
 vhs:
   vhs etc/recording.tape
 
+
+# Build the PGmacs mdbook documentation
+doc:
+    cd doc && mdbook build
+
+
 # Build a Podman/Docker container image for PGmacs
 #
 # Needs the package qemu-user and binfmt-misc installed to cross-build the various architectures.
