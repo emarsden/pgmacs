@@ -2,19 +2,33 @@
 
 ## [0.30] - Unreleased
 
+- Improve responsiveness on slow connections to the database. SQL queries issued to collect
+  non-critical information (column metadata, table size on disk, access privileges, etc.) are
+  delayed until after the main row-list table has been displayed. Placeholder data is shown while
+  waiting for these queries to be completed, to avoid display jank. If customizable variable
+  `pgmacs-use-worker-thread` is non-nil, the delayed queries will be run in a background worker
+  thread on a separate connection to the database, and Emacs should be responsive to user input
+  while the queries are underway. If the worker thread is disabled, delayed queries will be run on
+  the main thread; though the total query time until full information has been displayed is not
+  improved in that case, essential information is shown first.
+
+  This functionality requires the most recent version of the pg-el library (v0.64, recently
+  released).
+
 - In table-row buffers, add a button that opens a buffer showing system-level information concerning
   each index on a table. This functionality uses the `pgstattuple` module, which is a privileged
   module only available to superusers and roles with `EXECUTE` privilege on `pg_stat_scan_tables`.
 
-- Improve responsiveness on slow connections to the database. SQL queries issued to collect
-  non-critical information (column metadata, table size on disk, access privileges, etc.) are
-  delayed until after the main row-list table has been displayed. Placeholder data is shown while
-  waiting for these queries to be completed, to avoid display jank. Though the total query time until full
-  information has been displayed is not improved by this change, essential information is now shown
-  first.
-
 - In a table-row buffer in which a WHERE filter is active, an SVG funnel icon is displayed next to
   the content of the filter.
+
+- When using the latest version of the pg-el library, PGmacs has auth-source support for PostgreSQL.
+  It will make auth-source queries for the host, port and user that you specify in your connection
+  request. In your `~/.authinfo.gpg` file, for example, you can add a line such as
+
+  `machine localhost login pgeltestuser port 5432 password pgeltest`
+
+  and you will not need to specify the password when connecting to that database host.
 
 
 ## [0.29] - 2025-12-26
