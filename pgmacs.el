@@ -365,7 +365,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
                     (when-let* ((match (text-property-search-backward 'pgmacs--placeholder nil nil)))
                       (delete-region (prop-match-beginning match) (prop-match-end match))))))))
         (user-error (message "PGmacs worker thread user-error %s" e))
-        (error (message "PGmacs worker thread error %s\nBacktrace: %s" e bt))))))
+        (error (message "PGmacs worker thread error %s" e))))))
 
 
 (defclass pgmacs-shortcut-button ()
