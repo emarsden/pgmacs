@@ -1,11 +1,11 @@
 # Changelog
 
-## [0.30] - Unreleased
+## [0.30] - 2026-03-29
 
 - Improve responsiveness on slow connections to the database. SQL queries issued to collect
   non-critical information (column metadata, table size on disk, access privileges, etc.) are
   delayed until after the main row-list table has been displayed. Placeholder data is shown while
-  waiting for these queries to be completed, to avoid display jank. If customizable variable
+  waiting for these queries to be completed, to avoid display jank. If new customizable variable
   `pgmacs-use-worker-thread` is non-nil, the delayed queries will be run in a background worker
   thread on a separate connection to the database, and Emacs should be responsive to user input
   while the queries are underway. If the worker thread is disabled, delayed queries will be run on
