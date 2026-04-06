@@ -146,16 +146,16 @@ The following PostgreSQL-compatible databases have been tested:
 
 - [YugabyteDB](https://yugabyte.com/) works to a limited extent: we are not able to run the SQL
   command that adds a PRIMARY KEY to an existing table, nor to display total database size on disk,
-  for example. It does support some extensions such as pgvector, for example. Last tested 2025-12
-  with v2.25.
+  for example. It does support some extensions such as pgvector, for example. Last tested 2026-03
+  with v2025.2.2.
   
 - [CrateDB](https://crate.io/) works with limited functionality: for example querying the list of
-  defined procedures and functions triggers an internal error in CrateDB. Last tested 2025-12 with
-  v6.1.2.
+  defined procedures and functions triggers an internal error in CrateDB. Last tested 2026-03 with
+  v6.2.3.
 
 - [CockroachDB](https://github.com/cockroachdb/cockroach) works with limited functionality: for
   example the list of defined procedures and functions is not properly populated. Lasted tested
-  2025-12 with version 25.2.
+  2026-03 with version 26.1.
 
 - [PolarDB for PostgreSQL](https://github.com/ApsaraDB/PolarDB-for-PostgreSQL) is free software
   (Apache 2 licence) developed by Alibaba Cloud, also available as a commercial hosted service with
