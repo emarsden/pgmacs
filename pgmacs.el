@@ -3652,7 +3652,7 @@ Prompt for the table name in the minibuffer."
                         (pgmacs--read-current-user con)
                         (if superuser-p "" "not "))))
       (show "in_hot_standby" "In hot standby")
-      (unless (member (pgcon-server-variant con) '(cockroachdb))
+      (unless (member (pgcon-server-variant con) '(cockroachdb ydb))
         (let* ((res (pg-exec con "SELECT pg_catalog.pg_postmaster_start_time()"))
                (dtime (car (pg-result res :tuple 0)))
                (fmt (funcall (pgmacs--value-formatter "timestamp") dtime)))
@@ -3663,7 +3663,7 @@ Prompt for the table name in the minibuffer."
       (show "shared_memory_size" "Server shared memory size")
       (show "datestyle" "Date style")
       (show "search_path" "Search path")
-      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb materialize risingwave cedardb))
+      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb materialize risingwave cedardb ydb))
         (let* ((res (pg-exec con "SELECT pg_catalog.pg_listening_channels()"))
                (channels (pg-result res :tuples)))
           (when channels

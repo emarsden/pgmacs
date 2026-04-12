@@ -2,7 +2,7 @@
 
 ## [0.31] - Unreleased
 
-- Add some workarounds to support the CedarDB variant of PostgreSQL.
+- Add some workarounds to support the CedarDB and YDB variants of PostgreSQL.
 
 
 ## [0.30] - 2026-03-29
