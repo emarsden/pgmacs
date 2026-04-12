@@ -443,7 +443,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
          :action #'pgmacs--display-connections/materialize
          :help-echo "Show all connections configured in Materialize")
 	(pgmacs-shortcut-button
-         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize risingwave))))
+         :condition (lambda () (not (member (pgcon-server-variant pgmacs--con) '(cratedb questdb spanner materialize risingwave cedardb))))
 	 :label (format "%sReplication stats" (or (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-replication) ""))
 	 :action #'pgmacs--display-replication-stats
 	 :help-echo "Show information on PostgreSQL replication status")
@@ -3626,7 +3626,7 @@ Prompt for the table name in the minibuffer."
                   pgmacs--worker-state worker-state
                   buffer-read-only nil)
       (buffer-disable-undo)
-      (unless (member (pgcon-server-variant con) '(cratedb questdb ydb spanner materialize risingwave))
+      (unless (member (pgcon-server-variant con) '(cratedb questdb ydb spanner materialize risingwave cedardb))
         (let* ((res (pg-exec con "SELECT inet_server_addr(), inet_server_port(), pg_backend_pid()"))
                (row (pg-result res :tuple 0))
                (addr (cl-first row))
@@ -3639,7 +3639,7 @@ Prompt for the table name in the minibuffer."
       (let ((variant (pgcon-server-variant con)))
         (unless (eq variant 'postgresql)
           (insert (format "Server appears to be the PostgreSQL variant %s\n" variant))))
-      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb risingwave))
+      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb yugabyte ydb xata greptimedb risingwave cedardb))
         (when (> (pgcon-server-version-major con) 11)
           (let* ((res (pg-exec con "SELECT pg_catalog.current_setting('ssl_library')"))
                  (row (pg-result res :tuple 0)))
@@ -3663,7 +3663,7 @@ Prompt for the table name in the minibuffer."
       (show "shared_memory_size" "Server shared memory size")
       (show "datestyle" "Date style")
       (show "search_path" "Search path")
-      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb materialize risingwave))
+      (unless (member (pgcon-server-variant con) '(cockroachdb cratedb materialize risingwave cedardb))
         (let* ((res (pg-exec con "SELECT pg_catalog.pg_listening_channels()"))
                (channels (pg-result res :tuples)))
           (when channels

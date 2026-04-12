@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.31] - Unreleased
+
+- Add some workarounds to support the CedarDB variant of PostgreSQL.
+
+
 ## [0.30] - 2026-03-29
 
 - Improve responsiveness on slow connections to the database. SQL queries issued to collect
