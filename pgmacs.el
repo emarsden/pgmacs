@@ -372,8 +372,9 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
 (defun pgmacs--maybe-restart-worker ()
   (when pgmacs-use-worker-thread
     (with-slots (thread) pgmacs--worker-state
-      (unless (thread-live-p thread)
-        (setf thread (make-thread 'pgmacs--worker-runner "PGmacs worker thread"))))))
+      (when thread
+        (unless (thread-live-p thread)
+          (setf thread (make-thread 'pgmacs--worker-runner "PGmacs worker thread")))))))
 
 
 (defclass pgmacs-shortcut-button ()
@@ -3938,12 +3939,14 @@ Runs functions on `pgmacs-table-list-hook'."
   (let ((con pgmacs--con))
     ;; The background worker thread and background worker database connnection will be
     ;; re-established by pgmacs-open, so make sure we clean up the old ones.
-    (with-slots (con thread) pgmacs--worker-state
-      (when con
-        (pg-disconnect con))
-      (when (thread-live-p thread)
-        (thread-signal thread 'user-error "pgcon closed")))
-    (setq pgmacs--worker-state nil)
+    (when pgmacs-use-worker-thread
+      (with-slots (con thread) pgmacs--worker-state
+        (when con
+          (pg-disconnect con))
+        (when thread
+          (when (thread-live-p thread)
+            (thread-signal thread 'user-error "pgcon closed"))))
+      (setq pgmacs--worker-state nil))
     (kill-buffer)
     (pgmacs-open con)))
 
