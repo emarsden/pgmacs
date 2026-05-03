@@ -4,6 +4,11 @@
 
 - Add some workarounds to support the CedarDB and YDB variants of PostgreSQL.
 
+- Remove some thread yielding in the worker thread, which seems to improve performance.
+
+- The worker thread will be restarted if necessary when displaying a row-list buffer. This is a
+  workaround for abnormal death of the worker thread.
+
 
 ## [0.30] - 2026-03-29
 
