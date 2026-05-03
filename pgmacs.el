@@ -522,7 +522,7 @@ Uses customizations implemented in Emacs' customize support."
   "="     #'pgmacs--shrink-columns
   "r"     #'pgmacs--redraw-pgmacstbl
   "T"     #'pgmacs--switch-to-database-buffer
-  "q"     #'bury-buffer)
+  "q"     #'pgmacs--bury-buffer)
 
 (defvar-keymap pgmacs-table-list-map/table
   :doc "Keymap for PGmacs table-list buffers when point is in a table"
@@ -631,7 +631,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
 (defvar-keymap pgmacs-row-list-map
   :doc "Keymap for PGmacs row-list buffers"
   "TAB"   'pgmacs--next-item
-  "q"     'bury-buffer
+  "q"     'pgmacs--bury-buffer
   "h"     'pgmacs--row-list-help
   "?"     'pgmacs--row-list-help
   "i"     'pgmacs--insert-row-empty
@@ -714,13 +714,12 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
         (forward-line))
   ">" (lambda (&rest _ignored)
         (text-property-search-forward 'pgmacstbl)
-        (forward-line -1))
-  "q" (lambda (&rest _ignored) (bury-buffer)))
+        (forward-line -1)))
 
 
 (defvar-keymap pgmacs-transient-map
   :doc "Keymap for PGmacs transient buffers"
-  "q"  #'bury-buffer
+  "q"  #'pgmacs--bury-buffer
   "o"  #'pgmacs-open-table
   "e"  #'pgmacs-run-sql
   "E"  #'pgmacs-run-buffer-sql
@@ -743,6 +742,9 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   :init-value nil
   :keymap pgmacs-paginated-map)
 
+(defun pgmacs--bury-buffer (&rest _ignored)
+  (interactive)
+  (bury-buffer))
 
 ;; Used for updating on progress retrieving information from PostgreSQL.
 ;; FIXME: these should be per-PostgreSQL-connection rather than per-Emacs-instance.
@@ -2379,7 +2381,7 @@ Table names are schema-qualified if the schema is non-default."
           ;; (shw "r" "Redraw the table without refetching data from PostgreSQL")
           ;; (shw "g" "Redraw the table (refetches data from PostgreSQL)")
           (shwf 'pgmacs--switch-to-database-buffer "Switch to the main table-list buffer for this database")
-          (shwf 'bury-buffer "Bury this buffer")
+          (shwf 'pgmacs--bury-buffer "Bury this buffer")
           (shrink-window-if-larger-than-buffer)
           (goto-char (point-min)))))))
 
@@ -2920,7 +2922,7 @@ Opens a dedicated buffer if the query list is not empty."
         (shwf 'pgmacs--redraw-pgmacstbl "Redraw the table without refetching data from PostgreSQL")
         (shwf 'pgmacs--row-list-redraw "Redraw the table (refetches data from PostgreSQL)")
         (shwf 'pgmacs--switch-to-database-buffer "Switch to the main table-list buffer for this database")
-        (shwf 'bury-buffer "Bury this buffer")
+        (shwf 'pgmacs--bury-buffer "Bury this buffer")
         (shrink-window-if-larger-than-buffer)
         (goto-char (point-min))))))
 
@@ -3968,7 +3970,7 @@ Runs functions on `pgmacs-table-list-hook'."
         (shw "{" "Shrink the horizontal space used by the current column")
         (shw "}" "Grow the horizontal space used by the current column")
         (shwf 'pgmacs--table-list-redraw "Redraw this table-list buffer (refetches data from PostgreSQL)")
-        (shwf 'bury-buffer "Bury this buffer")
+        (shwf 'pgmacs--bury-buffer "Bury this buffer")
         (shrink-window-if-larger-than-buffer)
         (goto-char (point-min))))))
 
