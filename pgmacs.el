@@ -368,6 +368,14 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
         (error (message "PGmacs worker thread error %s" e))))))
 
 
+;; Restart the worker thread in case it has died during previous processing (this is a workaround).
+(defun pgmacs--maybe-restart-worker ()
+  (when pgmacs-use-worker-thread
+    (with-slots (thread) pgmacs--worker-state
+      (unless (thread-live-p thread)
+        (setf thread (make-thread 'pgmacs--worker-runner "PGmacs worker thread"))))))
+
+
 (defclass pgmacs-shortcut-button ()
   ((label :initarg :label :type string)
    ;; Condition, if defined, is a function called with zero arguments that determines whether this
@@ -3229,6 +3237,7 @@ The CENTER-ON and WHERE-FILTER arguments are mutually exclusive.
 Runs functions on `pgmacs-row-list-hook'."
   (when (and center-on where-filter)
     (user-error "CENTER-ON and WHERE-FILTER arguments are mutually exclusive"))
+  (pgmacs--maybe-restart-worker)
   (let* ((con pgmacs--con)
          (db-buffer pgmacs--db-buffer)
          (worker-state pgmacs--worker-state)
