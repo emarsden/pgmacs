@@ -705,6 +705,7 @@ Entering this mode runs the functions on `pgmacs-mode-hook'.
   "<deletechar>" #'pgmacs--proc-list-delete
   "T"            #'pgmacs--switch-to-database-buffer
   "R"            #'pgmacs--proc-list-rename
+  "q"            #'pgmacs--bury-buffer
   ;; "g" pgmacs--proc-list-redraw
   ;; the functions pgmacstbl-beginning-of-table and
   ;; pgmacstbl-end-of-table don't work when we have inserted text before
