@@ -3414,7 +3414,7 @@ Runs functions on `pgmacs-row-list-hook'."
         (insert "\n"))
       ;; Make it visually clear to the user that a WHERE filter is active
       (when where-filter
-        (insert (or (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-funnel) "") (propertize "WHERE filter" 'face 'bold) ": ")
+        (insert "\n" (or (pgmacs--maybe-svg-icon #'pgmacs--svg-icon-funnel) "") (propertize "WHERE filter" 'face 'bold) ": ")
         (insert (propertize where-filter 'face 'pgmacs-where-filter) "\n\n"))
       (when pgmacs--offset
         (pgmacs-paginated-mode)
