@@ -346,7 +346,7 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
     (funcall pgmacs--worker-initializer))
   (with-slots (con tasks-ready) pgmacs--worker-state
     (while t
-      (thread-yield)
+      ;; (thread-yield)
       (sit-for 0.1)
       (while (not tasks-ready)
         (thread-yield)
