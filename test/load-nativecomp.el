@@ -1,0 +1,6 @@
+(setq native-comp-speed 3)
+(load (native-compile "../pgmacstbl.el"))
+(load (native-compile "../pgmacs-sql-keywords.el"))
+(load (native-compile "../pgmacs-schemaspy.el"))
+(load (native-compile "../pgmacs-chrome.el"))
+(load (native-compile "../pgmacs.el"))
