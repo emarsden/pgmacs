@@ -101,8 +101,9 @@ test-emacs-dev: peg
 
 
 test-postgresql18: peg
+	wget -q -O ${WORKDIR}/pg.el https://github.com/emarsden/pg-el/raw/refs/heads/main/pg.el
 	cp ${PEG} ${WORKDIR}/peg.el
-	cp ../../pg-el/pg.el ../pgmacstbl.el ../pgmacs-sql-keywords.el ../pgmacs-schemaspy.el ../pgmacs-chrome.el ../pgmacs.el ${WORKDIR}
+	cp ../pgmacstbl.el ../pgmacs-sql-keywords.el ../pgmacs-schemaspy.el ../pgmacs-chrome.el ../pgmacs.el ${WORKDIR}
 	${DOCKER} run --rm --name pgsql --pull=newer \
            --publish 127.0.0.1:5439:5439 \
            -e POSTGRES_DB=pgeltestdb \
