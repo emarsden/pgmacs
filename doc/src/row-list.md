@@ -3,7 +3,7 @@
 A **row-list buffer** shows some metainformation on the table and its columns, then the row data in
 tabular form, as illustrated below.
 
-![Screenshot table](img/screenshot-table.png)
+![Screenshot table](img/screenshot-row-list.png)
 
 If the table contains a large number of rows, the contents will be **paginated**, with `Next` and
 `Previous` buttons to move page by page. The number of rows in each page is determined by the

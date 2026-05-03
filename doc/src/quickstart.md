@@ -59,7 +59,7 @@ git clone https://github.com/emarsden/pgmacs/
 >
 > **Setting up a PostgreSQL user with limited privileges**: You should be careful about giving
 > random software you downloaded from the internet access to your PostgreSQL data. I would recommend
-> you take a quick read through the source code (it’s quite short, only 3000 lines) before running
+> you take a quick read through the source code (it’s quite short, only 4300 lines) before running
 > it. Before taking the time to do this, you can also run PGmacs as a PostgreSQL user which is not
 > allowed to insert or delete data. Here’s how to do this (using predefined roles that are available
 > from PostgreSQL v14 onwards):
@@ -88,19 +88,22 @@ if they are set:
 - `POSTGRES_PASSWORD`, `POSTGRESQL_PASSWORD`, `PGPASSWORD`
 
 These semi-standardized variable names are used by the [official Docker image for
-PostgreSQL](https://hub.docker.com/_/postgres/), the more sophisticated [Bitnami PostgreSQL
-image](https://registry.hub.docker.com/r/bitnami/postgresql)) and by the official psql PostgreSQL client.
+PostgreSQL](https://hub.docker.com/_/postgres/) and by the official psql PostgreSQL client.
 
 ![Screenshot connection widget](img/connect-widget-table-list.gif)
 
 It will then open the main PGmacs [table-list buffer](table-list.html), which will show you a list
 of the tables available in the database.
 
-You can also open PGmacs with a PostgreSQL connection string
+You can also open PGmacs with a PostgreSQL **connection string**
 
     M-x pgmacs-open-string RET user=myself port=5432 dbname=mydb
 
-or with a PostgreSQL connection URI
+or with a PostgreSQL **connection URI**
+
+    M-x pgmacs-open-uri RET postgresql://myuser:mysecret@db.example.org/dbname
+
+or a connection URI for a local Unix socket connection:
 
     M-x pgmacs-open-uri RET postgresql://%2Fvar%2Flib%2Fpostgresql/dbname
 

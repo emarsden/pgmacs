@@ -43,7 +43,7 @@ it to modify real PostgreSQL databases used in production.
 ## Supported versions
 
 **Emacs version**: PGmacs requires Emacs version 29. It has also been tested on the
-pre-release v30. It has mostly been tested on Linux, but should work as expected on Microsoft
+pre-release v31. It has mostly been tested on Linux, but should work as expected on Microsoft
 Windows and MacOS. It works both in graphical mode and in the terminal.
 
 > [!NOTE]
