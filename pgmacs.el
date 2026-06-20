@@ -3952,7 +3952,7 @@ Runs functions on `pgmacs-table-list-hook'."
           (pg-disconnect con))
         (when thread
           (when (thread-live-p thread)
-            (thread-signal thread 'user-error "pgcon closed"))))
+            (thread-signal thread 'user-error (list "pgcon closed")))))
       (setq pgmacs--worker-state nil))
     (kill-buffer)
     (pgmacs-open con)))
