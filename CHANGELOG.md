@@ -2,6 +2,9 @@
 
 ## [0.31] - Unreleased
 
+- Fix the use of completion machinery in `pgmacs-run-sql`, which was breaking later use of
+  minibuffer completion. Fix thanks to @zorgick.
+
 - Add some workarounds to support the CedarDB and YDB variants of PostgreSQL.
 
 - Remove some thread yielding in the worker thread, which seems to improve performance.

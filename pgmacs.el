@@ -2820,7 +2820,7 @@ Opens a dedicated buffer if the query list is not empty."
       (lambda ()
         (set-syntax-table sql-mode-syntax-table)
         ;; cf. minibuffer-local-completion-map
-        (local-set-key (kbd "<tab>") #'completion-at-point)
+        (keymap-local-set "TAB" #'completion-at-point)
         (setq-local pgmacs--completions completions)
         (add-hook 'completion-at-point-functions
                   #'pgmacs--completion-at-point nil t))
