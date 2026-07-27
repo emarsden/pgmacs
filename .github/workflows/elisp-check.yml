@@ -18,7 +18,7 @@ jobs:
           - emacs_version: snapshot
             ignore_warnings: false
     steps:
-    - uses: actions/checkout@v7.0.0
+    - uses: actions/checkout@v7.0.1
     - uses: purcell/setup-emacs@master
       with:
         version: ${{ matrix.emacs_version }}
