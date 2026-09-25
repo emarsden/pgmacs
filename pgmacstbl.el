@@ -794,10 +794,19 @@ If NEXT, do the next column."
   (pgmacstbl-header-mode 1))
 
 (defun pgmacstbl--limit-string (string pixels)
-  (while (and (length> string 0)
-              (> (string-pixel-width string) pixels))
-    (setq string (substring string 0 (1- (length string)))))
-  string)
+  ;; Binary search on the prefix length: `string-pixel-width' lays out the
+  ;; whole string, so shortening one character at a time is quadratic in
+  ;; the length of the cell value.
+  (if (or (zerop (length string))
+          (<= (string-pixel-width string) pixels))
+      string
+    (let ((lo 0) (hi (length string)))
+      (while (< lo hi)
+        (let ((mid (/ (+ lo hi 1) 2)))
+          (if (<= (string-pixel-width (substring string 0 mid)) pixels)
+              (setq lo mid)
+            (setq hi (1- mid)))))
+      (substring string 0 lo))))
 
 (defun pgmacstbl--char-width (table)
   (string-pixel-width (propertize "x" 'face (pgmacstbl-face table))))
