@@ -2,6 +2,13 @@
 
 ## [0.31] - Unreleased
 
+- Truncate over-wide cells with a binary search in `pgmacstbl--limit-string`. The previous loop
+  was quadratic in the cell length, which made opening a table with large values (for example
+  `jsonb`) take several seconds.
+
+- Use `sleep-for` rather than `sit-for` in the worker thread. `sit-for` redisplays, and doing that
+  off the main thread hung GUI Emacs when opening a table with `pgmacs-use-worker-thread` enabled.
+
 - Fix the use of completion machinery in `pgmacs-run-sql`, which was breaking later use of
   minibuffer completion. Fix thanks to @zorgick.
 

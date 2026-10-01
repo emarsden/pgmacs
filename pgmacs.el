@@ -347,10 +347,12 @@ e.g. `UTC' or `Europe/Berlin'. Nil for local OS timezone."
   (with-slots (con tasks-ready) pgmacs--worker-state
     (while t
       ;; (thread-yield)
-      (sit-for 0.1)
+      ;; sleep-for rather than sit-for: sit-for redisplays, which must not
+      ;; happen off the main thread (it hangs a GUI Emacs).
+      (sleep-for 0.1)
       (while (not tasks-ready)
         (thread-yield)
-        (sit-for 1))
+        (sleep-for 1))
       (condition-case e
           (when-let* ((task (pgmacs--worker-pop-task)))
             (with-slots (retriever inserter marker) task
