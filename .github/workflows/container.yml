@@ -48,7 +48,7 @@ jobs:
 
       - name: Push container image
         id: push-to-registry
-        uses: redhat-actions/push-to-registry@v2.8
+        uses: redhat-actions/push-to-registry@v3
         with:
           image: pgmacs
           tags: latest
