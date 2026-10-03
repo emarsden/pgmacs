@@ -4,17 +4,18 @@
 
 - Truncate over-wide cells with a binary search in `pgmacstbl--limit-string`. The previous loop
   was quadratic in the cell length, which made opening a table with large values (for example
-  `jsonb`) take several seconds.
+  `jsonb`) take several seconds. Fix from @Vadym-Lopatka.
 
 - Use `sleep-for` rather than `sit-for` in the worker thread. `sit-for` redisplays, and doing that
   off the main thread hung GUI Emacs when opening a table with `pgmacs-use-worker-thread` enabled.
+  Fix from @Vadym-Lopatka.
+
+- Remove some thread yielding in the worker thread, which seems to improve performance.
 
 - Fix the use of completion machinery in `pgmacs-run-sql`, which was breaking later use of
   minibuffer completion. Fix thanks to @zorgick.
 
 - Add some workarounds to support the CedarDB and YDB variants of PostgreSQL.
-
-- Remove some thread yielding in the worker thread, which seems to improve performance.
 
 - The worker thread will be restarted if necessary when displaying a row-list buffer. This is a
   workaround for abnormal death of the worker thread.
