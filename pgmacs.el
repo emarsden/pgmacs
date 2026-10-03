@@ -3197,19 +3197,19 @@ Deletion is only possible for tables with a (possibly multicolumn) primary key."
     (goto-char (point-min))
     (text-property-search-forward 'pgmacstbl)
     (text-property-search-backward 'pgmacstbl)
-    (let* ((pgmacstbl (pgmacstbl-current-table))
-           (columns (pgmacstbl-columns pgmacstbl)))
-      (cl-loop
-       for c in columns
-       for name = (pgmacstbl-column-name c)
-       for ci = (gethash name column-info)
-       for cif = (pgmacs--format-column-info ci)
-       for dpy = (or (pgmacs--lookup-column-displayer table name)
-                     (pgmacs--make-column-displayer cif ci))
-       do
-       (setf (pgmacstbl-column-name c) (propertize name 'face 'pgmacs-table-header 'help-echo cif))
-       (setf (pgmacstbl-column-displayer c) dpy)
-       (pgmacs--redraw-pgmacstbl)))))
+    (cl-loop
+     with pgmacstbl = (pgmacstbl-current-table)
+     with columns = (pgmacstbl-columns pgmacstbl)
+     for c in columns
+     for name = (pgmacstbl-column-name c)
+     for ci = (gethash name column-info)
+     for cif = (pgmacs--format-column-info ci)
+     for dpy = (or (pgmacs--lookup-column-displayer table name)
+                   (pgmacs--make-column-displayer cif ci))
+     do
+     (setf (pgmacstbl-column-name c) (propertize name 'face 'pgmacs-table-header 'help-echo cif))
+     (setf (pgmacstbl-column-displayer c) dpy)
+     (pgmacs--redraw-pgmacstbl))))
 
 
 ;; TODO: add additional information as per psql
