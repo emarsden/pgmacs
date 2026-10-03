@@ -50,10 +50,10 @@
   marker)
 
 (defun bug--worker-add-task (retriever inserter marker)
-  (with-slots (con tasks-mutex tasks-list) bug--worker-state
+  (with-slots (tasks-mutex tasks-list) bug--worker-state
     (let ((task (make-bug--task :retriever retriever
-                                   :inserter inserter
-                                   :marker marker)))
+                                :inserter inserter
+                                :marker marker)))
       (with-mutex tasks-mutex
         (push task tasks-list)))))
 
@@ -80,23 +80,7 @@
   (with-slots (tasks-mutex tasks-list tasks-ready) bug--worker-state
     (with-mutex tasks-mutex
       (setq tasks-list (nreverse tasks-list)))
-    (setq tasks-ready t))
-  ;; If not using a worker thread, run all the pending tasks now, synchronously.
-  (unless bug-use-worker-thread
-    (cl-loop
-     for task = (bug--worker-pop-task)
-     while task
-     do (with-slots (retriever inserter marker) task
-          (with-current-buffer (marker-buffer marker)
-            (let ((calculated (funcall retriever bug--con))
-                  (buffer-read-only nil))
-              (save-excursion
-                (goto-char (marker-position marker))
-                (funcall inserter calculated)
-                ;; Delete the placeholder text.
-                (goto-char (marker-position marker))
-                (when-let* ((match (text-property-search-backward 'bug--placeholder nil nil)))
-                  (delete-region (prop-match-beginning match) (prop-match-end match))))))))))
+    (setq tasks-ready t)))
 
 (defun bug--worker-runner ()
   "The function run in a background worker thread."
@@ -107,7 +91,10 @@
   (message "Entered the worker thread, running initializer")
   (when bug--worker-initializer
     (funcall bug--worker-initializer))
+  (sit-for 5)
   (with-slots (con tasks-ready) bug--worker-state
+    (unless con
+      (error "In worker-runner no con!"))
     (while t
       (thread-yield)
       (sit-for 0.5)
@@ -118,6 +105,8 @@
           (when-let* ((task (bug--worker-pop-task)))
             (with-slots (retriever inserter marker) task
               (with-current-buffer (marker-buffer marker)
+                (unless con
+                  (error "In worker-runner on task con=nil"))
                 (let ((calculated (funcall retriever con))
                       (buffer-read-only nil))
                   (save-excursion
@@ -134,18 +123,25 @@
   (propertize text 'bug--placeholder t))
 
 (defun bug--fetch (con msg)
+  (unless con
+    (error "££ No worker connection"))
+  (unless (process-buffer con)
+    (error "No worker thread available"))
   (with-current-buffer (process-buffer con)
     (erase-buffer)
     (process-send-string con msg)
     (accept-process-output)
-    (sleep-for 3)
+    (sleep-for 0.1)
     (buffer-substring (point-min) (point-max))))
 
 (defun bug--insert-placeholder-text (msg)
-  (let ((buf (get-buffer-create "*bug*")))
-    (set-buffer buf)
+  (with-current-buffer (get-buffer-create "*bug*")
     (insert "\n")
-    (cl-flet ((retriever (wcon) (bug--fetch wcon msg)))
+    (cl-flet ((retriever (wcon)
+                (format "retrieved-%d-%s-%s"
+                        (length (all-threads))
+                        (current-thread)
+                        (bug--fetch wcon msg))))
       (insert (bug--placeholderize "<calculating>"))
       (bug--worker-add-task #'retriever #'insert (point-marker)))))
 
@@ -163,10 +159,22 @@
   (switch-to-buffer (get-buffer-create "*bug*"))
   (setq bug--worker-state (make-bug--worker))
   (setf (bug--worker-thread bug--worker-state) (make-thread 'bug--worker-runner "worker thread"))
-  (sit-for 0.5)
-  (bug--insert-placeholder-text "foo\n")
-  (bug--insert-placeholder-text "bar\n")
-  (bug--worker-tasks-start))
+  (dotimes (i 100)
+    (bug--insert-placeholder-text (format "replacement-%d" i)))
+  (bug--worker-tasks-start)
+  (let* ((pbuf (get-buffer-create "*bug echo perturber*"))
+         (pcon (make-network-process :name "echo service perturber"
+                                     :buffer pbuf
+                                     :host "127.0.0.1"
+                                     :service 12345
+                                     :coding nil)))
+    (dotimes (i 1000)
+      (sit-for 0.2)
+      (bug--fetch pcon (format "twiddle%s-%s" i (current-thread)))
+      (insert i " " (length (all-threads)))
+      (let ((worker-thread (bug--worker-thread bug--worker-state)))
+        (when (thread-live-p worker-thread)
+          (thread-signal worker-thread 'user-error (list "foo")))))))
 
 
 ;; EOF

@@ -1,4 +1,4 @@
-;;; thread-freeze.el   -*- lexical-binding: t; -*-
+;;; thread-sigabrt.el   -*- lexical-binding: t; -*-
 ;;
 ;; Copyright: (C) 2026  Eric Marsden
 ;; Author: Eric Marsden <eric.marsden@risk-engineering.org>
@@ -131,14 +131,16 @@
         (error (message "worker thread error %s" e))))))
 
 (defun bug--fetch (con msg)
-  (with-current-buffer (process-buffer con)
-    (erase-buffer)
-    (process-send-string con msg)
-    (accept-process-output)
-    (sleep-for 3)
-    (buffer-substring (point-min) (point-max))))
+  (when (and con (process-buffer con))
+    (with-current-buffer (process-buffer con)
+      (erase-buffer)
+      (process-send-string con msg)
+      (accept-process-output)
+      (sleep-for 3)
+      (buffer-substring (point-min) (point-max)))))
 
 (defun run ()
+  (setq debug-on-error t)
   (setq bug--worker-initializer
         (lambda ()
           (message "In worker initializer")
@@ -155,9 +157,10 @@
   (with-slots (con thread) bug--worker-state
     (dotimes (i 1000)
       (sit-for 0.5)
+      (thread-yield)
       (bug--fetch con (format "twiddle%s" i))
       (insert i " ")
-      (when (thread-live-p thread)
+      (when (and thread (thread-live-p thread))
         (thread-signal thread 'user-error (list "foo"))))))
 
 
