@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.31] - Unreleased
+## [0.31] - 2026-10-03
 
 - Truncate over-wide cells with a binary search in `pgmacstbl--limit-string`. The previous loop
   was quadratic in the cell length, which made opening a table with large values (for example

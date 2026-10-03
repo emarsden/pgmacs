@@ -453,8 +453,7 @@ test-cratedb-ssl: peg
 #
 #    postgresql://root@localhost:26257/postgres
 test-cockroach: peg
-	${DOCKER} run --rm --name cockroachdb \
-          --pull=newer \
+	${DOCKER} run --rm --name cockroachdb --pull=newer \
           -v /dev/log:/dev/log \
           --publish 127.0.0.1:26257:26257 \
           -e COCKROACH_DATABASE=pgeltestdb \
