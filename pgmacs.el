@@ -3742,7 +3742,11 @@ Prompt for the table name in the minibuffer."
                        (json-insert (cl-second row))
                        (json-pretty-print-buffer)
                        (buffer-string)))
-             (insert "\n")))))
+             (insert "\n"))))
+        ('picodata
+         (insert "\nPicodata _pico_db_config settings\n")
+         (let ((res (pg-exec con "SELECT * FROM _pico_db_config")))
+           (pgmacs--show-pgresult (current-buffer) res))))
       (shrink-window-if-larger-than-buffer)
       (goto-char (point-min))
       (pgmacs-transient-mode)
